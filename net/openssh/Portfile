@@ -44,10 +44,14 @@ if {${name} eq ${subport}} {
                         port:zlib
     depends_run         port:ssh-copy-id
 
-#    # the HPN patch needs this, so rewrite all other patches to support it, too
-#    patch.args          -p1
-#    patchfiles          # launchd.patch \
-#                        # pam.patch \
+    # the HPN patch needs this, so rewrite all other patches to support it, too
+    patch.args          -p1
+    patchfiles           patch-sandbox-darwin.c-apple-sandbox-named-external.diff \
+                         patch-sshd.c-apple-sandbox-named-external.diff
+
+    
+# launchd.patch \
+                        # pam.patch \
 #                        # patch-sandbox-darwin.c-apple-sandbox-named-external.diff \
 #                        # patch-sshd.c-apple-sandbox-named-external.diff \
 #                        # 0002-Apple-keychain-integration-other-changes.patch \
