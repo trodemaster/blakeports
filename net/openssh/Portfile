@@ -47,14 +47,13 @@ if {${name} eq ${subport}} {
     # the HPN patch needs this, so rewrite all other patches to support it, too
     patch.args          -p1
     patchfiles           pam.patch \
-                         0002-Apple-keychain-integration-other-changes.patch \
                          patch-sandbox-darwin.c-apple-sandbox-named-external.diff \
                          patch-sshd.c-apple-sandbox-named-external.diff
 
     
 # launchd.patch \
                         # 
-#                        # 
+#                        X 0002-Apple-keychain-integration-other-changes.patch \
 #                        X macports-config.patch \
 #                        X patch-openbsd_compat-memmem-bug.diff
 
