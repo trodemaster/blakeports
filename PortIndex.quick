@@ -1,3 +1,4 @@
-libfido2 0
-openssh 459
-ssh-copy-id 1589
+libcbor 0
+libfido2 459
+openssh 918
+ssh-copy-id 2047
