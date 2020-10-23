@@ -39,7 +39,6 @@ master_sites        openbsd:OpenSSH/portable \
 
 if {${name} eq ${subport}} {
     depends_lib         path:lib/libssl.dylib:openssl \
-                        port:libcbor \
                         port:libedit \
                         port:ncurses \
                         port:zlib
