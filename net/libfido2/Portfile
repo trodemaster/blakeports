@@ -20,5 +20,6 @@ configure.args      --mandir=${prefix}/share/man
 
 depends_lib        port:cmake \
                    port:mandoc \
+                   port:libcbor \
                    port:pkgconfig \
                    port:openssl
