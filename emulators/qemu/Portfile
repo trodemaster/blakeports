@@ -151,6 +151,10 @@ variant curses description {Use the curses text-only user interface} {
     depends_lib-append      port:ncurses
 }
 
+variant tcg description {enable tcg interpreter} {
+    configure.args-append   --enable-tcg-interpreter
+}
+
 # XXX: gtk/sdl need libepoxy for OpenGL
 
 # XXX: Builds, but does not work as expected at runtime
