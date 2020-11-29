@@ -1,0 +1,15 @@
+diff --git a/target/arm/cpu.c b/target/arm/cpu.c
+index 07492e9f9a..db6f7c34ed 100644
+--- a/target/arm/cpu.c
++++ b/target/arm/cpu.c
+@@ -1062,6 +1062,10 @@ static void arm_cpu_initfn(Object *obj)
+     if (tcg_enabled()) {
+         cpu->psci_version = 2; /* TCG implements PSCI 0.2 */
+     }
++
++    if (hvf_enabled()) {
++        cpu->psci_version = 2; /* HVF uses TCG's PSCI */
++    }
+ }
+ 
+ static Property arm_cpu_gt_cntfrq_property =
