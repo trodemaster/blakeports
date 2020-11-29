@@ -1,6 +1,6 @@
 qemu 0
-s3fs 1074
-libcbor 1654
-libfido2 2113
-openssh 2585
-ssh-copy-id 3720
+s3fs 1078
+libcbor 1658
+libfido2 2117
+openssh 2589
+ssh-copy-id 3724
