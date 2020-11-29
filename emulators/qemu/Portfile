@@ -7,7 +7,7 @@ PortGroup compiler_blacklist_versions 1.0
 PortGroup legacysupport 1.0
 
 name                    qemu
-version                 5.1.0
+version                 5.2.0-rc3
 revision                1
 categories              emulators
 license                 GPL-2+
@@ -25,9 +25,9 @@ homepage                https://www.qemu.org
 master_sites            https://download.qemu.org/
 use_xz                  yes
 
-checksums               rmd160  f5e4a20c481d7e2bf822bf6bf41667b810c3cecd \
-                        sha256  c9174eb5933d9eb5e61f541cd6d1184cd3118dfe4c5c4955bc1bdc4d390fa4e5 \
-                        size    62911540
+checksums               rmd160  8743ba52912e2deea170d4eeaaa5809a77bda93f \
+                        sha256  e4261767675d9cc32686b4a96870c9cf832c0b23180ef8f251061705d2f92854 \
+                        size    106891688
 
 patchfiles              patch-configure.diff \
                         1-8-hvf-Add-hypervisor-entitlement-to-output-binaries.diff \
