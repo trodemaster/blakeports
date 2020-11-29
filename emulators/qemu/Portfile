@@ -29,7 +29,15 @@ checksums               rmd160  f5e4a20c481d7e2bf822bf6bf41667b810c3cecd \
                         sha256  c9174eb5933d9eb5e61f541cd6d1184cd3118dfe4c5c4955bc1bdc4d390fa4e5 \
                         size    62911540
 
-patchfiles              patch-configure.diff
+patchfiles              patch-configure.diff \
+                        1-8-hvf-Add-hypervisor-entitlement-to-output-binaries.diff \
+                        2-8-hvf-Move-common-code-out.diff \
+                        3-8-arm-Set-PSCI-to-0.2-for-HVF.diff \
+                        4-8-arm-Synchronize-CPU-on-PSCI-on.diff \
+                        5-8-hvf-Add-Apple-Silicon-support.diff \
+                        6-8-hvf-Use-OS-provided-vcpu-kick-function.diff \
+                        7-8-arm-Add-Hypervisor.framework-build-target.diff \
+                        8-8-hw-arm-virt-Disable-highmem-when-on-hypervisor.framework.diff
 patch.pre_args          -p1
 
 depends_build           port:texinfo \
