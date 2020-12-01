@@ -29,7 +29,7 @@ checksums               rmd160  8743ba52912e2deea170d4eeaaa5809a77bda93f \
                         sha256  e4261767675d9cc32686b4a96870c9cf832c0b23180ef8f251061705d2f92854 \
                         size    106891688
 
-patchfiles              patch-configure.diff
+patchfiles              patch-configure.diff \
                         hvf-Implement-Apple-Silicon-Support.patch
 patch.pre_args          -p1
 
