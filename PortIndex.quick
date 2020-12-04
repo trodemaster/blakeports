@@ -1,6 +1,8 @@
 qemu 0
 s3fs 1078
 libcbor 1658
-libfido2 2117
-openssh 2589
-ssh-copy-id 3724
+ffmpeg-devel 2117
+libvpx 3935
+libfido2 4725
+openssh 5197
+ssh-copy-id 6332

@@ -20,7 +20,7 @@ name                ffmpeg-devel
 conflicts           ffmpeg
 epoch               1
 version             ${git_release}-${git_date}
-revision            0
+revision            1
 license             LGPL-2.1+
 categories          multimedia
 maintainers         {devans @dbevans} {jeremyhu @jeremyhu} openmaintainer
@@ -78,7 +78,6 @@ depends_lib         port:lame \
                     port:libmodplug \
                     port:libass \
                     port:libbluray \
-                    port:libvpx \
                     port:gnutls \
                     port:openjpeg \
                     port:fontconfig \
