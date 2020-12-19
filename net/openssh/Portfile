@@ -182,7 +182,7 @@ if {${name} eq ${subport}} {
     }
 
     variant gsskex conflicts hpn requires kerberos5 description "Add OpenSSH GSSAPI key exchange patch" {
-        patchfiles-append       openssh-8.1p1-gsskex-all-20141021-mp-20191015.patch
+        patchfiles-append       gssapi.8.4p1.patch
         configure.ldflags-append \
                                 -Wl,-pie
         configure.cflags-append -fPIE
