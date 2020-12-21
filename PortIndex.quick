@@ -1,8 +1,4 @@
 libcbor 0
-qemu 484
-s3fs 1562
-ffmpeg-devel 2142
-libvpx 3960
-openssh 4750
-ssh-copy-id 5881
-libfido2 6297
+openssh 484
+ssh-copy-id 1615
+libfido2 2031
