@@ -1,14 +1,18 @@
 # -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
 
 PortSystem          1.0
+
 name                libfido2
 version             1.5.0
 revision            0
-categories          net
+categories          security crypto
 platforms           darwin
-maintainers         @trodemaster
+license             BSD 2-Clause "Simplified" License
+maintainers         @trodemaster \
+                    openmaintainer
 description         FIDO library
-PortGroup           cmake 1.1 
+PortGroup           cmake 1.1
+
 long_description    library functionality and command-line tools to communicate with a FIDO device over USB
 homepage            https://github.com/Yubico/libfido2
 master_sites        https://github.com/Yubico/libfido2/archive/
