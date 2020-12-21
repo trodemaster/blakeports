@@ -1,4 +1,5 @@
 libcbor 0
-openssh 484
-ssh-copy-id 1615
-libfido2 2031
+qemu 484
+openssh 1576
+ssh-copy-id 2707
+libfido2 3123
