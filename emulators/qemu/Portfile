@@ -308,6 +308,12 @@ platform darwin {
     }
 }
 
+post-extract {
+    move   ${worksrcpath}/qemu-5.2.0/version \
+           ${worksrcpath}/qemu-5.2.0/version.txt
+}
+
+
 livecheck.type  regex
 livecheck.url   [lindex ${master_sites} 0]
 livecheck.regex ${name}-(\\d+(?:\\.\\d+)*)(?:-\\d+)*\\.tar
