@@ -8,7 +8,7 @@ PortGroup legacysupport 1.0
 
 name                    qemu
 version                 5.2.0
-revision                1
+revision                2
 categories              emulators
 license                 GPL-2+
 platforms               darwin
