@@ -134,7 +134,7 @@ patchfiles-append       patch-hvf-Add-hypervisor-entitlement-to-output-binaries.
                         patch-hvf-arm-Implement--cpu-host.diff
 
 post-configure {
-    system "chmod +x ${worksrcpath}/scripts/entitlement.sh"
+    file attributes ${worksrcpath}/scripts/entitlement.sh -permissions +x
 }
 
 # The qemu build system bugs out when using in-source-tree builds.
