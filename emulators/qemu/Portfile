@@ -309,8 +309,8 @@ platform darwin {
 }
 
 post-extract {
-    move   ${worksrcpath}/qemu-5.2.0/version \
-           ${worksrcpath}/qemu-5.2.0/version.txt
+    move   ${worksrcpath}/version \
+           ${worksrcpath}/version.txt
 }
 
 
