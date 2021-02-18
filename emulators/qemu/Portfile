@@ -309,7 +309,6 @@ platform darwin {
 }
 
 post-extract {
-    delete ${worksrcpath}/version
     delete ${worksrcpath}/version.rc
 }
 
