@@ -309,8 +309,7 @@ platform darwin {
 }
 
 post-extract {
-    move   ${worksrcpath}/version \
-           ${worksrcpath}/version.txt
+    rm ${worksrcpath}/version.rc 
 }
 
 
