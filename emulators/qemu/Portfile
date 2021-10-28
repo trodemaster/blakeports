@@ -8,7 +8,7 @@ PortGroup legacysupport 1.0
 
 name                    qemu
 version                 6.1.0-utm
-revision                10
+revision                1
 categories              emulators
 license                 GPL-2+
 platforms               darwin
@@ -23,24 +23,17 @@ long_description        QEMU is a generic and open source machine emulator. \
 
 homepage                https://getutm.app
 master_sites            https://github.com/utmapp/qemu/releases/download/v${version}/
-# https://github.com/utmapp/qemu/releases/download/6.1.0-utm/qemu-6.1.0-utm.tar.bz2
-# https://github.com/utmapp/qemu/releases/download/v6.1.0-utm/qemu-6.1.0-utm.tar.bz2
-# use_xz                  yes
-# qemu-6.1.0-utm.tar.bz2 
-#portindex
-#distname                
 extract.suffix          .tar.bz2
+
 checksums               rmd160  978e26b3c2fb8dffca81cbdd8ea5551b0d95a954 \
                         sha256  f8f86c991af13c4318000bafdb30e396b05aa35525159488744ad8b093f9d1fa \
                         size    133482654
 
-#patchfiles              patch-configure.diff
-patch.pre_args          -p1
-
 depends_build           port:texinfo \
                         port:libtool \
                         port:ninja \
-                        port:pkgconfig
+                        port:pkgconfig \
+                        port:py39-sphinx
 
 # python/perl5 is only used for build scripts, no linking
 depends_build-append    port:python39 \
@@ -53,26 +46,25 @@ depends_lib             path:lib/pkgconfig/glib-2.0.pc:glib2 \
                         port:zlib \
                         path:lib/pkgconfig/pixman-1.pc:libpixman
 
-# see #39058
-compiler.blacklist      {clang < 500} *gcc-4.2 *gcc-4.0 gcc-3.3
+# "ERROR: You need at least GCC v7.5 or Clang v6.0 (or XCode Clang v10.0)"
+compiler.blacklist      {clang < 1000} {macports-clang-[3-5].*} {macports-gcc-[56]} {*gcc-[34].*}
 if {${os.platform} eq "darwin" && ${os.major} < 11} {
     # Emulated TLS needed, which was added in LLVM 3.8
-    compiler.blacklist-append   macports-clang-3.4 macports-clang-3.3 macports-clang-3.7
-    compiler.fallback-append    macports-clang-8.0 macports-clang-7.0 macports-clang-6.0 macports-clang-5.0
     configure.cflags-append     -femulated-tls
 }
 
-set arch ${configure.build_arch}
-if {${configure.build_arch} eq "arm64"} {
-    set arch "aarch64"
+if {"${configure.build_arch}" eq "arm64"} {
+    set host_cpu "aarch64"
+} else {
+    set host_cpu "${configure.build_arch}"
 }
-
 # Select compiler
-configure.args          --cpu=${arch} \
+configure.args          --cpu=${host_cpu} \
                         --cc=${configure.cc} \
                         --objcc=${configure.objc} \
                         --host-cc=${configure.cc} \
-                        --python=${prefix}/bin/python3.8
+                        --python=${prefix}/bin/python3.9 \
+                        --sphinx-build=${prefix}/bin/sphinx-build-3.9
 
 # Use internal meson
 configure.args-append   --meson=internal
@@ -124,24 +116,6 @@ pre-configure {
     configure.args-append --extra-ldflags="${configure.ldflags}"
 }
 
-# out of tree hvf support for Apple Silicon
-# https://patchwork.kernel.org/project/qemu-devel/list/?series=418581
-#patchfiles-append       patch-hvf-Add-hypervisor-entitlement-to-output-binaries.diff \
-#                        patch-hvf-x86-Remove-unused-definitions.diff \
-#                        patch-hvf-Move-common-code-out.diff \
-#                        patch-hvf-Introduce-hvf-vcpu-struct.diff \
-#                        patch-arm-Set-PSCI-to-0.2-for-HVF.diff \
-#                        patch-hvf-Simplify-post-reset-init-loadvm-hooks.diff \
-#                        patch-hvf-Add-Apple-Silicon-support.diff \
-#                        patch-arm-Add-Hypervisor.framework-build-target.diff \
-#                        patch-arm-hvf-Add-a-WFI-handler.diff \
-#                        patch-hvf-arm-Add-support-for-GICv3.diff \
-#                        patch-hvf-arm-Implement--cpu-host.diff
-
-post-configure {
-    file attributes ${worksrcpath}/scripts/entitlement.sh -permissions +x
-}
-
 # The qemu build system bugs out when using in-source-tree builds.
 # During builds, files are generated in directories such as pc-bios, which are
 # prerequites to the config-host.mak file. The latter gets generated during a
@@ -166,18 +140,11 @@ build.args-append       V=1
 
 default_variants        +usb
 
-foreach t {i386 x86_64 alpha {arm aarch64} cris hppa lm32 m68k {microblaze microblazeel} {mips mipsel mips64 mips64el} \
-           nios2 moxie or1k {ppc ppc64} riscv32 riscv64 rx s390x {sh4 sh4eb} {sparc sparc64} tricore unicore32 {xtensa xtensaeb}} {
+foreach t {i386 x86_64 alpha {arm aarch64} cris hppa m68k {microblaze microblazeel} {mips mipsel mips64 mips64el} \
+           nios2 moxie or1k {ppc ppc64} riscv32 riscv64 rx s390x {sh4 sh4eb} {sparc sparc64} tricore {xtensa xtensaeb}} {
     variant target_[lindex $t 0] description "Add target support for [join $t {, }]" "append target_list \",[join $t -softmmu,]-softmmu\""
 }
-
-if {${configure.build_arch} eq "x86_64"} {
-    default_variants-append +target_i386 +target_x86_64
-} elseif {${configure.build_arch} eq "arm64"} {
-    default_variants-append +target_arm
-} elseif {${configure.build_arch} eq "ppc" || ${configure.build_arch} eq "ppc64"} {
-    default_variants-append +target_ppc
-}
+default_variants-append +target_i386 +target_x86_64 +target_arm
 
 if {![variant_isset curses]} {
     default_variants-append +cocoa
@@ -199,14 +166,14 @@ variant curses description {Use the curses text-only user interface} {
 #variant gtk3 description {Build GTK+ GUI for GTK+ 3 (experimental)} conflicts cocoa curses gtk2 sdl sdl2 {
 #    configure.args-replace --disable-gtk --enable-gtk
 #    configure.args-append --with-gtkabi=3.0
-#    depends_lib-append     port:gtk3 port:vte
+#    depends_lib-append     path:lib/pkgconfig/gtk+-3.0.pc:gtk3 port:vte
 #}
 
 # XXX: Builds, but user input does not work at runtime
 #variant gtk2 description {Use the GTK+ 2 graphical user interface} conflicts cocoa curses gtk3 sdl sdl2 {
 #    configure.args-replace --disable-gtk --enable-gtk
 #    configure.args-append  --with-gtkabi=2.0
-#    depends_lib-append     port:gtk2 port:vte
+#    depends_lib-append     path:lib/pkgconfig/gtk+-2.0.pc:gtk2 port:vte
 #}
 
 # XXX: Build broken due to missing X11 symbols
@@ -238,9 +205,11 @@ variant curl description {Support network block devices using CURL} {
 variant vnc description {Support VNC server} {
     configure.args-replace  --disable-vnc --enable-vnc
     configure.args-append   --enable-gnutls \
+                            --enable-vnc-sasl \
                             --enable-vnc-jpeg \
                             --enable-vnc-png
     depends_lib-append      port:gnutls \
+                            port:cyrus-sasl2 \
                             path:include/turbojpeg.h:libjpeg-turbo \
                             port:libpng
 }
@@ -282,39 +251,6 @@ platform darwin 8 {
     depends_build-append port:gmake
     build.cmd ${prefix}/bin/gmake
 }
-
-#platform darwin 20 {
-#    post-destroot {
-#        # meson modify binary during install which broke codesign for hvf-enabled binaries
-#        # we need to re-sign it again
-#        set codesign_targets {}
-#
-#        if {${configure.build_arch} eq "x86_64"} {
-#            lappend codesign_targets ${destroot}${prefix}/bin/qemu-system-x86_64
-#            lappend codesign_targets ${destroot}${prefix}/bin/qemu-system-i386
-#        } elseif {${configure.build_arch} eq "arm64"} {
-#            lappend codesign_targets ${destroot}${prefix}/bin/qemu-system-aarch64
-#        }
-#
-#        foreach target ${codesign_targets} {
-#            if {[file exists ${target}]} {
-#                system "/usr/bin/codesign --entitlements ${worksrcpath}/accel/hvf/entitlements.plist --force -s - ${target}"
-#            }
-#        }
-#    }
-#}
-
-platform darwin {
-    if {${os.major} < 15} {
-        depends_build-append    port:coreutils
-        patchfiles-append       patch-Makefile-legacy-mktemp-to-coreutils.diff
-    }
-}
-
-post-extract {
-    delete ${worksrcpath}/version.rc
-}
-
 
 livecheck.type  regex
 livecheck.url   [lindex ${master_sites} 0]
