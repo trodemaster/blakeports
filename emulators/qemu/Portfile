@@ -7,12 +7,12 @@ PortGroup compiler_blacklist_versions 1.0
 PortGroup legacysupport 1.0
 
 name                    qemu
-version                 5.2.0
-revision                2
+version                 6.1.0-utm
+revision                10
 categories              emulators
 license                 GPL-2+
 platforms               darwin
-maintainers             {raimue @raimue} \
+maintainers             {trodemaster @trodemaster} \
                         openmaintainer
 
 description             Emulator for various architectures
@@ -21,15 +21,20 @@ long_description        QEMU is a generic and open source machine emulator. \
                         different machine. By using dynamic translation, it \
                         achieves very good performance.
 
-homepage                https://www.qemu.org
-master_sites            https://download.qemu.org/
-use_xz                  yes
+homepage                https://getutm.app
+master_sites            https://github.com/utmapp/qemu/releases/download/v${version}/
+# https://github.com/utmapp/qemu/releases/download/6.1.0-utm/qemu-6.1.0-utm.tar.bz2
+# https://github.com/utmapp/qemu/releases/download/v6.1.0-utm/qemu-6.1.0-utm.tar.bz2
+# use_xz                  yes
+# qemu-6.1.0-utm.tar.bz2 
+#portindex
+#distname                
+extract.suffix          .tar.bz2
+checksums               rmd160  978e26b3c2fb8dffca81cbdd8ea5551b0d95a954 \
+                        sha256  f8f86c991af13c4318000bafdb30e396b05aa35525159488744ad8b093f9d1fa \
+                        size    133482654
 
-checksums               rmd160  2c33e773f012e333f99237e3d4ff1653ea0bc88f \
-                        sha256  cb18d889b628fbe637672b0326789d9b0e3b8027e0445b936537c78549df17bc \
-                        size    106902800
-
-patchfiles              patch-configure.diff
+#patchfiles              patch-configure.diff
 patch.pre_args          -p1
 
 depends_build           port:texinfo \
@@ -38,10 +43,10 @@ depends_build           port:texinfo \
                         port:pkgconfig
 
 # python/perl5 is only used for build scripts, no linking
-depends_build-append    port:python38 \
+depends_build-append    port:python39 \
                         port:perl5
 
-license_noconflict      python38 \
+license_noconflict      python39 \
                         perl5
 
 depends_lib             path:lib/pkgconfig/glib-2.0.pc:glib2 \
@@ -121,17 +126,17 @@ pre-configure {
 
 # out of tree hvf support for Apple Silicon
 # https://patchwork.kernel.org/project/qemu-devel/list/?series=418581
-patchfiles-append       patch-hvf-Add-hypervisor-entitlement-to-output-binaries.diff \
-                        patch-hvf-x86-Remove-unused-definitions.diff \
-                        patch-hvf-Move-common-code-out.diff \
-                        patch-hvf-Introduce-hvf-vcpu-struct.diff \
-                        patch-arm-Set-PSCI-to-0.2-for-HVF.diff \
-                        patch-hvf-Simplify-post-reset-init-loadvm-hooks.diff \
-                        patch-hvf-Add-Apple-Silicon-support.diff \
-                        patch-arm-Add-Hypervisor.framework-build-target.diff \
-                        patch-arm-hvf-Add-a-WFI-handler.diff \
-                        patch-hvf-arm-Add-support-for-GICv3.diff \
-                        patch-hvf-arm-Implement--cpu-host.diff
+#patchfiles-append       patch-hvf-Add-hypervisor-entitlement-to-output-binaries.diff \
+#                        patch-hvf-x86-Remove-unused-definitions.diff \
+#                        patch-hvf-Move-common-code-out.diff \
+#                        patch-hvf-Introduce-hvf-vcpu-struct.diff \
+#                        patch-arm-Set-PSCI-to-0.2-for-HVF.diff \
+#                        patch-hvf-Simplify-post-reset-init-loadvm-hooks.diff \
+#                        patch-hvf-Add-Apple-Silicon-support.diff \
+#                        patch-arm-Add-Hypervisor.framework-build-target.diff \
+#                        patch-arm-hvf-Add-a-WFI-handler.diff \
+#                        patch-hvf-arm-Add-support-for-GICv3.diff \
+#                        patch-hvf-arm-Implement--cpu-host.diff
 
 post-configure {
     file attributes ${worksrcpath}/scripts/entitlement.sh -permissions +x
@@ -278,26 +283,26 @@ platform darwin 8 {
     build.cmd ${prefix}/bin/gmake
 }
 
-platform darwin 20 {
-    post-destroot {
-        # meson modify binary during install which broke codesign for hvf-enabled binaries
-        # we need to re-sign it again
-        set codesign_targets {}
-
-        if {${configure.build_arch} eq "x86_64"} {
-            lappend codesign_targets ${destroot}${prefix}/bin/qemu-system-x86_64
-            lappend codesign_targets ${destroot}${prefix}/bin/qemu-system-i386
-        } elseif {${configure.build_arch} eq "arm64"} {
-            lappend codesign_targets ${destroot}${prefix}/bin/qemu-system-aarch64
-        }
-
-        foreach target ${codesign_targets} {
-            if {[file exists ${target}]} {
-                system "/usr/bin/codesign --entitlements ${worksrcpath}/accel/hvf/entitlements.plist --force -s - ${target}"
-            }
-        }
-    }
-}
+#platform darwin 20 {
+#    post-destroot {
+#        # meson modify binary during install which broke codesign for hvf-enabled binaries
+#        # we need to re-sign it again
+#        set codesign_targets {}
+#
+#        if {${configure.build_arch} eq "x86_64"} {
+#            lappend codesign_targets ${destroot}${prefix}/bin/qemu-system-x86_64
+#            lappend codesign_targets ${destroot}${prefix}/bin/qemu-system-i386
+#        } elseif {${configure.build_arch} eq "arm64"} {
+#            lappend codesign_targets ${destroot}${prefix}/bin/qemu-system-aarch64
+#        }
+#
+#        foreach target ${codesign_targets} {
+#            if {[file exists ${target}]} {
+#                system "/usr/bin/codesign --entitlements ${worksrcpath}/accel/hvf/entitlements.plist --force -s - ${target}"
+#            }
+#        }
+#    }
+#}
 
 platform darwin {
     if {${os.major} < 15} {
