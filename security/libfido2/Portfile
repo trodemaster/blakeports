@@ -1,0 +1,28 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           cmake 1.1
+PortGroup           openssl 1.0
+
+github.setup        Yubico libfido2 1.9.0
+revision            0
+
+categories          security crypto
+platforms           darwin
+maintainers         {@trodemaster netjibbing.com:blake} \
+                    openmaintainer
+license             bsd
+description         library to communicate with a FIDO device over USB
+long_description    provides library functionality and command-line tools to communicate with a FIDO device over USB, and to verify attestation and assertion signatures.
+
+checksums           rmd160  e7972f1092cfcb1cb07dcdc5e0d28d6d4685e978 \
+                    sha256  efab43a401a062d6c99ed1b5c6e528589738efcc08aaccdf921d1186640333f1 \
+                    size    576018
+
+depends_build-append \
+                    port:mandoc \
+                    port:pkgconfig
+
+depends_lib-append  port:libcbor \
+                    path:lib/libssl.dylib:openssl
