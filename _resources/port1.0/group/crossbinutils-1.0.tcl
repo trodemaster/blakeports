@@ -66,6 +66,11 @@ array set crossbinutils.versions_info {
         sha256  e81d9edf373f193af428a0f256674aea62a9d74dfe93f65192d4eae030b0f3b0 \
         size    22772248
     }}
+    2.37 {xz {
+        rmd160  55280d11b786b931cb53819bc5b3b5d6b6b4383d \
+        sha256  820d9724f020a3e69cb337893a0b63c2db161dadcb0e06fc11dc29eb1e84a32c \
+        size    22916924
+    }}
 }
 
 proc crossbinutils.setup {target version} {
@@ -86,8 +91,7 @@ proc crossbinutils.setup {target version} {
         ${target} cross development.
 
     homepage        https://www.gnu.org/software/binutils/binutils.html
-    master_sites    gnu:binutils \
-                    http://mirrors.ibiblio.org/gnu/ftp/gnu/binutils/
+    master_sites    gnu:binutils
     dist_subdir     binutils
     distname        binutils-${version}
     worksrcdir      binutils-[string trimright ${version} {[a-zA-Z]}]
@@ -185,8 +189,4 @@ proc crossbinutils.setup {target version} {
     }
 
     universal_variant no
-
-    livecheck.type  regex
-    livecheck.url   [lindex ${master_sites} 1]
-    livecheck.regex "binutils-((?!.*binutils.*|\\${extract.suffix}).*)\\${extract.suffix}"
 }

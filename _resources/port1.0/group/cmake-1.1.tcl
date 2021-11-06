@@ -18,7 +18,9 @@ options                             cmake.build_dir \
                                     cmake.module_path \
                                     cmake_share_module_dir \
                                     cmake.out_of_source \
-                                    cmake.set_osx_architectures
+                                    cmake.set_osx_architectures \
+                                    cmake.set_c_standard \
+                                    cmake.set_cxx_standard
 
 ## Explanation of and default values for the options defined above ##
 
@@ -52,6 +54,10 @@ default cmake_share_module_dir      {${prefix}/share/cmake/Modules}
 # extra locations to search for modules can be specified with
 # cmake.module_path; they come after ${cmake_share_module_dir}
 default cmake.module_path           {}
+
+# Propagate c/c++ standards to the build
+default cmake.set_c_standard        no
+default cmake.set_cxx_standard      no
 
 # CMake provides several different generators corresponding to different utilities
 # (and IDEs) used for building the sources. We support "Unix Makefiles" (the default)
@@ -162,7 +168,13 @@ proc cmake::handle_generator {option action args} {
                                 port:ninja
                 build.cmd       ninja
                 # force Ninja to use the exact number of requested build jobs
-                build.post_args -j${build.jobs} -v
+                # Need to check use_parallel_build here, as build.jobs is still > 1
+                # even if use_parallel_build=no ....
+                set njobs ${build.jobs}
+                if { ![option use_parallel_build] } {
+                    set njobs 1
+                }
+                build.post_args -j${njobs} -v
                 destroot.target install
                 # ninja needs the DESTDIR argument in the environment
                 destroot.destdir
@@ -202,7 +214,11 @@ proc cmake::ccaching {} {
     if {${cccache} && [file exists ${prefix}/bin/ccache]} {
         return [list \
             -DCMAKE_C_COMPILER_LAUNCHER=${prefix}/bin/ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=${prefix}/bin/ccache]
+            -DCMAKE_CXX_COMPILER_LAUNCHER=${prefix}/bin/ccache \
+            -DCMAKE_Fortran_COMPILER_LAUNCHER=${prefix}/bin/ccache \
+            -DCMAKE_OBJC_COMPILER_LAUNCHER=${prefix}/bin/ccache \
+            -DCMAKE_OBJCXX_COMPILER_LAUNCHER=${prefix}/bin/ccache \
+            -DCMAKE_ISPC_COMPILER_LAUNCHER=${prefix}/bin/ccache ]
     }
 }
 
@@ -222,6 +238,8 @@ default configure.pre_args {[list \
                     {*}[cmake::ccaching] \
                     {-DCMAKE_C_COMPILER="$CC"} \
                     {-DCMAKE_CXX_COMPILER="$CXX"} \
+                    {-DCMAKE_OBJC_COMPILER="$CC"} \
+                    {-DCMAKE_OBJCXX_COMPILER="$CXX"} \
                     -DCMAKE_POLICY_DEFAULT_CMP0025=NEW \
                     -DCMAKE_POLICY_DEFAULT_CMP0060=NEW \
                     -DCMAKE_VERBOSE_MAKEFILE=ON \
@@ -417,6 +435,24 @@ platform darwin {
                 -DCMAKE_OSX_ARCHITECTURES="${configure.build_arch}"
         }
 
+        # C/C++ standard
+        if {[option cmake.set_cxx_standard] && ${compiler.cxx_standard} ne ""} {
+            # https://cmake.org/cmake/help/latest/prop_tgt/CXX_STANDARD.html
+            if {${compiler.cxx_standard} < 1998} {
+                compiler.cxx_standard 1998
+            }
+            configure.args-append -DCMAKE_CXX_STANDARD=[string range ${compiler.cxx_standard} end-1 end]
+        }
+        if {[option cmake.set_c_standard] && ${compiler.c_standard} ne ""} {
+            # Base defaults to 1989 which is not valid as a C standard
+            # (at least as far as CMake is concerned)
+            # https://cmake.org/cmake/help/latest/prop_tgt/C_STANDARD.html#prop_tgt:C_STANDARD
+            if {${compiler.c_standard} < 1990} {
+                compiler.c_standard 1990
+            }
+            configure.args-append -DCMAKE_C_STANDARD=[string range ${compiler.c_standard} end-1 end]
+        }
+
         # Setting our own -arch flags is unnecessary (in the case of a non-universal build) or even
         # harmful (in the case of a universal build, because it causes the compiler identification to
         # fail; see https://public.kitware.com/pipermail/cmake-developers/2015-September/026586.html).
@@ -432,7 +468,7 @@ platform darwin {
 
         configure.args-append -DCMAKE_OSX_DEPLOYMENT_TARGET="${macosx_deployment_target}"
 
-        if {${configure.sdkroot} != ""} {
+        if {${configure.sdkroot} ne ""} {
             configure.args-append -DCMAKE_OSX_SYSROOT="${configure.sdkroot}"
         } else {
             configure.args-append -DCMAKE_OSX_SYSROOT="/"
