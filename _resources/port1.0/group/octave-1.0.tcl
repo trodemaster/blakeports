@@ -19,6 +19,9 @@ default octave.config_h {no}
 
 # some header files from Octave require C++-11
 compiler.cxx_standard  2011
+# error: field has incomplete type 'const octave::cdef_class'
+PortGroup compiler_blacklist_versions 1.0
+compiler.blacklist-append {clang < 700}
 
 # see https://trac.macports.org/ticket/51643
 PortGroup muniversal 1.0
@@ -40,7 +43,8 @@ proc octave.set_module {opt action args} {
 }
 
 default categories   "math science"
-default master_sites {sourceforge:octave}
+default master_sites [list sourceforge:project/octave/Octave%20Forge%20Packages/Individual%20Package%20Releases \
+                        sourceforge:octave]
 default distname     {${octave.module}-${version}}
 default worksrcdir   {${octave.module}}
 # do not build in parallel; many can't, and these are small builds
@@ -121,19 +125,23 @@ pre-configure {
         }
 
     } else {
-        configure.env-append OCTAVE_ARCH=${build_arch}
+        configure.env-append OCTAVE_ARCH=${configure.build_arch}
         configure.args \
             "'try; pkg build -verbose -nodeps ${workpath}/tmp-build ${workpath}/${distname}.tar.gz; catch; disp(lasterror.message); exit(1); end_try_catch;'"
 
         # fortran arch flag is not set automatically
-        if {${build_arch} eq "x86_64" || ${build_arch} eq "ppc64"} {
+        if {${configure.build_arch} eq "x86_64" || ${configure.build_arch} eq "ppc64"} {
             configure.fflags-append -m64
         } else {
             configure.fflags-append -m32
         }
     }
 
-    configure.cmd /usr/bin/arch -arch \$OCTAVE_ARCH ${prefix}/bin/octave-cli
+    if { ${supported_archs} eq "noarch" } {
+        configure.cmd ${prefix}/bin/octave-cli
+    } else {
+        configure.cmd /usr/bin/arch -arch \$OCTAVE_ARCH ${prefix}/bin/octave-cli
+    }
 
     configure.pre_args -q -f -H --eval
     configure.post_args
@@ -146,7 +154,12 @@ build {}
 pre-destroot {
     set octave_api_version [exec "${prefix}/bin/octave-config" -p API_VERSION]
 
-    destroot.cmd /usr/bin/arch -arch \$OCTAVE_ARCH ${prefix}/bin/octave-cli
+    if { ${supported_archs} eq "noarch" } {
+        destroot.cmd ${prefix}/bin/octave-cli
+    } else {
+        destroot.cmd /usr/bin/arch -arch \$OCTAVE_ARCH ${prefix}/bin/octave-cli
+    }
+
     destroot.pre_args -q -f -H --eval
 
     if { ${os.arch} eq "i386" } {
@@ -186,7 +199,7 @@ pre-destroot {
         set octave_install_lib   ${destroot}${prefix}/lib/octave/packages
         set octave_tgz_file ${workpath}/tmp-build/[exec /bin/ls ${workpath}/tmp-build]
 
-        destroot.env-append OCTAVE_ARCH=${build_arch}
+        destroot.env-append OCTAVE_ARCH=${configure.build_arch}
 
         destroot.args \
             "'try; pkg prefix ${octave_install_share} ${octave_install_lib}; pkg install -verbose -nodeps -local ${octave_tgz_file}; catch; disp(lasterror.message); exit(1); end_try_catch;'"
