@@ -71,40 +71,40 @@ configure.args-append   --meson=internal
 # Do not use iasl, even if it is installed, #43911
 configure.args-append   --iasl=/usr/bin/false
 
-# Select features
-configure.args-append   --disable-cocoa \
-                        --disable-curses \
-                        --disable-capstone \
-                        --disable-sdl \
-                        --disable-gtk \
-                        --disable-opengl \
-                        --enable-bzip2 \
-                        --disable-curl \
-                        --disable-attr \
-                        --disable-vde \
-                        --disable-brlapi \
-                        --disable-cap-ng \
-                        --disable-spice \
-                        --disable-libiscsi \
-                        --disable-rbd \
-                        --disable-smartcard \
-                        --disable-libusb \
-                        --disable-usb-redir \
-                        --disable-seccomp \
-                        --disable-linux-aio \
-                        --disable-glusterfs \
-                        --disable-rdma \
-                        --disable-libssh \
-                        --disable-vnc \
-                        --disable-gnutls \
-                        --disable-gcrypt \
-                        --disable-nettle \
-                        --disable-numa \
-                        --disable-xen \
-                        --disable-snappy \
-                        --disable-lzo \
-                        --disable-lzfse \
-                        --disable-zstd
+## Select features
+#configure.args-append   --disable-cocoa \
+#                        --disable-curses \
+#                        --disable-capstone \
+#                        --disable-sdl \
+#                        --disable-gtk \
+#                        --disable-opengl \
+#                        --enable-bzip2 \
+#                        --disable-curl \
+#                        --disable-attr \
+#                        --disable-vde \
+#                        --disable-brlapi \
+#                        --disable-cap-ng \
+#                        --disable-spice \
+#                        --disable-libiscsi \
+#                        --disable-rbd \
+#                        --disable-smartcard \
+#                        --disable-libusb \
+#                        --disable-usb-redir \
+#                        --disable-seccomp \
+#                        --disable-linux-aio \
+#                        --disable-glusterfs \
+#                        --disable-rdma \
+#                        --disable-libssh \
+#                        --disable-vnc \
+#                        --disable-gnutls \
+#                        --disable-gcrypt \
+#                        --disable-nettle \
+#                        --disable-numa \
+#                        --disable-xen \
+#                        --disable-snappy \
+#                        --disable-lzo \
+#                        --disable-lzfse \
+#                        --disable-zstd
 
 # libtool: unknown option character `-' in: --mode=compile
 configure.env-append   LIBTOOL=${prefix}/bin/glibtool
