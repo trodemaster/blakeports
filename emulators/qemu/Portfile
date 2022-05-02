@@ -7,7 +7,7 @@ PortGroup compiler_blacklist_versions 1.0
 PortGroup legacysupport 1.0
 
 name                    qemu
-version                 6.2.0-utm
+version                 7.0.0-utm
 revision                1
 categories              emulators
 license                 GPL-2+
@@ -24,9 +24,9 @@ homepage                https://getutm.app
 master_sites            https://github.com/utmapp/qemu/releases/download/v${version}/
 extract.suffix          .tar.bz2
 
-checksums               rmd160  f64b142d4a13006213108a1903d4ad8fafc15b77 \
-                        sha256  f012161c873e5c189b1b19c99fd92abeb0b055310311a4c0b5bfe313731d9513 \
-                        size    137926783
+checksums               rmd160  d86719507042b21f9abfcdfc30a434e956fbf217 \
+                        sha256  e41661dc9224ca04ec935729b01e5925ecbbcf30f28b12a1c37410c18c8c4667 \
+                        size    149880118
 
 depends_build           port:texinfo \
                         port:libtool \

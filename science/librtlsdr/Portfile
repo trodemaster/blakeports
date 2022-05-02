@@ -18,3 +18,5 @@ long_description    rtl-sdr turns your Realtek RTL2832 based DVB dongle into a S
 checksums           rmd160 84659a153a00809ddeec271877497262e733c5d7 \
                     sha256 457e62bdd649aa5461922cf42db4b1a675bb1b8182a8b066a8f86773a975e724 \
                     size 231512
+
+depends_lib-append  port:libusb

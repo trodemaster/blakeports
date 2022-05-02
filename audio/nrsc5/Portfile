@@ -4,7 +4,7 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           cmake 1.1
 
-github.setup        theori-io nrsc5 1.0 v
+github.setup        theori-io nrsc5 dba681bac21cfadf842907876a7532cb71d78dfc
 
 revision            0
 
@@ -16,6 +16,18 @@ description         This program receives NRSC-5 digital radio stations using an
 long_description    \
 This program receives NRSC-5 digital radio stations using an RTL-SDR dongle. It offers a command-line interface as well as an API upon which other applications can be built. Before using it, you'll first need to compile the program using the build instructions below.
 
-checksums           rmd160 9976d05bb64f011f3096965babedbdbbf5fdd663 \
-                    sha256 907476866d3408eb24b51588727ac1b73394ea19579c6f47757ec81626a93e5a \
-                    size 23124301
+checksums           rmd160 27fd4177039eeb6f1ca3a3fe2642624c642d2c1b \
+                    sha256 02cc7fde0457ba34a5d0689a401c3df9e3abb9ec1a0736b6c43417f3df4afb74 \
+                    size 23166336
+
+configure.args-append \
+    -DUSE_NEON=OFF \
+    -DUSE_SSE=ON
+
+depends_build       port:libtool
+
+depends_run         port:fftw
+
+depends_lib-append  port:librtlsdr \
+                    port:libao
+
