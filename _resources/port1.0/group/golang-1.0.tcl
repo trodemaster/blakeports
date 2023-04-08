@@ -70,12 +70,21 @@ proc go.setup {go_package go_version {go_tag_prefix ""} {go_tag_suffix ""}} {
     # It is assumed in this portgroup that go.{domain,author,project} will
     # remain consistent with the distfile; this is needed when moving the source
     # into the GOPATH in the post-extract block later on.
-    lassign [go._translate_package_id ${go_package}] go.domain go.author go.project
+    lassign [go._translate_package_id ${go_package}] go.domain go.author go.project subproject
+
+    if {${subproject} ne ""} {
+        ui_error "go.setup cannot handle subprojects yet"
+        error "unhandled subproject"
+    }
 
     switch ${go.domain} {
         github.com {
             uplevel "PortGroup github 1.0"
             github.setup ${go.author} ${go.project} ${go_version} ${go_tag_prefix} ${go_tag_suffix}
+        }
+        gitlab.com {
+            uplevel "PortGroup gitlab 1.0"
+            gitlab.setup ${go.author} ${go.project} ${go_version} ${go_tag_prefix} ${go_tag_suffix}
         }
         bitbucket.org {
             uplevel "PortGroup bitbucket 1.0"
@@ -90,7 +99,7 @@ proc go.setup {go_package go_version {go_tag_prefix ""} {go_tag_suffix ""}} {
             gitea.setup ${go.author} ${go.project} ${go_version} ${go_tag_prefix} ${go_tag_suffix}
         }
         default {
-            if {!([info exists PortInfo(name)] && (${PortInfo(name)} ne ${go.project}))} {
+            if {![info exists PortInfo(name)]} {
                 name    ${go.project}
             }
             version     ${go.version}
@@ -104,6 +113,8 @@ proc go._translate_package_id {package_id} {
     set domain [lindex ${parts} 0]
     set author [lindex ${parts} 1]
     set project [lindex ${parts} 2]
+    # possibly empty
+    set subproject [lindex ${parts} 3]
 
     switch ${domain} {
         golang.org {
@@ -128,7 +139,7 @@ proc go._translate_package_id {package_id} {
             set author [string trim ${author} ~]
         }
     }
-    return [list ${domain} ${author} ${project}]
+    return [list ${domain} ${author} ${project} ${subproject}]
 }
 
 proc go._strip_gopkg_version {str} {
@@ -188,8 +199,8 @@ proc go.append_env {} {
         # To then prevent 'clang linker input unused' errors we must append -Wno-error at the end.
         # Also remove '-static' from compilation options as this is not supported on older systems.
         compwrap.compiler_args_forward \$\{\@\//-static/\}
-        compwrap.compiler_pre_flags    ${configure.ldflags}
-        compwrap.compiler_post_flags   -Wno-error
+        compwrap.compiler_pre_flags-append    ${configure.ldflags}
+        compwrap.compiler_post_flags-append   -Wno-error
     }
     post-extract {
         build.env-append \
@@ -236,6 +247,10 @@ proc handle_set_go_vendors {vendors_str} {
         set checksum_types $portchecksum::checksum_types
     }
     set num_tokens [llength ${vendors_str}]
+    if {$num_tokens > 0} {
+        # portgroups like github may set this - can't be used with multiple distfiles
+        extract.rename  no
+    }
     for {set ix 0} {${ix} < ${num_tokens}} {incr ix} {
         # Get the Go package ID
         set vpackage [lindex ${vendors_str} ${ix}]
@@ -261,7 +276,7 @@ proc handle_set_go_vendors {vendors_str} {
                 incr ix
 
                 # Split up the package ID
-                lassign [go._translate_package_id ${vresolved}] vdomain vauthor vproject
+                lassign [go._translate_package_id ${vresolved}] vdomain vauthor vproject vsubproject
 
                 if {[string match v* ${vversion}]} {
                     set sha1_short {}
@@ -276,21 +291,46 @@ proc handle_set_go_vendors {vendors_str} {
 
                 switch ${vdomain} {
                     github.com {
-                        set distfile ${vauthor}-${vproject}-${vversion}.tar.gz
-                        set master_site https://github.com/${vauthor}/${vproject}/tarball/${vversion}
+                        if {${vsubproject} eq ""} {
+                            set distfile ${vauthor}-${vproject}-${vversion}.tar.gz
+                            set master_site https://codeload.github.com/${vauthor}/${vproject}/legacy.tar.gz/${vversion}?dummy=
+                        } else {
+                            set distfile ${vauthor}-${vproject}-${vsubproject}-${vversion}.tar.gz
+                            set master_site https://codeload.github.com/${vauthor}/${vproject}/legacy.tar.gz/${vsubproject}/${vversion}?dummy=
+                        }
                     }
                     bitbucket.org {
+                        if {${vsubproject} ne ""} {
+                            ui_error "go.vendors can't handle subprojects from ${vdomain} yet"
+                            error "unsupported dependency domain"
+                        }
                         set distfile ${vversion}.tar.gz
                         set master_site https://bitbucket.org/${vauthor}/${vproject}/get
                     }
                     gitlab.com -
                     salsa.debian.org {
+                        if {${vsubproject} ne ""} {
+                            ui_error "go.vendors can't handle subprojects from ${vdomain} yet"
+                            error "unsupported dependency domain"
+                        }
                         set distfile ${vproject}-${vversion}.tar.gz
                         set master_site https://${vdomain}/${vauthor}/${vproject}/-/archive/${vversion}
                     }
                     git.sr.ht {
+                        if {${vsubproject} ne ""} {
+                            ui_error "go.vendors can't handle subprojects from ${vdomain} yet"
+                            error "unsupported dependency domain"
+                        }
                         set distfile ${vversion}.tar.gz
                         set master_site https://${vdomain}/~${vauthor}/${vproject}/archive
+                    }
+                    go.googlesource.com {
+                        if {${vsubproject} ne ""} {
+                            ui_error "go.vendors can't handle subprojects from ${vdomain} yet"
+                            error "unsupported dependency domain"
+                        }
+                        set distfile ${vversion}.tar.gz
+                        set master_site https://${vdomain}/${vauthor}/+archive/refs/tags
                     }
                     default {
                         ui_error "go.vendors can't handle dependencies from ${vdomain}"
@@ -355,13 +395,27 @@ post-extract {
 
     foreach vlist ${go.vendors_internal} {
         lassign ${vlist} sha1_short vpackage vresolved
+        ui_debug "Processing vendored dependency (sha1_short: ${sha1_short}, vpackage: ${vpackage}, vresolved: ${vresolved})"
 
         file mkdir ${gopath}/src/[file dirname ${vpackage}]
         if {${sha1_short} ne ""} {
             move [glob ${workpath}/*-${sha1_short}*] ${gopath}/src/${vpackage}
         } else {
             lassign [go._translate_package_id ${vresolved}] _ vauthor vproject
-            move [glob ${workpath}/${vauthor}-${vproject}-*] ${gopath}/src/${vpackage}
+            # In some cases, this can match multiple folders, e.g.,
+            # gopkg.in/src-d/go-git.v4 and gopkg.in/src-d/go-git-fixtures.v3.
+            # We want the one that does not have any dashes in the wildcard of
+            # our glob expression, so use regex to identify that.
+            set candidates [glob ${workpath}/${vauthor}-${vproject}-*]
+            foreach candidate $candidates {
+                if {[regexp -nocase "^[quotemeta $workpath]/[quotemeta $vauthor]-[quotemeta $vproject]-\[^-\]*$" $candidate]} {
+                    ui_debug "Choosing $candidate for ${workpath}/${vauthor}-${vproject}-*"
+                    move $candidate ${gopath}/src/${vpackage}
+                    break
+                } else {
+                    ui_debug "Rejecting $candidate for ${workpath}/${vauthor}-${vproject}-* because it contains dashes in the wildcard match"
+                }
+            }
         }
     }
 }

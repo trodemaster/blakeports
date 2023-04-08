@@ -14,15 +14,16 @@
 #
 # - Java 8 and earlier are "1.8", etc.
 # - Java 9 and later are "9", etc.
-# - "+" and "*" wilcards are supported
+# - "+" and "*" wildcards are supported
 #
 # If the required Java cannot be found, an error will be thrown at pre-fetch.
 
-options java.version java.home java.fallback
+options java.version java.home java.fallback java.deptypes
 
 default java.version  {}
 default java.home     {}
-default java.fallback {}
+default java.fallback {[java::java_get_default_fallback]}
+default java.deptypes lib
 
 # allow PortGroup to be used inside a variant (e.g. octave)
 global java_version_not_found
@@ -30,7 +31,7 @@ set java_version_not_found no
 
 pre-fetch {
     if { ${java_version_not_found} } {
-        # Check again, incase java became available, .e.g openjdk installed as a dependency
+        # Check again in case java became available e.g. openjdk installed as a dependency
         java::java_set_env
         # If still not present, error out
         if { ${java_version_not_found} } {
@@ -59,7 +60,9 @@ namespace eval java {
             # as required, as currently these are the only ones supporting arm.
             # To be reviewed as support for arm comes for the other versions.
             # Following regex matches openjdk<version> only.
-            if { [option configure.build_arch] eq "arm64" &&
+            # Keep in mind that configure.build_arch isn't available here
+            global os.arch
+            if { ${os.arch} eq "arm" &&
                  [regexp {openjdk(\d{1,2}$)} ${java.fallback}] } {
                 set newjdk ${java.fallback}-zulu
                 ui_debug "Redefining java fallback ${java.fallback} to ${newjdk} for arm compatibility"
@@ -123,10 +126,26 @@ namespace eval java {
         # Add dependency if required
         if { ${java_version_not_found} && ${java.fallback} ne "" } {
             ui_debug "Adding dependency on JDK fallback ${java.fallback}"
-            depends_lib-append port:${java.fallback}
+            foreach deptype [option java.deptypes] {
+                depends_${deptype}-append port:${java.fallback}
+            }
         }
 
         return $home_value
+    }
+
+    proc java_get_default_fallback {} {
+        global os.major java.version
+        if {[option os.platform] eq "darwin"} {
+            if {${os.major} >= 18 && [vercmp ${java.version} < 18]} {
+                return openjdk17
+            } elseif {${os.major} >= 15 && [vercmp ${java.version} < 12]} {
+                return openjdk11
+            } elseif {${os.major} >= 11 && [vercmp ${java.version} < 9]} {
+                return openjdk8
+            }
+        }
+        return {}
     }
 
     proc java_set_env {} {
@@ -205,7 +224,7 @@ namespace eval java {
     }
 
     # Returns the value of the first dictionary entry
-    # whose key is less or equal to search_key.
+    # whose key is less than or equal to search_key.
     #
     # @param search_key The key that is to be found in the dictionary
     # @param target_dict The dictionary which should be searched for search_key
