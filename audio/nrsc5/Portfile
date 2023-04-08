@@ -20,14 +20,17 @@ checksums           rmd160  3f4bc1b86fbe4c10d1bf0d5ad3709afc238b8b06 \
                     sha256  9c8829c70bdc04f155ae95c964889a5267acac3c4e4111707e31ac9d763b96d4 \
                     size    23167905
 
+patchfiles         CMakeLists.txt.diff
+
 configure.args-append \
-    -DUSE_NEON=OFF \
-    -DUSE_SSE=OFF \
-    -DUSE_FAAD2=OFF   
+    -DUSE_NEON=ON \
+    -DUSE_SSE=ON \
+    -DUSE_FAAD2=ON   
 
 depends_build       port:libtool
 
-depends_run         port:fftw
+depends_run         port:fftw \
+                    port:faad2
 
 depends_lib-append  port:rtl-sdr \
                     port:libao
