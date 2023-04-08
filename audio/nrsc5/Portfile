@@ -27,7 +27,8 @@ configure.args-append \
     -DUSE_SSE=ON \
     -DUSE_FAAD2=ON   
 
-depends_build       port:libtool
+depends_build       port:libtool \
+                    port:cmake
 
 depends_run         port:fftw \
                     port:faad2
