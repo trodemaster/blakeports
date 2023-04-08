@@ -28,7 +28,8 @@ configure.args-append \
     -DUSE_FAAD2=ON   
 
 depends_build       port:libtool \
-                    port:cmake
+                    port:cmake \
+                    port:autoconf
 
 depends_run         port:fftw \
                     port:faad2
