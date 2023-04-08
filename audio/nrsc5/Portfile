@@ -29,7 +29,8 @@ configure.args-append \
 
 depends_build       port:libtool \
                     port:cmake \
-                    port:autoconf
+                    port:autoconf \
+                    port:automake
 
 depends_run         port:fftw \
                     port:faad2
