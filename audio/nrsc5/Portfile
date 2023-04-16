@@ -4,28 +4,28 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           cmake 1.1
 
-github.setup        theori-io nrsc5 59bc2968485635c16c7250696abc3e8ff765b72d
+github.setup        theori-io nrsc5 f1a32a551471dc5045193027e4c828746c5790fd
 
 revision            0
 
 categories          audio
-maintainers         {netjibbing.com:blake @trodemaster} 
+maintainers         {netjibbing.com:blake @trodemaster}
 license             GPL
 
 description         This program receives NRSC-5 digital radio stations using an RTL-SDR dongle
 long_description    \
-This program receives NRSC-5 digital radio stations using an RTL-SDR dongle. It offers a command-line interface as well as an API upon which other applications can be built. Before using it, you'll first need to compile the program using the build instructions below.
+This program receives NRSC-5 digital radio stations using an RTL-SDR dongle. It offers a command-line interface as well as an API upon which other applications can be built.
 
-checksums           rmd160  3f4bc1b86fbe4c10d1bf0d5ad3709afc238b8b06 \
-                    sha256  9c8829c70bdc04f155ae95c964889a5267acac3c4e4111707e31ac9d763b96d4 \
-                    size    23167905
+checksums           rmd160  03b316b7c1bbc38966758958c2d4f35aec32e235 \
+                    sha256  7704739e40dc9467dbdf1f484ca87414b3c54f8f63c8eb1f1920729d3addb5cc \
+                    size    23168025
 
 patchfiles         CMakeLists.txt.diff
 
 configure.args-append \
     -DUSE_NEON=ON \
     -DUSE_SSE=ON \
-    -DUSE_FAAD2=ON   
+    -DUSE_FAAD2=ON
 
 depends_build       port:libtool \
                     port:cmake \
