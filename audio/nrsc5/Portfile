@@ -17,9 +17,9 @@ description         This program receives NRSC-5 digital radio stations using an
 long_description    \
 This program receives NRSC-5 digital radio stations using an RTL-SDR dongle. It offers a command-line interface as well as an API upon which other applications can be built.
 
-checksums           rmd160  03b316b7c1bbc38966758958c2d4f35aec32e235 \
-                    sha256  7704739e40dc9467dbdf1f484ca87414b3c54f8f63c8eb1f1920729d3addb5cc \
-                    size    23168025
+checksums           rmd160  c0bade3db2333ebe2a8bc7a2ce27b88b1f229a59 \
+                    sha256  793a70b25c585babe5041267ab7bccf7d8f549bebe53d9228c4bf1e00c20ab41 \
+                    size    23168318
 
 patchfiles         CMakeLists.txt.diff
 
