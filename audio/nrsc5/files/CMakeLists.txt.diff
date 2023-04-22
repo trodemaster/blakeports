@@ -1,7 +1,6 @@
-diff --git a/CMakeLists.txt b/CMakeLists.txt
 index d598c31..6680b2b 100644
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
+--- CMakeLists.txt.orig
++++ CMakeLists.txt
 @@ -81,7 +81,7 @@ endif ()
  
  if (CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
@@ -11,10 +10,9 @@ index d598c31..6680b2b 100644
          add_definitions (-DHAVE_NEON)
      endif()
  endif()
-diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
 index cee353f..e300fd8 100644
---- a/src/CMakeLists.txt
-+++ b/src/CMakeLists.txt
+--- src/CMakeLists.txt.orig
++++ src/CMakeLists.txt
 @@ -18,12 +18,12 @@ endif()
  
  configure_file (config.h.in config.h)
