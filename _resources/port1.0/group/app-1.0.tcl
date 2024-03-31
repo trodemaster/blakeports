@@ -310,15 +310,15 @@ platform macosx {
 
                 # If app.icon is svg, rasterize and convert it.
                 } elseif {[file extension ${icon}] eq ".svg"} {
-                    set makeicnsargs {}
+                    set makeicnsargs [list]
                     foreach w {16 32 128 256 512} {
-                        lappend makeicnsargs -$w ${worksrcpath}/${w}.png
+                        lappend makeicnsargs -$w [shellescape ${worksrcpath}/${w}.png]
 
                         if {[catch {system -W ${worksrcpath} "${prefix}/bin/rsvg-convert -w $w -h $w [shellescape ${icon}] > ${worksrcpath}/$w.png" }]} {
                             return -code error "app.icon '[join ${app.icon}]' could not be converted to png: $::errorInfo"
                         }
                     }
-                    if {[catch {system -W ${worksrcpath} "${prefix}/bin/makeicns $makeicnsargs -out [shellescape ${destroot}${applications_dir}/${app.name}.app/Contents/Resources/${app.name}.icns] 2>&1"}]} {
+                    if {[catch {system -W ${worksrcpath} "${prefix}/bin/makeicns [join $makeicnsargs] -out [shellescape ${destroot}${applications_dir}/${app.name}.app/Contents/Resources/${app.name}.icns] 2>&1"}]} {
                         return -code error "app.icns could not be created: $::errorInfo"
                     }
 
@@ -475,7 +475,7 @@ proc app._write_launch_script {executable app_destination} {
     global prefix
     set launch_script [open ${app_destination} w]
 
-    puts ${launch_script} "#!/bin/bash
+    puts ${launch_script} "#!/bin/sh
 export PATH=\"${prefix}/bin:${prefix}/sbin:\$PATH\"
 exec [shellescape ${executable}]
 "

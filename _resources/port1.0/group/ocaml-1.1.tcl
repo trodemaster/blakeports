@@ -404,7 +404,13 @@ commands    dune.build \
 options     dune.build.target
 
 default     dune.build.cmd          {${prefix}/bin/dune}
-default     dune.build.env          {}
+# See: https://github.com/ocaml/dune/issues/8941
+global      os.major
+if {${os.major} < 11} {
+    default dune.build.env          DUNE_CONFIG__COPY_FILE=portable
+} else {
+    default dune.build.env          {}
+}
 default     dune.build.dir          {${build.dir}}
 default     dune.build.nice         {${build.nice}}
 default     dune.build.target       {@install}
@@ -573,7 +579,15 @@ destroot {
     }
 }
 
+# Most of our OCaml ports do not have test dependencies,
+# so disable tests by default.
+default test.run    no
+
 test {
+    if {![option test.run]} {
+        ui_info "Tests are disabled."
+        return
+    }
     switch -- ${ocaml.build_type} {
         dune {
             command_exec dune.test
