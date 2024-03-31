@@ -56,15 +56,11 @@ namespace eval java {
         if { ${java.version} ne "" } {
             ui_debug "java-portgroup: Trying to find JVM version: ${java.version}"
 
-            # If on arm automatically adjust to the *-zulu fallback versions
-            # as required, as currently these are the only ones supporting arm.
-            # To be reviewed as support for arm comes for the other versions.
-            # Following regex matches openjdk<version> only.
+            # If on arm automatically adjust openjdk8 to openjdk8-zulu, because openjdk8 doesn't support arm yet
             # Keep in mind that configure.build_arch isn't available here
             global os.arch
-            if { ${os.arch} eq "arm" &&
-                 [regexp {openjdk(\d{1,2}$)} ${java.fallback}] } {
-                set newjdk ${java.fallback}-zulu
+            if { ${os.arch} eq "arm" && ${java.fallback} eq "openjdk8" } {
+                set newjdk openjdk8-zulu
                 ui_debug "Redefining java fallback ${java.fallback} to ${newjdk} for arm compatibility"
                 java.fallback ${newjdk}
             }
@@ -179,6 +175,7 @@ namespace eval java {
             # %3=0 -> Regex match, ignored.
             # %3=1 -> Version
             # %3=2 -> JAVA_HOME.
+            set version_path_dict {}
             for {set idx 0} {$idx < [llength $vm_versions]} {incr idx 3} {
                 set vers [lindex $vm_versions $idx+1]
                 # Normalize version 1.x -> x
@@ -186,7 +183,15 @@ namespace eval java {
                 # Extract major version
                 set vers [regsub {(\.\d+)+} $vers ""]
                 set path [lindex $vm_versions $idx+2]
-                dict append version_path_dict $vers $path
+                # Note, using [dict set ...] here instead of [dict append ...] to handle scenario the
+                # system could have multiple installations of the JVM for exactly the same version.
+                # See e.g. https://github.com/macports/macports-ports/pull/16149
+                # where it was found this could happen with the CI tests.
+                # By using 'dict set' instead you get the last value encountered...
+                if { [dict exists $version_path_dict $vers] } {
+                    ui_debug "java-portgroup: Found multiple installations for JVM $vers"
+                }
+                dict set version_path_dict $vers $path
             }
         } else {
             set details [dict get $options -errorcode]

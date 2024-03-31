@@ -97,7 +97,7 @@ pre-configure {
         puts ${cache} "}"
     }
     puts ${cache} "QMAKE_MACOSX_DEPLOYMENT_TARGET=${macosx_deployment_target}"
-    puts ${cache} "QMAKE_MAC_SDK=[qt5pg::qmake_mac_sdk]"
+    puts ${cache} "QMAKE_MAC_SDK=${qt5.mac_sdk}"
 
     # https://github.com/qt/qtbase/commit/d64940891dffcb951f4b76426490cbc94fb4aba7
     # Enable ccache support if active and available in given qt5 version
@@ -116,10 +116,10 @@ pre-configure {
     }
 
     # save certain configure flags
-    set qmake5_cxx11_flags ""
-    set qmake5_cxx_flags   ""
-    set qmake5_c_flags     ""
-    set qmake5_l_flags     ""
+    set qmake5_cxx11_flags [list]
+    set qmake5_cxx_flags   [list]
+    set qmake5_c_flags     [list]
+    set qmake5_l_flags     [list]
     foreach flag ${configure.cxxflags} {
         if { ${flag} eq "-D_GLIBCXX_USE_CXX11_ABI=0" } {
             lappend qmake5_cxx11_flags ${flag}
