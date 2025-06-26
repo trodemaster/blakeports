@@ -1,0 +1,6 @@
+#!/bin/bash
+set -euo pipefail
+
+# Make an empty commit to trigger GitHub Actions
+git commit --allow-empty -m "🚀 boop: trigger GitHub Actions"
+git push

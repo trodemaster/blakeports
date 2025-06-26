@@ -27,9 +27,9 @@ if ! command -v /opt/local/bin/port &>/dev/null; then
     curl -O https://distfiles.macports.org/MacPorts/MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.bz2
     tar xf MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.bz2
     cd MacPorts-${PORT_LATEST_RELEASE_NUMBER}/
-    ./configure
-    make
-    sudo make install
+    ./configure > /dev/null
+    make > /dev/null
+    sudo make install > /dev/null
     cd
     rm -rf MacPorts-${PORT_LATEST_RELEASE_NUMBER}*
   else
