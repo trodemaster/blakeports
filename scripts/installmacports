@@ -3,16 +3,6 @@ set -euo pipefail
 IFS=$'\n\t'
 shopt -s nullglob nocaseglob
 
-# path to self and parent dir
-SCRIPT=$(realpath $0)
-SCRIPTPATH=$(dirname $SCRIPT)
-
-# Variables with default values
-VAULT_ADDR="${VAULT_ADDR:-https://vault.example.com:8200}"
-VAULT_AGENT_ROLEID="${VAULT_AGENT_ROLEID:-}"
-VAULT_AGENT_SECRETID="${VAULT_AGENT_SECRETID:-}"
-
-
 # determine CPU architecture
 ARCH=$(uname -m)
 ARCH=${ARCH/x86_64/amd64}
@@ -57,10 +47,9 @@ fi
 
 # configure macports.conf
 
-# macports selfupdate after config
-if [[ -e /opt/local/bin/port ]]; then
-  sudo /opt/local/bin/port selfupdate
-fi
-
+# add macports to path in .zshrc
+echo 'export PATH="/opt/local/bin:$PATH"' >> ~/.zshrc
+echo 'export PATH="/opt/local/sbin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
 
 exit 0
