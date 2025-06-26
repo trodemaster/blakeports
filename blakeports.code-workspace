@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../jibb-runners"
+		},
+		{
+			"path": "../packer_macOS_26"
+		}
+	],
+	"settings": {}
+}
