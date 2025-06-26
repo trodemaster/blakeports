@@ -51,4 +51,7 @@ fi
 grep -q "/opt/local/bin" ~/.zshrc 2>/dev/null || echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 
+# sync macports
+sudo port sync
+
 exit 0
