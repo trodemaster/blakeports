@@ -1,10 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 IFS=$'\n\t'
 shopt -s nullglob nocaseglob
-
-# modern bash version check
-! [ "${BASH_VERSINFO:-0}" -ge 4 ] && echo "This script requires bash v4 or later" && exit 1
 
 # path to self and parent dir
 SCRIPT=$(realpath $0)
