@@ -47,9 +47,8 @@ fi
 
 # configure macports.conf
 
-# add macports to path in .zshrc
-echo 'export PATH="/opt/local/bin:$PATH"' >> ~/.zshrc
-echo 'export PATH="/opt/local/sbin:$PATH"' >> ~/.zshrc
+# add macports to path in .zshrc (idempotent)
+grep -q "/opt/local/bin" ~/.zshrc 2>/dev/null || echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 
 exit 0
