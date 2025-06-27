@@ -1,0 +1,37 @@
+#!/bin/bash
+set -euo pipefail
+
+SOURCES_CONF="/opt/local/etc/macports/sources.conf"
+BLAKEPORTS_DIR="/Users/blake/code/blakeports"
+
+# Check if blakeports is already configured as default
+if grep -q "file://${BLAKEPORTS_DIR} \[default\]" "$SOURCES_CONF" 2>/dev/null; then
+    echo "blakeports already configured as default source"
+    exit 0
+fi
+
+echo "Configuring blakeports as default MacPorts source..."
+
+# Create a temporary file for the new configuration
+TEMP_CONF=$(mktemp)
+
+# Copy everything up to the rsync line, then add blakeports, then modify rsync line
+awk -v blakeports_dir="$BLAKEPORTS_DIR" '
+/^rsync:\/\/.*\[default\]/ {
+    # Add blakeports line before the rsync line
+    print "file://" blakeports_dir " [default]"
+    # Remove [default] from the rsync line
+    gsub(/\[default\]/, "")
+    gsub(/  *$/, "")  # Remove trailing spaces
+    print $0
+    next
+}
+{ print }
+' "$SOURCES_CONF" > "$TEMP_CONF"
+
+# Replace the original file
+sudo cp "$TEMP_CONF" "$SOURCES_CONF"
+rm "$TEMP_CONF"
+
+echo "MacPorts sources.conf updated successfully"
+echo "blakeports directory set as default source"
