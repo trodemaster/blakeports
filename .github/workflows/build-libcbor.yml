@@ -1,0 +1,29 @@
+name: Build libcbor
+
+on:
+  push:
+    paths:
+      - 'devel/libcbor/**'
+    branches: [main]
+  pull_request:
+    paths:
+      - 'devel/libcbor/**'
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-libcbor:
+    runs-on: [self-hosted, macOS, ARM64, tart]
+    
+    steps:
+    - name: Setup BlakePorts Environment
+      uses: ./.github/actions/setup-blakeports
+        
+    - name: Build libcbor port
+      run: |
+        sudo port -v install libcbor
+        
+    - name: Verify libcbor installation
+      run: |
+        port installed libcbor
+        ls -la /opt/local/lib/libcbor* || echo "libcbor libraries not found" 

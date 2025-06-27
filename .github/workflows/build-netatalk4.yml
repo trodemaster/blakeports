@@ -1,0 +1,30 @@
+name: Build netatalk4
+
+on:
+  push:
+    paths:
+      - 'net/netatalk4/**'
+    branches: [main]
+  pull_request:
+    paths:
+      - 'net/netatalk4/**'
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-netatalk4:
+    runs-on: [self-hosted, macOS, ARM64, tart]
+    
+    steps:
+    - name: Setup BlakePorts Environment
+      uses: ./.github/actions/setup-blakeports
+        
+    - name: Build netatalk4 port
+      run: |
+        sudo port -v install netatalk4
+        
+    - name: Verify netatalk4 installation
+      run: |
+        port installed netatalk4
+        which afpd || echo "afpd binary not found in PATH"
+        ls -la /opt/local/sbin/afpd || echo "afpd binary not found" 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SOURCES_CONF="/opt/local/etc/macports/sources.conf"
-BLAKEPORTS_DIR="/Users/admin/code/blakeports"
+BLAKEPORTS_DIR="$HOME/code/blakeports"
 
 # Check if blakeports is already configured as default
 if grep -q "file://${BLAKEPORTS_DIR} \[default\]" "$SOURCES_CONF" 2>/dev/null; then
@@ -10,7 +10,7 @@ if grep -q "file://${BLAKEPORTS_DIR} \[default\]" "$SOURCES_CONF" 2>/dev/null; t
 else
     echo "Configuring blakeports as default MacPorts source..."
     sudo tee "$SOURCES_CONF" <<EOF
-file:///Users/admin/code/blakeports [default]
+file://${BLAKEPORTS_DIR} [default]
 https://mirror.fcix.net/macports/release/tarballs/ports.tar
 EOF
     echo "MacPorts sources.conf updated successfully"

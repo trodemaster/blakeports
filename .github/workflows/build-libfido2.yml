@@ -1,0 +1,30 @@
+name: Build libfido2
+
+on:
+  push:
+    paths:
+      - 'security/libfido2/**'
+    branches: [main]
+  pull_request:
+    paths:
+      - 'security/libfido2/**'
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-libfido2:
+    runs-on: [self-hosted, macOS, ARM64, tart]
+    
+    steps:
+    - name: Setup BlakePorts Environment
+      uses: ./.github/actions/setup-blakeports
+        
+    - name: Build libfido2 port
+      run: |
+        sudo port -v install libfido2
+        
+    - name: Verify libfido2 installation
+      run: |
+        port installed libfido2
+        ls -la /opt/local/lib/libfido2* || echo "libfido2 libraries not found"
+        which fido2-token || echo "fido2-token binary not found in PATH" 

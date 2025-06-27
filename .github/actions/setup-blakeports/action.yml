@@ -1,0 +1,27 @@
+name: 'Setup BlakePorts Environment'
+description: 'Sets up BlakePorts repository and MacPorts configuration'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        path: code/blakeports
+        
+    - name: Set up home directory structure
+      shell: bash
+      run: |
+        mkdir -p ~/code
+        rm -rf ~/code/blakeports
+        mv ${{ github.workspace }}/code/blakeports ~/code/blakeports
+        
+    - name: Configure BlakePorts
+      shell: bash
+      run: ~/code/blakeports/scripts/configblakeports
+      
+    - name: Update port index
+      shell: bash
+      run: |
+        cd ~/code/blakeports
+        sudo portindex 
