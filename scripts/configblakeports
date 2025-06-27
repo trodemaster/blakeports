@@ -11,7 +11,7 @@ else
     echo "Configuring blakeports as default MacPorts source..."
     sudo tee "$SOURCES_CONF" <<EOF
 file://${BLAKEPORTS_DIR} [default]
-https://mirror.fcix.net/macports/release/tarballs/ports.tar
+rsync://rsync.macports.org/macports/release/tarballs/ports.tar.gz
 EOF
     echo "MacPorts sources.conf updated successfully"
     echo "blakeports directory set as default source"
