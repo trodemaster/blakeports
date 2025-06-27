@@ -1,0 +1,29 @@
+name: Build nrsc5
+
+on:
+  push:
+    paths:
+      - 'audio/nrsc5/**'
+    branches: [main]
+  pull_request:
+    paths:
+      - 'audio/nrsc5/**'
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-nrsc5:
+    runs-on: [self-hosted, macOS, ARM64, tart]
+    
+    steps:
+    - name: Setup BlakePorts Environment
+      uses: ./.github/actions/setup-blakeports
+        
+    - name: Build nrsc5 port
+      run: |
+        sudo port -v install nrsc5
+        
+    - name: Verify nrsc5 installation
+      run: |
+        port installed nrsc5
+        which nrsc5 || echo "nrsc5 binary not found in PATH" 
