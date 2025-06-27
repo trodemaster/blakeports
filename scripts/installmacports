@@ -49,7 +49,9 @@ fi
 
 # add macports to path in .zshrc (idempotent)
 grep -q "/opt/local/bin" ~/.zshrc 2>/dev/null || echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+
+# add macports to current session PATH
+export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
 
 # sync macports
 sudo port sync
