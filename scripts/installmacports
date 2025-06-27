@@ -16,6 +16,9 @@ PORT_LATEST_RELEASE_NUMBER=${PORT_LATEST_RELEASE#v}
 MACOS_VERSION=$(sw_vers --ProductVersion | cut -d . -f1)
 MACOS_VERSION_NAME=$(awk '/SOFTWARE LICENSE AGREEMENT FOR macOS/' '/System/Library/CoreServices/Setup Assistant.app/Contents/Resources/en.lproj/OSXSoftwareLicense.rtf' | awk -F 'macOS ' '{print $NF}' | awk '{print substr($0, 0, length($0)-1)}')
 
+# track if we need to sync macports
+NEED_SYNC=false
+
 # test for macports and install if not present
 if ! command -v /opt/local/bin/port &>/dev/null; then
   echo "Installing macports..."
@@ -27,9 +30,9 @@ if ! command -v /opt/local/bin/port &>/dev/null; then
     curl -O https://distfiles.macports.org/MacPorts/MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.bz2
     tar xf MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.bz2
     cd MacPorts-${PORT_LATEST_RELEASE_NUMBER}/
-    ./configure > /dev/null
-    make > /dev/null
-    sudo make install > /dev/null
+    ./configure >/dev/null
+    make >/dev/null
+    sudo make install >/dev/null
     cd
     rm -rf MacPorts-${PORT_LATEST_RELEASE_NUMBER}*
   else
@@ -39,21 +42,45 @@ if ! command -v /opt/local/bin/port &>/dev/null; then
     sudo installer -pkg /tmp/macports.pkg -target /
     rm /tmp/macports.pkg
   fi
+  # MacPorts was just installed, we need to sync
+  NEED_SYNC=true
 fi
 
 # configure macports sources
+SOURCES_CONF="/opt/local/etc/macports/sources.conf"
+BLAKEPORTS_DIR="$HOME/code/blakeports"
+
+# Check if blakeports is already configured as default
+if ! grep -q "file://${BLAKEPORTS_DIR} \\[default\\]" "$SOURCES_CONF" 2>/dev/null; then
+    echo "Configuring blakeports as default MacPorts source..."
+    sudo tee "$SOURCES_CONF" <<EOF
+file://${BLAKEPORTS_DIR} [default]
+rsync://rsync.macports.org/macports/release/tarballs/ports.tar.gz
+EOF
+    echo "MacPorts sources.conf updated successfully"
+    echo "blakeports directory set as default source"
+    # Sources configuration was modified, we need to sync
+    NEED_SYNC=true
+else
+    echo "blakeports already configured as default source"
+fi
 
 # configure macports archive sites
 
 # configure macports.conf
 
+# sync macports to update port index (only if needed)
+if [[ "$NEED_SYNC" == "true" ]]; then
+    echo "Syncing MacPorts port index..."
+    sudo port sync
+else
+    echo "Skipping port sync - no changes detected"
+fi
+
 # add macports to path in .zshrc (idempotent)
-grep -q "/opt/local/bin" ~/.zshrc 2>/dev/null || echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >> ~/.zshrc
+grep -q "/opt/local/bin" ~/.zshrc 2>/dev/null || echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >>~/.zshrc
 
 # add macports to current session PATH
 export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
-
-# sync macports
-sudo port sync
 
 exit 0

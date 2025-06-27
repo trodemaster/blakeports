@@ -16,10 +16,6 @@ runs:
         rm -rf ~/code/blakeports
         mv ${{ github.workspace }}/code/blakeports ~/code/blakeports
         
-    - name: Configure BlakePorts
-      shell: bash
-      run: ~/code/blakeports/scripts/configblakeports
-      
     - name: Update port index
       shell: bash
       run: |
