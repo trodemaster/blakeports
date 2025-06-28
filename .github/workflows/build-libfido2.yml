@@ -24,6 +24,9 @@ jobs:
         
     - name: Clean existing libfido2 installation
       run: |
+        # Set up MacPorts PATH explicitly
+        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        
         # Uninstall and clean if port already exists
         if port installed libfido2 | grep -q libfido2; then
           echo "Removing existing libfido2 installation..."
@@ -35,10 +38,16 @@ jobs:
         
     - name: Build libfido2 port
       run: |
+        # Set up MacPorts PATH explicitly
+        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        
         sudo port -v install libfido2
         
     - name: Verify libfido2 installation
       run: |
+        # Set up MacPorts PATH explicitly
+        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        
         port installed libfido2
         ls -la /opt/local/lib/libfido2* || echo "libfido2 libraries not found"
         which fido2-token || echo "fido2-token binary not found in PATH" 
