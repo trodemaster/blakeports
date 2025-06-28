@@ -70,10 +70,10 @@ fi
 # configure macports.conf
 
 # set up macports environment for current session
-source /opt/local/share/macports/setupenv.bash
+source ~/code/blakeports/setupenv.bash
 
 # add macports setup to .zshrc (idempotent)
-grep -q "setupenv.bash" ~/.zshrc 2>/dev/null || echo 'source /opt/local/share/macports/setupenv.bash' >>~/.zshrc
+grep -q "setupenv.bash" ~/.zshrc 2>/dev/null || echo 'source ~/code/blakeports/setupenv.bash' >>~/.zshrc
 
 # sync macports to update port index (only if needed)
 if [[ "$NEED_SYNC" == "true" ]]; then

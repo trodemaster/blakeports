@@ -24,8 +24,8 @@ jobs:
       
     - name: Verify MacPorts installation
       run: |
-        # Source MacPorts environment
-        source /opt/local/share/macports/setupenv.bash
+        # Source MacPorts environment from our local copy
+        source ~/code/blakeports/setupenv.bash
         
         echo "Checking MacPorts installation..."
         /opt/local/bin/port version || echo "MacPorts not found in expected location"
