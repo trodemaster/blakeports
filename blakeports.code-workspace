@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../packer_macOS_26"
+		},
+		{
+			"path": "../macports-ports"
 		}
 	],
 	"settings": {}

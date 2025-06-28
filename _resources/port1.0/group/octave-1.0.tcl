@@ -17,8 +17,8 @@
 #   where module is the name of the module w/o the octave- prefix
 #   (e.g. communications)
 
-# see octave Portfile
-set package_version 9.x.x
+# package_version has to be kept in sync with the octave Portfile
+set package_version 10.x.x
 
 options octave.author octave.module octave.config_h
 
@@ -27,8 +27,8 @@ options octave.author octave.module octave.config_h
 # this should eventually be removed
 default octave.config_h {no}
 
-# some header files from Octave require C++-11
-compiler.cxx_standard       2011
+# some header files from Octave >= 10.1.0 require C++-17
+compiler.cxx_standard       2017
 # error: field has incomplete type 'const octave::cdef_class'
 PortGroup compiler_blacklist_versions 1.0
 compiler.blacklist-append {clang < 700}
@@ -121,7 +121,7 @@ proc octave.add_dependencies {} {
 port::register_callback octave.add_dependencies
 
 # configure_make.m calls "make --jobs n ..."
-# use environmental variable to set the number of jobs to 1
+# use environment variable to set the number of jobs to 1
 # parallel build is a problem for octave-optiminterp
 configure.env-append OMP_NUM_THREADS=1
 # do not force all Portfiles to switch from configure.env to configure.env-append
@@ -210,7 +210,7 @@ pre-configure {
     configure.pre_args -q -f -H --eval
     configure.post_args
 
-    configure.cxxflags-append -std=c++11
+    configure.cxxflags-append -std=gnu++17
 }
 
 build {}
