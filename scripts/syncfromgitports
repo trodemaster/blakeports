@@ -151,15 +151,8 @@ sync_directory() {
         return 0
     fi
     
-    # Method 1: Try git archive (most efficient)
-    if command -v git >/dev/null 2>&1; then
-        if git archive --remote="$MACPORTS_REPO" --format=tar "$BRANCH" "$dir_path" | tar -xf - 2>/dev/null; then
-            log_success "Successfully synced $dir_path using git archive"
-            return 0
-        fi
-    fi
-    
-    # Method 2: Try GitHub CLI with API
+    # Method 1: Try GitHub CLI with API (most reliable for GitHub repos)
+    # Note: Skipping git archive as it typically fails with HTTP 403 for GitHub repositories
     if command -v gh >/dev/null 2>&1; then
         local temp_dir=$(mktemp -d)
         trap "rm -rf $temp_dir" EXIT
@@ -185,7 +178,7 @@ sync_directory() {
         fi
     fi
     
-    # Method 3: Shallow clone with sparse checkout
+    # Method 2: Shallow clone with sparse checkout
     if command -v git >/dev/null 2>&1; then
         local temp_dir=$(mktemp -d)
         trap "rm -rf $temp_dir" EXIT
@@ -209,7 +202,7 @@ sync_directory() {
         fi
     fi
     
-    # Method 4: Full shallow clone (fallback)
+    # Method 3: Full shallow clone (fallback)
     if command -v git >/dev/null 2>&1; then
         local temp_dir=$(mktemp -d)
         trap "rm -rf $temp_dir" EXIT
