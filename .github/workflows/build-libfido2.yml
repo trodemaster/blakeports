@@ -21,6 +21,11 @@ jobs:
       
     - name: Setup BlakePorts Environment
       uses: ./.github/actions/setup-blakeports
+      
+    - name: Install dependencies
+      run: |
+        cd ~/code/blakeports
+        ./scripts/install-deps libfido2
         
     - name: Clean existing libfido2 installation
       run: |

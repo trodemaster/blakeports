@@ -21,6 +21,11 @@ jobs:
       
     - name: Setup BlakePorts Environment
       uses: ./.github/actions/setup-blakeports
+      
+    - name: Install dependencies
+      run: |
+        cd ~/code/blakeports
+        ./scripts/install-deps nrsc5
         
     - name: Clean existing nrsc5 installation
       run: |
