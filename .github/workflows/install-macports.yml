@@ -1,11 +1,15 @@
 name: Install MacPorts
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    paths:
+      - 'scripts/installmacports'
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    paths:
+      - 'scripts/installmacports'
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   install-macports:
@@ -14,25 +18,14 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        path: code/blakeports
-        
-    - name: Set up home directory structure
-      run: |
-        mkdir -p ~/code
-        # Remove existing blakeports if it exists to avoid conflicts
-        rm -rf ~/code/blakeports
-        # Move checked out code to the expected location
-        mv ${{ github.workspace }}/code/blakeports ~/code/blakeports
-        
-    - name: Make install script executable
-      run: chmod +x ~/code/blakeports/scripts/installmacports
       
-    - name: Run MacPorts installation script
-      run: ~/code/blakeports/scripts/installmacports
+    - name: Setup BlakePorts Environment
+      uses: ./.github/actions/setup-blakeports
       
     - name: Verify MacPorts installation
       run: |
         echo "Checking MacPorts installation..."
         /opt/local/bin/port version || echo "MacPorts not found in expected location"
-        which port || echo "port command not in PATH" 
+        which port || echo "port command not in PATH"
+        echo "Checking blakeports configuration..."
+        grep "file:///" /opt/local/etc/macports/sources.conf || echo "BlakePorts source not found" 
