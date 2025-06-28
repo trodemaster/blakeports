@@ -24,8 +24,8 @@ jobs:
         
     - name: Clean existing netatalk4 installation
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         # Uninstall and clean if port already exists
         if port installed netatalk4 | grep -q netatalk4; then
@@ -38,15 +38,15 @@ jobs:
         
     - name: Build netatalk4 port
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         sudo port -v install netatalk4
         
     - name: Verify netatalk4 installation
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         port installed netatalk4
         which afpd || echo "afpd binary not found in PATH"

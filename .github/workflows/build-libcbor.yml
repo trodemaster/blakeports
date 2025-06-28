@@ -24,8 +24,8 @@ jobs:
         
     - name: Clean existing libcbor installation
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         # Uninstall and clean if port already exists
         if port installed libcbor | grep -q libcbor; then
@@ -38,15 +38,15 @@ jobs:
         
     - name: Build libcbor port
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         sudo port -v install libcbor
         
     - name: Verify libcbor installation
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         port installed libcbor
         ls -la /opt/local/lib/libcbor* || echo "libcbor libraries not found" 

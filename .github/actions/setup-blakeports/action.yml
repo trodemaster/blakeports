@@ -37,9 +37,6 @@ runs:
     - name: Check if MacPorts configuration needs updating
       shell: bash
       run: |
-        # Set up MacPorts PATH explicitly since GitHub Actions uses --noprofile
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
-        
         # Set flag to determine if we need to sync
         NEED_SYNC=false
         
@@ -74,14 +71,13 @@ runs:
     - name: Update port index if needed
       shell: bash
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         if [ "$NEED_SYNC" = "true" ]; then
           echo "Updating port index..."
           cd ~/code/blakeports
-          # Use full path to ensure portindex is found
-          sudo /opt/local/bin/portindex
+          sudo portindex
         else
           echo "✓ Port index sync not needed"
         fi 

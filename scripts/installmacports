@@ -69,11 +69,11 @@ fi
 
 # configure macports.conf
 
-# add macports to current session PATH
-export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+# set up macports environment for current session
+source /opt/local/share/macports/setupenv.bash
 
-# add macports to path in .zshrc (idempotent)
-grep -q "/opt/local/bin" ~/.zshrc 2>/dev/null || echo 'export PATH="/opt/local/bin:/opt/local/sbin:$PATH"' >>~/.zshrc
+# add macports setup to .zshrc (idempotent)
+grep -q "setupenv.bash" ~/.zshrc 2>/dev/null || echo 'source /opt/local/share/macports/setupenv.bash' >>~/.zshrc
 
 # sync macports to update port index (only if needed)
 if [[ "$NEED_SYNC" == "true" ]]; then
