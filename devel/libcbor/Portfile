@@ -16,9 +16,9 @@ license             MIT
 description         library for parsing and generating CBOR
 long_description    {*}${description}, the general-purpose schema-less binary data format.
 
-checksums           rmd160  62f5049c16f9e53a73e9bd64bec596d310f97fef \
-                    sha256  5368add109db559f546d7ed10f440f39a273b073daa8da4abffc83815069fa7f \
-                    size    294856
+checksums           rmd160  b4aeb6e2393e354564cd3d9b5bd4f2c9bc1bc5ec \
+                    sha256  8a01f043c4dc4835e618ee4047ccfc13595ef3b4a3a2994ac904f1b9770501fb \
+                    size    294854
 
 configure.args-append    -DBUILD_SHARED_LIBS=ON
 
