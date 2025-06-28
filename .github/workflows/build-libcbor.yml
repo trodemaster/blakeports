@@ -19,6 +19,17 @@ jobs:
     - name: Setup BlakePorts Environment
       uses: ./.github/actions/setup-blakeports
         
+    - name: Clean existing libcbor installation
+      run: |
+        # Uninstall and clean if port already exists
+        if port installed libcbor | grep -q libcbor; then
+          echo "Removing existing libcbor installation..."
+          sudo port -f uninstall libcbor
+          sudo port clean libcbor
+        else
+          echo "No existing libcbor installation found"
+        fi
+        
     - name: Build libcbor port
       run: |
         sudo port -v install libcbor

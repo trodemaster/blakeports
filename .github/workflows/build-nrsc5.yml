@@ -19,6 +19,17 @@ jobs:
     - name: Setup BlakePorts Environment
       uses: ./.github/actions/setup-blakeports
         
+    - name: Clean existing nrsc5 installation
+      run: |
+        # Uninstall and clean if port already exists
+        if port installed nrsc5 | grep -q nrsc5; then
+          echo "Removing existing nrsc5 installation..."
+          sudo port -f uninstall nrsc5
+          sudo port clean nrsc5
+        else
+          echo "No existing nrsc5 installation found"
+        fi
+        
     - name: Build nrsc5 port
       run: |
         sudo port -v install nrsc5
