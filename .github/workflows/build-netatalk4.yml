@@ -19,6 +19,17 @@ jobs:
     - name: Setup BlakePorts Environment
       uses: ./.github/actions/setup-blakeports
         
+    - name: Clean existing netatalk4 installation
+      run: |
+        # Uninstall and clean if port already exists
+        if port installed netatalk4 | grep -q netatalk4; then
+          echo "Removing existing netatalk4 installation..."
+          sudo port -f uninstall netatalk4
+          sudo port clean netatalk4
+        else
+          echo "No existing netatalk4 installation found"
+        fi
+        
     - name: Build netatalk4 port
       run: |
         sudo port -v install netatalk4
