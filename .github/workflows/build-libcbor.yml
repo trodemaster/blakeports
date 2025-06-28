@@ -27,8 +27,8 @@ jobs:
         cd ~/code/blakeports
         ./scripts/install-deps libcbor
         
-          - name: Clean existing libcbor installation
-        run: |
+    - name: Clean existing libcbor installation
+      run: |
         # Source MacPorts environment from our local copy
         source ~/code/blakeports/setupenv.bash
         
