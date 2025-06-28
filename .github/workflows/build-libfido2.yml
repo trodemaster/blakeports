@@ -16,6 +16,9 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, tart]
     
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
     - name: Setup BlakePorts Environment
       uses: ./.github/actions/setup-blakeports
         
