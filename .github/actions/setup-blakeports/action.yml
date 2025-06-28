@@ -71,8 +71,8 @@ runs:
     - name: Update port index if needed
       shell: bash
       run: |
-        # Source MacPorts environment
-        source /opt/local/share/macports/setupenv.bash
+        # Source MacPorts environment from our local copy
+        source ~/code/blakeports/setupenv.bash
         
         if [ "$NEED_SYNC" = "true" ]; then
           echo "Updating port index..."

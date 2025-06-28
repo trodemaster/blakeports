@@ -27,10 +27,10 @@ jobs:
         cd ~/code/blakeports
         ./scripts/install-deps libcbor
         
-    - name: Clean existing libcbor installation
-      run: |
-        # Source MacPorts environment
-        source /opt/local/share/macports/setupenv.bash
+          - name: Clean existing libcbor installation
+        run: |
+        # Source MacPorts environment from our local copy
+        source ~/code/blakeports/setupenv.bash
         
         # Uninstall and clean if port already exists
         if port installed libcbor | grep -q libcbor; then
@@ -43,15 +43,15 @@ jobs:
         
     - name: Build libcbor port
       run: |
-        # Source MacPorts environment
-        source /opt/local/share/macports/setupenv.bash
+        # Source MacPorts environment from our local copy
+        source ~/code/blakeports/setupenv.bash
         
         sudo port -v install libcbor
         
     - name: Verify libcbor installation
       run: |
-        # Source MacPorts environment
-        source /opt/local/share/macports/setupenv.bash
+        # Source MacPorts environment from our local copy
+        source ~/code/blakeports/setupenv.bash
         
         port installed libcbor
         ls -la /opt/local/lib/libcbor* || echo "libcbor libraries not found" 
