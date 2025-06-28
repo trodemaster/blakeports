@@ -24,8 +24,8 @@ jobs:
         
     - name: Clean existing libfido2 installation
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         # Uninstall and clean if port already exists
         if port installed libfido2 | grep -q libfido2; then
@@ -38,15 +38,15 @@ jobs:
         
     - name: Build libfido2 port
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         sudo port -v install libfido2
         
     - name: Verify libfido2 installation
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         port installed libfido2
         ls -la /opt/local/lib/libfido2* || echo "libfido2 libraries not found"

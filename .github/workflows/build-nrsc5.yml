@@ -24,8 +24,8 @@ jobs:
         
     - name: Clean existing nrsc5 installation
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         # Uninstall and clean if port already exists
         if port installed nrsc5 | grep -q nrsc5; then
@@ -38,15 +38,15 @@ jobs:
         
     - name: Build nrsc5 port
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         sudo port -v install nrsc5
         
     - name: Verify nrsc5 installation
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         port installed nrsc5
         which nrsc5 || echo "nrsc5 binary not found in PATH" 

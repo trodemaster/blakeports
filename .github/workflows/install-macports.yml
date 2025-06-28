@@ -24,8 +24,8 @@ jobs:
       
     - name: Verify MacPorts installation
       run: |
-        # Set up MacPorts PATH explicitly
-        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        # Source MacPorts environment
+        source /opt/local/share/macports/setupenv.bash
         
         echo "Checking MacPorts installation..."
         /opt/local/bin/port version || echo "MacPorts not found in expected location"
