@@ -10,21 +10,19 @@ PortGroup           legacysupport 1.1
 # clock_gettime
 legacysupport.newest_darwin_requires_legacy 15
 
-github.setup        Yubico libfido2 1.15.0
-# Change github.tarball_from to 'releases' or 'archive' next update
-github.tarball_from tarball
+github.setup        Yubico libfido2 1.16.0
 revision            0
 
 categories          security crypto
-maintainers         {@trodemaster netjibbing.com:blake} \
-                    openmaintainer
+maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+
 license             bsd
 description         library to communicate with a FIDO device over USB
 long_description    provides library functionality and command-line tools to communicate with a FIDO device over USB, and to verify attestation and assertion signatures.
 
-checksums           rmd160  ef6a3a7c6627c0f2c37c2b7471b247d6c31de1bb \
-                    sha256  7f0a8d48bb9f296b8579de007a80935e8b20cd0d0b8436452f87a24bdd8a3f0a \
-                    size    672574
+checksums           rmd160  7c1d9e6598c83a13b9fe28be203c4dd433db159c \
+                    sha256  7d86088ef4a48f9faad4ff6f41343328157849153a8dc94d88f4b5461cb29474 \
+                    size    682395
 
 depends_build-append \
                     port:mandoc \
