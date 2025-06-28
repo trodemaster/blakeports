@@ -1,15 +1,58 @@
 #!/bin/bash
-# Script to install just the dependencies for a given port
+# Script to install dependencies for a given port
 
 set -euo pipefail
 
-if [ $# -eq 0 ]; then
-    echo "Usage: $0 <portname>"
-    echo "Example: $0 nrsc5"
+# Show usage
+show_usage() {
+    echo "Usage: $0 [OPTIONS] <portname>"
+    echo ""
+    echo "OPTIONS:"
+    echo "  --runtime-only    Install only runtime dependencies (excludes build deps)"
+    echo "  --help           Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0 nrsc5                    # Install all dependencies"
+    echo "  $0 --runtime-only nrsc5     # Install only runtime dependencies"
+}
+
+# Parse arguments
+RUNTIME_ONLY=false
+PORTNAME=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --runtime-only)
+            RUNTIME_ONLY=true
+            shift
+            ;;
+        --help)
+            show_usage
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            show_usage
+            exit 1
+            ;;
+        *)
+            if [ -z "$PORTNAME" ]; then
+                PORTNAME="$1"
+            else
+                echo "Error: Multiple port names specified"
+                show_usage
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$PORTNAME" ]; then
+    echo "Error: No port name specified"
+    show_usage
     exit 1
 fi
-
-PORTNAME="$1"
 
 # Set MANPATH to avoid unbound variable error
 export MANPATH="${MANPATH:-}"
@@ -19,24 +62,37 @@ source /opt/local/share/macports/setupenv.bash
 
 echo "Getting dependencies for $PORTNAME..."
 
+# Choose which dependencies to get
+if [ "$RUNTIME_ONLY" = true ]; then
+    echo "Mode: Runtime dependencies only"
+    DEPS_OUTPUT=$(port deps --no-build "$PORTNAME" 2>/dev/null)
+else
+    echo "Mode: All dependencies (build + runtime)"
+    DEPS_OUTPUT=$(port deps "$PORTNAME" 2>/dev/null)
+fi
+
 # Extract all dependencies (build + library)
-DEPS=$(port deps "$PORTNAME" | sed -n 's/.*Dependencies: *//p' | tr ',' ' ' | tr -s ' ')
+DEPS=$(echo "$DEPS_OUTPUT" | sed -n 's/.*Dependencies: *//p' | tr ',' ' ' | tr -s ' ')
 
 if [ -z "$DEPS" ]; then
     echo "No dependencies found for $PORTNAME"
     exit 0
 fi
 
-echo "Dependencies found: $DEPS"
+echo "Dependencies to install: $DEPS"
 echo ""
 
-# Install each dependency
+# Install each dependency quietly
 echo "Installing dependencies..."
 for dep in $DEPS; do
-    echo "Installing $dep..."
-    sudo port install "$dep"
+    echo "  Installing $dep..."
+    sudo port install "$dep" >/dev/null 2>&1 || {
+        echo "  ❌ Failed to install $dep"
+        exit 1
+    }
+    echo "  ✅ $dep installed"
 done
 
 echo ""
-echo "✅ All dependencies for $PORTNAME have been installed!"
+echo "🎉 All dependencies for $PORTNAME have been installed!"
 echo "Installed: $DEPS" 
