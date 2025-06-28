@@ -1,0 +1,182 @@
+#!/bin/bash
+# Script to sync _resources directory from MacPorts main repo
+# Uses efficient methods to avoid full repo cloning
+
+set -euo pipefail
+
+# Configuration
+MACPORTS_REPO="https://github.com/macports/macports-ports.git"
+BRANCH="master"  # MacPorts uses 'master' not 'main'
+TARGET_DIR="_resources"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Helper functions
+log_info() {
+    echo -e "${BLUE}ℹ️  $1${NC}"
+}
+
+log_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+log_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+log_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+# Show usage
+show_usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Sync _resources directory from MacPorts main repository"
+    echo ""
+    echo "OPTIONS:"
+    echo "  --branch BRANCH    Use specific branch (default: master)"
+    echo "  --force           Force overwrite existing _resources directory"
+    echo "  --help            Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0                        # Sync from master branch"
+    echo "  $0 --branch release-2.9   # Sync from specific branch"
+    echo "  $0 --force               # Force overwrite existing files"
+}
+
+# Parse arguments
+FORCE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --branch)
+            BRANCH="$2"
+            shift 2
+            ;;
+        --force)
+            FORCE=true
+            shift
+            ;;
+        --help)
+            show_usage
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            show_usage
+            exit 1
+            ;;
+        *)
+            echo "Error: Unexpected argument: $1"
+            show_usage
+            exit 1
+            ;;
+    esac
+done
+
+log_info "Syncing _resources directory from MacPorts repository"
+log_info "Repository: $MACPORTS_REPO"
+log_info "Branch: $BRANCH"
+log_info "Target: $REPO_ROOT/$TARGET_DIR"
+
+cd "$REPO_ROOT"
+
+# Check if target directory exists
+if [ -d "$TARGET_DIR" ] && [ "$FORCE" != true ]; then
+    log_warning "$TARGET_DIR directory already exists"
+    echo "Use --force to overwrite, or remove it manually first"
+    exit 1
+fi
+
+# Method 1: Try git archive (most efficient)
+log_info "Attempting Method 1: git archive (most efficient)"
+if command -v git >/dev/null 2>&1; then
+    if git archive --remote="$MACPORTS_REPO" --format=tar "$BRANCH" "$TARGET_DIR" | tar -xf - 2>/dev/null; then
+        log_success "Successfully synced using git archive"
+        log_info "Synced $(find "$TARGET_DIR" -type f | wc -l | tr -d ' ') files"
+        exit 0
+    else
+        log_warning "git archive failed, trying next method"
+    fi
+else
+    log_warning "git command not found, trying next method"
+fi
+
+# Method 2: Try GitHub CLI with API
+log_info "Attempting Method 2: GitHub CLI with API"
+if command -v gh >/dev/null 2>&1; then
+    TEMP_DIR=$(mktemp -d)
+    trap "rm -rf $TEMP_DIR" EXIT
+    
+    if gh api repos/macports/macports-ports/tarball/"$BRANCH" > "$TEMP_DIR/repo.tar.gz" 2>/dev/null; then
+        cd "$TEMP_DIR"
+        if tar -xzf repo.tar.gz 2>/dev/null; then
+            # Find the extracted directory (GitHub adds a prefix)
+            EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "macports-macports-ports-*" | head -1)
+            if [ -n "$EXTRACTED_DIR" ] && [ -d "$EXTRACTED_DIR/$TARGET_DIR" ]; then
+                cd "$REPO_ROOT"
+                cp -r "$TEMP_DIR/$EXTRACTED_DIR/$TARGET_DIR" .
+                log_success "Successfully synced using GitHub CLI"
+                log_info "Synced $(find "$TARGET_DIR" -type f | wc -l | tr -d ' ') files"
+                exit 0
+            fi
+        fi
+    fi
+    log_warning "GitHub CLI method failed, trying next method"
+fi
+
+# Method 3: Shallow clone with sparse checkout
+log_info "Attempting Method 3: Shallow clone with sparse checkout"
+if command -v git >/dev/null 2>&1; then
+    TEMP_DIR=$(mktemp -d)
+    trap "rm -rf $TEMP_DIR" EXIT
+    
+    cd "$TEMP_DIR"
+    if git clone --depth 1 --branch "$BRANCH" --filter=blob:none --sparse "$MACPORTS_REPO" macports 2>/dev/null; then
+        cd macports
+        git sparse-checkout set "$TARGET_DIR"
+        if [ -d "$TARGET_DIR" ]; then
+            cd "$REPO_ROOT"
+            cp -r "$TEMP_DIR/macports/$TARGET_DIR" .
+            log_success "Successfully synced using sparse checkout"
+            log_info "Synced $(find "$TARGET_DIR" -type f | wc -l | tr -d ' ') files"
+            exit 0
+        fi
+    fi
+    log_warning "Sparse checkout failed, trying fallback method"
+fi
+
+# Method 4: Full shallow clone (fallback)
+log_info "Attempting Method 4: Full shallow clone (fallback)"
+if command -v git >/dev/null 2>&1; then
+    TEMP_DIR=$(mktemp -d)
+    trap "rm -rf $TEMP_DIR" EXIT
+    
+    cd "$TEMP_DIR"
+    if git clone --depth 1 --branch "$BRANCH" "$MACPORTS_REPO" macports; then
+        if [ -d "macports/$TARGET_DIR" ]; then
+            cd "$REPO_ROOT"
+            cp -r "$TEMP_DIR/macports/$TARGET_DIR" .
+            log_success "Successfully synced using full shallow clone"
+            log_info "Synced $(find "$TARGET_DIR" -type f | wc -l | tr -d ' ') files"
+            exit 0
+        else
+            log_error "$TARGET_DIR directory not found in repository"
+            exit 1
+        fi
+    else
+        log_error "Failed to clone repository"
+        exit 1
+    fi
+fi
+
+log_error "All sync methods failed. Please check your internet connection and try again."
+exit 1 
