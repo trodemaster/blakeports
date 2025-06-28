@@ -86,11 +86,18 @@ echo ""
 echo "Installing dependencies..."
 for dep in $DEPS; do
     echo "  Installing $dep..."
-    sudo port install "$dep" >/dev/null 2>&1 || {
-        echo "  ❌ Failed to install $dep"
-        exit 1
-    }
-    echo "  ✅ $dep installed"
+    
+    # Capture output and error status
+    if OUTPUT=$(sudo port install "$dep" 2>&1); then
+        echo "  ✅ $dep installed"
+    else
+        EXIT_CODE=$?
+        echo "  ❌ Failed to install $dep (exit code: $EXIT_CODE)"
+        echo "  📋 Error details:"
+        echo "$OUTPUT" | sed 's/^/     /'  # Indent error output
+        echo ""
+        exit $EXIT_CODE
+    fi
 done
 
 echo ""
