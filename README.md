@@ -5,6 +5,43 @@ Personal MacPorts repository with custom ports and automated CI/CD workflows.
 
 - `scripts/installmacports` - Installs MacPorts and configures BlakePorts as the default source
 - `scripts/boop` - Creates an empty commit to trigger GitHub Actions workflows
+- `scripts/install-deps` - Installs all dependencies for a given port (build + runtime or runtime-only)
+- `scripts/syncfromgitports` - Syncs `_resources` and active port directories from upstream MacPorts repository
+
+### `syncfromgitports` - Sync from MacPorts Repository
+
+Efficiently syncs your BlakePorts repository with the upstream MacPorts repository without requiring a full local clone.
+
+**Key Features:**
+- 🔍 **Auto-discovery** - Automatically finds all active ports by scanning for Portfiles
+- ⚡ **Efficient syncing** - Uses 4 fallback methods (git archive, GitHub API, sparse checkout, shallow clone)  
+- 📊 **Selective operations** - Sync everything, only resources, or only ports
+- 🛡️ **Safe by default** - Won't overwrite existing directories without `--force`
+
+**Usage:**
+```bash
+# Show all discovered active ports
+./scripts/syncfromgitports --list-ports
+
+# Sync everything (_resources + all active ports)
+./scripts/syncfromgitports --force
+
+# Sync only the _resources directory 
+./scripts/syncfromgitports --resources-only --force
+
+# Sync only active port directories
+./scripts/syncfromgitports --ports-only --force
+
+# Sync from a specific MacPorts branch
+./scripts/syncfromgitports --branch release-2.9
+
+# Show help
+./scripts/syncfromgitports --help
+```
+
+**What it syncs:**
+- `_resources/` - MacPorts build system files, port groups, and configurations
+- Active port directories (e.g., `devel/libcbor`, `net/netatalk4`) - Latest versions from MacPorts
 
 ## Ports
 
