@@ -20,10 +20,10 @@ description         This program receives NRSC-5 digital radio stations using an
 long_description    {*}${description}. It offers a command-line interface \
                     as well as an API upon which other applications can be built.
 
-checksums           rmd160  d3306102a9364e62bbe0589a8fbd3800d8dab293 \
-                    sha256  987fa7f058db1e2a5056c8e4832e06b95ee3800a45306ebce2eec7de242c9948 \
-                    size    23182802
-                    
+checksums           rmd160  c34f475365429c50ce33e9f8c90f231c077fe27e \
+                    sha256  6c7608a5da2e26b8940ca55423e9fa45c61ca9f6fe816b6dd298029ff419a91e \
+                    size    23182772
+                                        
 patchfiles          CMakeLists.txt.diff
 
 # cc1: error: unrecognized command line option "-std=gnu11"
