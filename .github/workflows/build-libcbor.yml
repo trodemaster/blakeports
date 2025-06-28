@@ -24,6 +24,9 @@ jobs:
         
     - name: Clean existing libcbor installation
       run: |
+        # Set up MacPorts PATH explicitly
+        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        
         # Uninstall and clean if port already exists
         if port installed libcbor | grep -q libcbor; then
           echo "Removing existing libcbor installation..."
@@ -35,9 +38,15 @@ jobs:
         
     - name: Build libcbor port
       run: |
+        # Set up MacPorts PATH explicitly
+        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        
         sudo port -v install libcbor
         
     - name: Verify libcbor installation
       run: |
+        # Set up MacPorts PATH explicitly
+        export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        
         port installed libcbor
         ls -la /opt/local/lib/libcbor* || echo "libcbor libraries not found" 

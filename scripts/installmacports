@@ -78,7 +78,7 @@ grep -q "/opt/local/bin" ~/.zshrc 2>/dev/null || echo 'export PATH="/opt/local/b
 # sync macports to update port index (only if needed)
 if [[ "$NEED_SYNC" == "true" ]]; then
     echo "Syncing MacPorts port index..."
-    /opt/local/bin/sudo port sync
+    sudo port sync
 else
     echo "Skipping port sync - no changes detected"
 fi
