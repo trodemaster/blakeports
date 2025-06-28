@@ -20,7 +20,7 @@ MACOS_VERSION_NAME=$(awk '/SOFTWARE LICENSE AGREEMENT FOR macOS/' '/System/Libra
 NEED_SYNC=false
 
 # test for macports and install if not present
-if ! command -v /opt/local/bin/port &>/dev/null; then
+if [ ! -f /opt/local/bin/port ]; then
   echo "Installing macports..."
   MACOS_VERSION=$(sw_vers -productVersion | cut -f 1 -d .)
   if [[ $MACOS_VERSION -ge 26 ]]; then
