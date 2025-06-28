@@ -46,7 +46,7 @@ jobs:
         # Source MacPorts environment from our local copy
         source ~/code/blakeports/setupenv.bash
         
-        sudo port -v install libfido2
+        sudo port -vs install libfido2
         
     - name: Verify libfido2 installation
       run: |
