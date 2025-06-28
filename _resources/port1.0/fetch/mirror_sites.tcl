@@ -133,7 +133,6 @@ set portfetch::mirror_sites::sites(cpan) {
     http://mirror.softaculous.com/cpan/modules/by-module/
     http://mirror.sov.uk.goscomb.net/CPAN/modules/by-module/
     http://mirror.team-cymru.org/CPAN/modules/by-module/
-    http://mirror.transip.net/CPAN/modules/by-module/
     http://mirror.truenetwork.ru/CPAN/modules/by-module/
     http://mirror.ucu.ac.ug/cpan/modules/by-module/
     https://mirror.uic.edu/CPAN/modules/by-module/
@@ -166,7 +165,6 @@ set portfetch::mirror_sites::sites(cpan) {
     https://osl.ugr.es/CPAN/modules/by-module/
     http://sunsite.icm.edu.pl/pub/CPAN/modules/by-module/
     http://tux.rainside.sk/CPAN/modules/by-module/
-    http://www.cpan.org.ua/modules/by-module/
     http://www.mirrorservice.org/sites/cpan.perl.org/CPAN/modules/by-module/
     http://www.planet-elektronik.de/CPAN/modules/by-module/
 }
@@ -423,6 +421,7 @@ set fastly      ${letsencrypt_https_or_http}
 #set aarnet.au   ${letsencrypt_https_or_http}
 set aarnet.au   http
 set atl.us      http
+set bos.us      ${letsencrypt_https_or_http}
 set cph.dk      ${letsencrypt_https_or_http}
 set cjj.kr      http
 # cert doesn't have macports.org SANs; admin notified
@@ -432,14 +431,17 @@ set fra.de      ${letsencrypt_https_or_http}
 set jnb.za      ${letsencrypt_https_only}
 set jog.id      http
 set kmq.jp      ${letsencrypt_https_or_http}
+set lis.pt      ${letsencrypt_https_or_http}
 set mse.uk      ${letsencrypt_https_or_http}
 set nue.de      ${letsencrypt_https_or_http}
 set pek.cn      ${letsencrypt_https_or_http}
+set vie.at      ${letsencrypt_https_or_http}
 # cert doesn't have macports.org SANs; admin notified
 #set ykf.ca      ${letsencrypt_https_or_http}
 set ykf.ca      http
 set ywg.ca      ${letsencrypt_https_or_http}
 set fcix.net    http
+set sjtu.edu.cn ${letsencrypt_https_only}
 
 set portfetch::mirror_sites::sites(macports_distfiles) [lsearch -all -glob -inline -not "
     ${fastly}://distfiles.macports.org/:mirror
@@ -447,6 +449,7 @@ set portfetch::mirror_sites::sites(macports_distfiles) [lsearch -all -glob -inli
     ${fcix.net}://mirror.fcix.net/macports/distfiles/:mirror
     ${aarnet.au}://aarnet.au.distfiles.macports.org/pub/macports/distfiles/:mirror
     ${atl.us}://atl.us.distfiles.macports.org/:mirror
+    ${bos.us}://bos.us.distfiles.macports.org/:mirror
     ${cjj.kr}://cjj.kr.distfiles.macports.org/:mirror
     ${cph.dk}://cph.dk.distfiles.macports.org/:mirror
     ${fco.it}://fco.it.distfiles.macports.org/:mirror
@@ -454,8 +457,11 @@ set portfetch::mirror_sites::sites(macports_distfiles) [lsearch -all -glob -inli
     ${jnb.za}://jnb.za.distfiles.macports.org/distfiles/:mirror
     ${jog.id}://jog.id.distfiles.macports.org/macports/distfiles/:mirror
     ${kmq.jp}://kmq.jp.distfiles.macports.org/:mirror
+    ${lis.pt}://lis.pt.distfiles.macports.org/:mirror
     ${mse.uk}://mse.uk.distfiles.macports.org/:mirror
     ${pek.cn}://pek.cn.distfiles.macports.org/macports/distfiles/:mirror
+    ${sjtu.edu.cn}://mirror.sjtu.edu.cn/macports/distfiles/:mirror
+    ${vie.at}://vie.at.distfiles.macports.org/:mirror
     ${ykf.ca}://ykf.ca.distfiles.macports.org/MacPorts/mpdistfiles/:mirror
     ${ywg.ca}://ywg.ca.distfiles.macports.org/mirror/macports/distfiles/:mirror
 " {:*}]
@@ -498,12 +504,10 @@ set portfetch::mirror_sites::sites(netbsd) {
 # https://download-mirror.savannah.gnu.org/releases/00_MIRRORS.txt
 set portfetch::mirror_sites::sites(nongnu) {
     https://bigsearcher.com/mirrors/nongnu/
-    https://de.freedif.org/savannah/
     http://download-mirror.savannah.gnu.org/releases/
     http://ftp.acc.umu.se/mirror/gnu.org/savannah/
     http://ftp.cc.uoc.gr/mirrors/nongnu.org/
-    http://ftp.igh.cnrs.fr/pub/nongnu/
-    http://mirror.cedia.org.ec/nongnu/
+    https://mirror.cedia.org.ec/nongnu/
     http://mirror.csclub.uwaterloo.ca/nongnu/
     http://mirror.downloadvn.com/nongnu/
     http://mirror.easyname.at/nongnu/
@@ -512,12 +516,8 @@ set portfetch::mirror_sites::sites(nongnu) {
     http://mirror.marwan.ma/savannah/
     http://mirror.netcologne.de/savannah/
     http://mirror.ossplanet.net/nongnu/
-    http://mirror.rackdc.com/savannah/
-    http://mirror.yongbok.net/nongnu/
     https://mirrors.sarata.com/non-gnu/
-    http://mirrors.up.pt/pub/nongnu/
     http://nongnu.askapache.com/
-    http://nongnu.freemirror.org/nongnu/
     https://nongnu.uib.no/
     http://quantum-mirror.hu/mirrors/pub/gnusavannah/
     http://savannah-nongnu-org.ip-connect.vn.ua/
@@ -655,32 +655,34 @@ set portfetch::mirror_sites::sites(savannah) \
 
 # https://sourceforge.net/p/forge/documentation/Mirrors/
 set portfetch::mirror_sites::sites(sourceforge) {
-    http://astuteinternet.dl.sourceforge.net/
+    http://altushost-swe.dl.sourceforge.net/
     http://cfhcable.dl.sourceforge.net/
-    http://deac-ams.dl.sourceforge.net/
+    http://cyfuture.dl.sourceforge.net/
+    http://cytranet-dal.dl.sourceforge.net/
     http://deac-fra.dl.sourceforge.net/
     http://deac-riga.dl.sourceforge.net/
     http://excellmedia.dl.sourceforge.net/
     http://freefr.dl.sourceforge.net/
     http://gigenet.dl.sourceforge.net/
-    http://iweb.dl.sourceforge.net/
+    http://ixpeering.dl.sourceforge.net/
     http://jaist.dl.sourceforge.net/
-    http://jztkft.dl.sourceforge.net/
     http://kumisystems.dl.sourceforge.net/
     http://liquidtelecom.dl.sourceforge.net/
-    http://managedway.dl.sourceforge.net/
     http://nchc.dl.sourceforge.net/
     http://netactuate.dl.sourceforge.net/
     http://netcologne.dl.sourceforge.net/
-    http://netix.dl.sourceforge.net/
-    http://newcontinuum.dl.sourceforge.net/
+    http://onboardcloud.dl.sourceforge.net/
     http://phoenixnap.dl.sourceforge.net/
     http://pilotfiber.dl.sourceforge.net/
+    http://psychz.dl.sourceforge.net/
     http://razaoinfo.dl.sourceforge.net/
+    http://sinalbr.dl.sourceforge.net/
+    http://sitsa.dl.sourceforge.net/
     http://tenet.dl.sourceforge.net/
-    http://svwh.dl.sourceforge.net/
-    http://ufpr.dl.sourceforge.net/
     http://versaweb.dl.sourceforge.net/
+    http://webwerks.dl.sourceforge.net/
+    http://yer.dl.sourceforge.net/
+    http://zenlayer.dl.sourceforge.net/
 }
 
 set portfetch::mirror_sites::sites(sourceforge_jp) {

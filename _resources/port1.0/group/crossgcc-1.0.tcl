@@ -106,6 +106,11 @@ array set crossgcc.versions_info {
         sha256  e549cf9cf3594a00e27b6589d4322d70e0720cdd213f39beb4181e06926230ff \
         size    84645292
     }}
+    12.4.0 {xz {
+        rmd160  28610a746188e2a3c368b6578a22b6770f295267 \
+        sha256  704f652604ccbccb14bdabf3478c9511c89788b12cb3bbffded37341916a9175 \
+        size    83377372
+    }}
     13.1.0 {xz {
         rmd160  685ae181bad5121afb132e2744fde13296a6982f \
         sha256  61d684f0aa5e76ac6585ad8898a2427aade8979ed5e7f85492286c4dfc13ee86 \
@@ -115,6 +120,21 @@ array set crossgcc.versions_info {
         rmd160  a6d646ed9765f973d3f63ef560edf4a50cf686c3 \
         sha256  e275e76442a6067341a27f04c5c6b83d8613144004c0413528863dc6b5c743da \
         size    87858592
+    }}
+    14.1.0 {xz {
+        rmd160  7ef2f86a35529c52a71107ae4e82400ce3c90758 \
+        sha256  e283c654987afe3de9d8080bc0bd79534b5ca0d681a73a11ff2b5d3767426840 \
+        size    92265736
+    }}
+    14.2.0 {xz {
+        rmd160  f01750a5753ec6977c23ae6e94f9449a8c147881 \
+        sha256  a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9 \
+        size    92306460
+    }}
+    15.1.0 {xz {
+        rmd160  711fdf2d13fcda8b2b149b6f3a1b30b04326d5f3 \
+        sha256  e2b09ec21660f01fecffb715e0120265216943f038d0e48a9868713e54f06cea \
+        size    98268344
     }}
 }
 
@@ -187,6 +207,9 @@ proc crossgcc.setup {target version} {
 
         worksrcdir      gcc-${version}
 
+        depends_build   port:gettext \
+                        port:texinfo
+
         depends_lib     port:${crossgcc.target}-binutils \
                         port:gmp \
                         port:mpfr \
@@ -194,8 +217,6 @@ proc crossgcc.setup {target version} {
                         port:libiconv \
                         port:libmpc \
                         port:zlib
-
-        depends_build   port:gettext
 
         # Extract gcc distfiles only. libc tarball might be available as gzip only;
         # handled below in post-extract in the variant.
@@ -321,7 +342,7 @@ proc crossgcc.setup {target version} {
 
             # https://build.macports.org/builders/ports-10.13_x86_64-builder/builds/105513/steps/install-port/logs/stdio
             # c++/v1/functional:1408:2: error: no member named 'fancy_abort' in namespace 'std::__1'; did you mean simply 'fancy_abort'?
-            compiler.blacklist-append {clang < 1000}
+            compiler.blacklist-append {clang < 1001}
         }
 
         universal_variant no

@@ -38,17 +38,23 @@ default common_lisp.clisp       yes
 
 options common_lisp.ccl
 # CLL doesn't support arm64 yet, and seems that stable working on 10.10+
-default common_lisp.ccl         [expr { ${os.platform} eq "darwin" && ${os.major} >= 14  && ${os.arch} ne "arm" }]
+default common_lisp.ccl         {[expr { ${os.platform} eq "darwin" && ${os.major} >= 14  && ${os.arch} ne "arm" }]}
 
 options common_lisp.abcl
 # ABCL requires java and support OpenJDK 21 before 10.14 fragile
-default common_lisp.abcl        [expr { ${os.platform} eq "darwin" && ${os.major} >= 18 }]
+default common_lisp.abcl        {[expr { ${os.platform} eq "darwin" && ${os.major} >= 18 }]}
 
 options common_lisp.build_run
 default common_lisp.build_run   yes
 
 options common_lisp.systems
 default common_lisp.systems     {*.asd}
+
+# This option may be needed for some ports on 32-bit systems.
+# https://github.com/sharplispers/ironclad/issues/80
+# It does not affect 64-bit builds, regardless of its value.
+options common_lisp.large_heap
+default common_lisp.large_heap  no
 
 categories-append               lisp
 
@@ -64,12 +70,6 @@ default test.run                yes
 namespace eval common_lisp      {}
 
 proc common_lisp::add_dependencies {} {
-    global common_lisp.sbcl
-    global common_lisp.ecl
-    global common_lisp.clisp
-    global common_lisp.abcl
-    global common_lisp.ccl
-
     if {[option common_lisp.sbcl]} {
         depends_build-delete    port:sbcl \
                                 port:sbcl-devel \
@@ -107,10 +107,6 @@ proc common_lisp::add_dependencies {} {
 port::register_callback common_lisp::add_dependencies
 
 proc common_lisp::respect_threads_support {} {
-    global common_lisp.sbcl
-    global common_lisp.ecl
-    global common_lisp.clisp
-
     if {[option common_lisp.threads] && [option common_lisp.sbcl]} {
         common_lisp.sbcl    no
 
@@ -192,12 +188,6 @@ test {
 }
 
 proc common_lisp::asdf_operate {op name build_system_path} {
-    global common_lisp.sbcl
-    global common_lisp.ecl
-    global common_lisp.clisp
-    global common_lisp.abcl
-    global common_lisp.ccl
-
     if {[option common_lisp.sbcl]} {
         common_lisp::sbcl_asdf_operate ${op} ${name} ${build_system_path}
     }
@@ -220,10 +210,14 @@ proc common_lisp::asdf_operate {op name build_system_path} {
 }
 
 proc common_lisp::sbcl_asdf_operate {op name build_system_path} {
-    global prefix
+    global prefix build_arch
     ui_info "Execute asdf:${op} at ${name} by SBCL"
 
-    common_lisp::run "${prefix}/bin/sbcl --no-sysinit --no-userinit --non-interactive" "--eval" ${op} ${name} ${build_system_path}
+    if {[option common_lisp.large_heap] && (${build_arch} in [list i386 ppc])} {
+        common_lisp::run "${prefix}/bin/sbcl --dynamic-space-size 1500 --no-sysinit --no-userinit --non-interactive" "--eval" ${op} ${name} ${build_system_path}
+    } else {
+        common_lisp::run "${prefix}/bin/sbcl --no-sysinit --no-userinit --non-interactive" "--eval" ${op} ${name} ${build_system_path}
+    }
 }
 
 proc common_lisp::ecl_asdf_operate {op name build_system_path} {
@@ -251,11 +245,12 @@ proc common_lisp::abcl_asdf_operate {op name build_system_path} {
 }
 
 proc common_lisp::ccl_asdf_operate {op name build_system_path} {
-    global prefix configure.build_arch
+    global prefix build_arch
     ui_info "Execute asdf:${op} at ${name} by CCL"
 
     set ccl ccl64
-    if { ${configure.build_arch} in [list i386 ppc] } {
+    # This must be build_arch, not configure.build_arch:
+    if { ${build_arch} in [list i386 ppc] } {
         set ccl ccl
     }
 

@@ -21,8 +21,8 @@ namespace eval legacysupport {
 }
 
 # Newest Darwin version that requires legacy support.
-# Currently OS X 10.12 ( Sierra, Darwin 16) due to utimensat, fsgetpath, setattrlistat
-set ls_max_darwin_support 16
+# Currently OS X 10.14 ( Mojave, Darwin 18) due to timespec_get
+set ls_max_darwin_support 18
 options legacysupport.newest_darwin_requires_legacy
 default legacysupport.newest_darwin_requires_legacy ${ls_max_darwin_support}
 
@@ -89,13 +89,6 @@ proc legacysupport::get_library_link_flags {} {
 proc legacysupport::get_newest_darwin_with_missing_symbols {} {
     global   ls_max_darwin_support
     return ${ls_max_darwin_support}
-}
-
-# please remove when a86f95c has been in a released MacPorts version for at least two weeks
-# see https://github.com/macports/macports-base/commit/a86f95c5ab86ee52c8fec2271e005591179731de
-if {![info exists compiler.limit_flags]} {
-    options compiler.limit_flags
-    default compiler.limit_flags        no
 }
 
 proc legacysupport::get_depends_type {} {
