@@ -9,7 +9,7 @@ PortGroup           legacysupport 1.1
 legacysupport.newest_darwin_requires_legacy 10
 
 github.setup        theori-io nrsc5 3.0.1 v
-github.tarball_from releases
+github.tarball_from tarball
 
 version             3.0.1
 categories          audio
