@@ -1,0 +1,42 @@
+#!/bin/bash
+# Script to install just the dependencies for a given port
+
+set -euo pipefail
+
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <portname>"
+    echo "Example: $0 nrsc5"
+    exit 1
+fi
+
+PORTNAME="$1"
+
+# Set MANPATH to avoid unbound variable error
+export MANPATH="${MANPATH:-}"
+
+# Source MacPorts environment
+source /opt/local/share/macports/setupenv.bash
+
+echo "Getting dependencies for $PORTNAME..."
+
+# Extract all dependencies (build + library)
+DEPS=$(port deps "$PORTNAME" | sed -n 's/.*Dependencies: *//p' | tr ',' ' ' | tr -s ' ')
+
+if [ -z "$DEPS" ]; then
+    echo "No dependencies found for $PORTNAME"
+    exit 0
+fi
+
+echo "Dependencies found: $DEPS"
+echo ""
+
+# Install each dependency
+echo "Installing dependencies..."
+for dep in $DEPS; do
+    echo "Installing $dep..."
+    sudo port install "$dep"
+done
+
+echo ""
+echo "✅ All dependencies for $PORTNAME have been installed!"
+echo "Installed: $DEPS" 
