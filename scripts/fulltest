@@ -61,9 +61,9 @@ check_jibb_runners() {
     fi
 }
 
-# Function to remove all existing runners
+# Function to remove all existing runners for clean state
 teardown_runners() {
-    print_header "PHASE 1: Tearing Down Existing Runners"
+    print_header "PHASE 1: Tearing Down All Existing Runners (Clean Slate)"
     
     cd "$JIBB_RUNNERS_PATH"
     
@@ -79,18 +79,18 @@ teardown_runners() {
     # Brief pause to ensure cleanup completes
     sleep 5
     
-    print_success "Runner teardown completed"
+    print_success "Complete runner teardown completed"
     cd - > /dev/null
 }
 
-# Function to create all runners
+# Function to create all runners fresh
 setup_runners() {
     print_header "PHASE 2: Creating Fresh Runners"
     
     cd "$JIBB_RUNNERS_PATH"
     
     for runner in "${RUNNERS[@]}"; do
-        print_info "Creating runner: $runner"
+        print_info "Creating fresh runner: $runner"
         if ./ghrunner.sh -tart "$runner"; then
             print_success "Successfully created $runner"
         else
@@ -99,13 +99,13 @@ setup_runners() {
         fi
     done
     
-    print_success "All runners created"
+    print_success "All runners created fresh"
     cd - > /dev/null
 }
 
 # Function to wait for runners to come online
 wait_for_runners() {
-    print_header "PHASE 3: Waiting for Runners to Come Online"
+    print_header "PHASE 3: Waiting for All Runners to Come Online"
     
     cd "$JIBB_RUNNERS_PATH"
     
@@ -113,30 +113,44 @@ wait_for_runners() {
     local attempt=0
     
     while [ $attempt -lt $max_attempts ]; do
-        print_info "Checking runner status... (attempt $((attempt + 1))/$max_attempts)"
+        print_info "Verifying runner readiness... (attempt $((attempt + 1))/$max_attempts)"
         
-        # Get runner status
-        local all_online=true
+        # Get fresh runner status
+        local runner_list_output
+        if ! runner_list_output=$(./ghrunner.sh -list 2>/dev/null); then
+            print_warning "Failed to get runner status, retrying..."
+            attempt=$((attempt + 1))
+            sleep 10
+            continue
+        fi
+        
+        # Check each runner
+        local all_ready=true
         for runner in "${RUNNERS[@]}"; do
-            local status=$(./ghrunner.sh -list | grep "^$runner " | awk '{print $2}' || echo "offline")
-            local busy=$(./ghrunner.sh -list | grep "^$runner " | awk '{print $3}' || echo "true")
+            local status="unknown"
+            local busy="unknown"
+            
+            if echo "$runner_list_output" | grep -q "^$runner "; then
+                status=$(echo "$runner_list_output" | grep "^$runner " | awk '{print $2}' || echo "unknown")
+                busy=$(echo "$runner_list_output" | grep "^$runner " | awk '{print $3}' || echo "unknown")
+            fi
             
             if [ "$status" != "online" ] || [ "$busy" = "true" ]; then
-                all_online=false
-                print_info "$runner: status=$status, busy=$busy"
+                all_ready=false
+                print_info "$runner: status=$status, busy=$busy (waiting...)"
             else
-                print_success "$runner: online and ready"
+                print_success "$runner: ready"
             fi
         done
         
-        if [ "$all_online" = true ]; then
+        if [ "$all_ready" = true ]; then
             print_success "All runners are online and ready!"
             break
         fi
         
         if [ $attempt -eq $((max_attempts - 1)) ]; then
-            print_error "Timeout waiting for runners to come online"
-            ./ghrunner.sh -list
+            print_error "Timeout waiting for runners to be ready"
+            echo "$runner_list_output"
             exit 1
         fi
         
@@ -196,11 +210,16 @@ show_build_status() {
 main() {
     print_header "BlakePorts Full Test Script"
     print_info "This script will:"
-    print_info "  1. Remove all existing GitHub runners"
+    print_info "  1. Tear down ALL existing GitHub runners (clean slate)"
     print_info "  2. Create fresh runners for both macOS versions"  
-    print_info "  3. Wait for runners to come online"
+    print_info "  3. Wait for all runners to come online"
     print_info "  4. Trigger all port build workflows"
     print_info "  5. Show status summary"
+    echo
+    print_info "Clean slate approach:"
+    print_info "  🧹 Complete teardown ensures no lingering issues"
+    print_info "  🔄 Fresh runners guarantee known good state"
+    print_info "  🧪 Reliable, repeatable comprehensive testing"
     
     echo
     read -p "Continue? (y/N): " -n 1 -r
@@ -232,7 +251,7 @@ main() {
     show_build_status
     
     print_header "FULL TEST COMPLETED SUCCESSFULLY! 🎉"
-    print_success "All runners recreated and builds triggered"
+    print_success "All runners recreated fresh and builds triggered"
     print_info "Monitor progress with: gh run list"
 }
 
