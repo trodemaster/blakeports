@@ -10,28 +10,12 @@ runs:
         # Create ~/code directory if it doesn't exist
         mkdir -p ~/code
         
-        # Check if ~/code/blakeports exists and what it is
-        if [ -L ~/code/blakeports ]; then
-          # It's a symlink - check if it points to the right place
-          if [ "$(readlink ~/code/blakeports)" = "${{ github.workspace }}" ]; then
-            echo "✓ Symlink already exists and points to correct location"
-            cd ~/code/blakeports
-            echo "Updating repository with git pull..."
-            git pull
-          else
-            echo "Symlink exists but points to wrong location, recreating..."
-            rm ~/code/blakeports
-            ln -s "${{ github.workspace }}" ~/code/blakeports
-          fi
-        elif [ -d ~/code/blakeports ]; then
-          # It's a directory - remove it and create symlink
-          echo "Directory exists, replacing with symlink..."
-          rm -rf ~/code/blakeports
+        # Create symlink if it doesn't exist
+        if [ ! -e ~/code/blakeports ]; then
+          echo "Creating symlink to blakeports..."
           ln -s "${{ github.workspace }}" ~/code/blakeports
         else
-          # Nothing exists - create symlink
-          echo "Creating new symlink to blakeports..."
-          ln -s "${{ github.workspace }}" ~/code/blakeports
+          echo "✓ BlakePorts already exists at ~/code/blakeports"
         fi
         
     - name: Check if MacPorts configuration needs updating

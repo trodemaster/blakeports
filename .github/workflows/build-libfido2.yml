@@ -13,9 +13,19 @@ on:
 
 jobs:
   build-libfido2:
-    runs-on: [self-hosted, macOS, ARM64, tart]
+    name: build-libfido2 (${{ matrix.runner }})
+    strategy:
+      matrix:
+        runner: [macOS_15, macOS_26_Beta]
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
     
     steps:
+    - name: Show macOS version
+      run: |
+        echo "Running on: ${{ matrix.runner }}"
+        sw_vers
+        
     - name: Checkout repository
       uses: actions/checkout@v4
       
