@@ -49,7 +49,7 @@ Efficiently syncs your BlakePorts repository with the upstream MacPorts reposito
 Complete end-to-end testing script that recreates the entire CI/CD pipeline from scratch.
 
 **Key Features:**
-- 🔄 **Full teardown/rebuild** - Removes and recreates all GitHub runners
+- 🧹 **Clean slate testing** - Complete teardown and fresh rebuild of all runners
 - 🧪 **Complete port coverage** - Triggers builds for all ports in the repository
 - 📊 **Matrix validation** - Ensures builds work on both macOS versions
 - ⏱️ **Status monitoring** - Waits for runners and tracks build progress
