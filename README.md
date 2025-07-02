@@ -7,6 +7,7 @@ Personal MacPorts repository with custom ports and automated CI/CD workflows.
 - `scripts/boop` - Creates an empty commit to trigger GitHub Actions workflows
 - `scripts/install-deps` - Installs all dependencies for a given port (build + runtime or runtime-only)
 - `scripts/syncfromgitports` - Syncs `_resources` and active port directories from upstream MacPorts repository
+- `scripts/fulltest` - **Comprehensive test script** - Recreates all runners and triggers all port builds
 
 ### `syncfromgitports` - Sync from MacPorts Repository
 
@@ -42,6 +43,41 @@ Efficiently syncs your BlakePorts repository with the upstream MacPorts reposito
 **What it syncs:**
 - `_resources/` - MacPorts build system files, port groups, and configurations
 - Active port directories (e.g., `devel/libcbor`, `net/netatalk4`) - Latest versions from MacPorts
+
+### `fulltest` - Comprehensive Testing
+
+Complete end-to-end testing script that recreates the entire CI/CD pipeline from scratch.
+
+**Key Features:**
+- 🔄 **Full teardown/rebuild** - Removes and recreates all GitHub runners
+- 🧪 **Complete port coverage** - Triggers builds for all ports in the repository
+- 📊 **Matrix validation** - Ensures builds work on both macOS versions
+- ⏱️ **Status monitoring** - Waits for runners and tracks build progress
+- 🛡️ **Safety checks** - Validates prerequisites and prompts for confirmation
+
+**Usage:**
+```bash
+# Run comprehensive test (interactive)
+./scripts/fulltest
+
+# What it does:
+# 1. Removes all existing runners (macOS_15, macOS_26_Beta)
+# 2. Creates fresh runner VMs 
+# 3. Waits for runners to come online
+# 4. Triggers all port build workflows
+# 5. Shows monitoring commands for tracking progress
+```
+
+**When to use:**
+- Testing major changes to the CI/CD pipeline
+- Validating the entire port collection after upstream sync
+- Ensuring runner health after system updates
+- Demonstrating the complete workflow to contributors
+
+**Prerequisites:**
+- [jibb-runners](https://github.com/trodemaster/jibb-runners) cloned at `../jibb-runners`
+- GitHub CLI authenticated (`gh auth login`)
+- Base VMs (`macOS_15`, `macOS_26_Beta`) available in tart
 
 ## Ports
 
@@ -285,4 +321,10 @@ gh run view --json jobs --jq '.jobs[] | {name: .name, status: .status}'  # CLI s
 
 # View specific job logs
 gh run view --log --job "build-libcbor (macOS_15)"
+```
+
+**Comprehensive Testing:**
+```bash
+# Full end-to-end test (recreates all runners + builds all ports)
+./scripts/fulltest
 ```
