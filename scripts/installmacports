@@ -50,7 +50,7 @@ if [ ! -f /opt/local/bin/port ]; then
     MACPORTS_PKG="https://github.com/macports/macports-base/releases/download/${PORT_LATEST_RELEASE}/MacPorts-${PORT_LATEST_RELEASE_NUMBER}-${MACOS_VERSION}-${MACOS_VERSION_NAME}.pkg"
     echo $MACPORTS_PKG
     curl -s -L -o /tmp/macports.pkg $MACPORTS_PKG
-    sudo installer -pkg /tmp/macports.pkg -target /
+    sudo installer -pkg /tmp/macports.pkg -target / || true
     rm /tmp/macports.pkg
     # MacPorts package installer handles initial sync, no need to sync again
   fi
