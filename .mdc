@@ -1,0 +1,70 @@
+# SSH Configuration Rules for Cursor Agents
+
+## SSH Connection Guidelines
+
+When connecting to hosts via SSH, always use the following SSH options to ensure secure, non-interactive connections:
+
+### Required SSH Options
+
+Always include these SSH options when connecting to hosts:
+
+```bash
+SSH_OPTS=(
+    "-o" "ControlPath ~/.ssh/controlmasters/%r@%h:%p"
+    "-o" "ControlMaster auto"
+    "-o" "ControlPersist 10m"
+    "-o" "StrictHostKeyChecking no"
+    "-o" "UserKnownHostsFile=/dev/null"
+    "-o" "IdentityAgent /Users/blake/Library/Containers/com.maxgoedjen.Secretive.SecretAgent/Data/socket.ssh"
+)
+```
+
+### Usage Pattern
+
+When SSHing into a host, use this pattern:
+
+```bash
+ssh "${SSH_OPTS[@]}" "username@hostname_or_ip"
+```
+
+### Key Principles
+
+1. **No Interactive Authentication**: The SSH configuration should handle all authentication automatically
+2. **Skip Host Key Verification**: Use `StrictHostKeyChecking no` and `UserKnownHostsFile=/dev/null` to avoid host key prompts
+3. **Connection Multiplexing**: Use SSH connection multiplexing for efficiency with `ControlMaster auto` and `ControlPersist 10m`
+4. **Identity Agent**: Use the Secretive SSH agent for key management
+5. **Non-Interactive**: All SSH connections should be non-interactive and not require password entry or key acceptance
+
+### Example Implementation
+
+When writing scripts or commands that need to SSH into hosts:
+
+```bash
+# Define SSH options
+SSH_OPTS=(
+    "-o" "ControlPath ~/.ssh/controlmasters/%r@%h:%p"
+    "-o" "ControlMaster auto"
+    "-o" "ControlPersist 10m"
+    "-o" "StrictHostKeyChecking no"
+    "-o" "UserKnownHostsFile=/dev/null"
+    "-o" "IdentityAgent /Users/blake/Library/Containers/com.maxgoedjen.Secretive.SecretAgent/Data/socket.ssh"
+)
+
+# Use for SSH connections
+ssh "${SSH_OPTS[@]}" "admin@192.168.1.100"
+```
+
+### Reference Implementation
+
+See `jibb-runners/scripts/sshtorunner` for a complete implementation example.
+
+## Security Notes
+
+- This configuration is designed for development and testing environments
+- The SSH agent (Secretive) handles key management securely
+- Connection multiplexing improves performance for multiple SSH sessions
+- Host key verification is disabled for automation purposes
+description:
+globs:
+alwaysApply: false
+---

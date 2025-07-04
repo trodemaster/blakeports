@@ -67,17 +67,79 @@ teardown_runners() {
     
     cd "$JIBB_RUNNERS_PATH"
     
+    # First, get current runner status to see what exists
+    print_info "Checking current runner state..."
+    local runner_list_output
+    if runner_list_output=$(./ghrunner.sh -list 2>/dev/null); then
+        echo "$runner_list_output"
+    else
+        print_warning "Could not get runner list, proceeding with removal anyway"
+    fi
+    
+    # Remove each runner with verification
     for runner in "${RUNNERS[@]}"; do
         print_info "Removing runner: $runner"
-        if ./ghrunner.sh -remove "$runner" 2>/dev/null; then
-            print_success "Successfully removed $runner"
+        local runner_vm_name="${runner}_runner"
+        
+        # Step 1: Remove via ghrunner.sh (handles service stop, GitHub removal, etc.)
+        if ./ghrunner.sh -remove "$runner"; then
+            print_success "ghrunner.sh removal completed for $runner"
         else
-            print_warning "Failed to remove $runner (may not exist)"
+            print_warning "ghrunner.sh removal failed for $runner, trying manual cleanup"
         fi
+        
+        # Step 2: Ensure VM is actually stopped and deleted (belt and suspenders)
+        print_info "Verifying VM cleanup for $runner_vm_name..."
+        if tart list | grep -q "$runner_vm_name"; then
+            print_warning "VM $runner_vm_name still exists, forcing cleanup..."
+            
+            # Force stop if running
+            tart stop "$runner_vm_name" 2>/dev/null || print_info "VM was already stopped"
+            
+            # Wait a moment for clean shutdown
+            sleep 3
+            
+            # Force delete
+            if tart delete "$runner_vm_name" 2>/dev/null; then
+                print_success "Successfully force-deleted VM $runner_vm_name"
+            else
+                print_error "Failed to delete VM $runner_vm_name - manual intervention may be needed"
+            fi
+        else
+            print_success "VM $runner_vm_name successfully removed"
+        fi
+        
+        # Brief pause between runners to avoid race conditions
+        sleep 2
     done
     
-    # Brief pause to ensure cleanup completes
-    sleep 5
+    # Final verification - wait for all VMs to be completely gone
+    print_info "Waiting for complete VM cleanup..."
+    local max_wait=30
+    local waited=0
+    while [ $waited -lt $max_wait ]; do
+        local remaining_vms=0
+        for runner in "${RUNNERS[@]}"; do
+            local runner_vm_name="${runner}_runner"
+            if tart list | grep -q "$runner_vm_name"; then
+                remaining_vms=$((remaining_vms + 1))
+            fi
+        done
+        
+        if [ $remaining_vms -eq 0 ]; then
+            print_success "All runner VMs successfully removed"
+            break
+        fi
+        
+        print_info "Still waiting for $remaining_vms VM(s) to be removed... ($waited/$max_wait)"
+        sleep 2
+        waited=$((waited + 2))
+    done
+    
+    if [ $waited -ge $max_wait ]; then
+        print_warning "Timeout waiting for all VMs to be removed, but proceeding..."
+        tart list | grep "_runner" || print_info "No runner VMs found in final check"
+    fi
     
     print_success "Complete runner teardown completed"
     cd - > /dev/null
