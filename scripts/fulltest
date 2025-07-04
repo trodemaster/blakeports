@@ -16,7 +16,6 @@ NC='\033[0m' # No Color
 JIBB_RUNNERS_PATH="../jibb-runners"
 RUNNERS=("macOS_15" "macOS_26_Beta")
 WORKFLOWS=(
-    "Install MacPorts"
     "Build libcbor"
     "Build libfido2" 
     "Build netatalk4"
@@ -230,6 +229,7 @@ wait_for_runners() {
 # Function to trigger all workflow builds
 trigger_builds() {
     print_header "PHASE 4: Triggering All Port Builds"
+    print_info "Note: MacPorts and BlakePorts setup is now handled automatically by each build workflow via scripts/installmacports."
     
     for workflow in "${WORKFLOWS[@]}"; do
         print_info "Triggering: $workflow"
@@ -275,13 +275,14 @@ main() {
     print_info "  1. Tear down ALL existing GitHub runners (clean slate)"
     print_info "  2. Create fresh runners for both macOS versions"  
     print_info "  3. Wait for all runners to come online"
-    print_info "  4. Trigger all port build workflows"
+    print_info "  4. Trigger all port build workflows (each will set up MacPorts/BlakePorts as needed)"
     print_info "  5. Show status summary"
     echo
     print_info "Clean slate approach:"
     print_info "  🧹 Complete teardown ensures no lingering issues"
     print_info "  🔄 Fresh runners guarantee known good state"
     print_info "  🧪 Reliable, repeatable comprehensive testing"
+    print_info "  ⚡ MacPorts/BlakePorts setup is now consolidated and idempotent via scripts/installmacports"
     
     echo
     read -p "Continue? (y/N): " -n 1 -r

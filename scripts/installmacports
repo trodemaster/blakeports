@@ -19,6 +19,18 @@ MACOS_VERSION_NAME=$(awk '/SOFTWARE LICENSE AGREEMENT FOR macOS/' '/System/Libra
 # track if we need to sync macports
 NEED_SYNC=false
 
+# Set up blakeports symlink and directory structure
+echo "Setting up BlakePorts directory structure..."
+mkdir -p ~/code
+
+# Create symlink if it doesn't exist
+if [ ! -e ~/code/blakeports ]; then
+  echo "Creating symlink to blakeports..."
+  ln -s "$(pwd)" ~/code/blakeports
+else
+  echo "✓ BlakePorts already exists at ~/code/blakeports"
+fi
+
 # test for macports and install if not present
 if [ ! -f /opt/local/bin/port ]; then
   echo "Installing macports..."
@@ -44,6 +56,8 @@ if [ ! -f /opt/local/bin/port ]; then
   fi
   # MacPorts was just installed, we need to sync
   NEED_SYNC=true
+else
+  echo "✓ MacPorts already installed"
 fi
 
 # configure macports sources
@@ -62,7 +76,7 @@ EOF
     # Sources configuration was modified, we need to sync
     NEED_SYNC=true
 else
-    echo "blakeports already configured as default source"
+    echo "✓ blakeports already configured as default source"
 fi
 
 # configure macports archive sites
@@ -82,7 +96,7 @@ export MANPATH="/opt/local/share/man:$MANPATH"
 EOF
     echo "Added MacPorts configuration to .zshrc"
 else
-    echo "MacPorts configuration already exists in .zshrc"
+    echo "✓ MacPorts configuration already exists in .zshrc"
 fi
 
 # sync macports to update port index (only if needed)
@@ -90,7 +104,9 @@ if [[ "$NEED_SYNC" == "true" ]]; then
     echo "Syncing MacPorts port index..."
     sudo port sync
 else
-    echo "Skipping port sync - no changes detected"
+    echo "✓ Skipping port sync - no changes detected"
 fi
+
+echo "✓ MacPorts setup complete!"
 
 exit 0

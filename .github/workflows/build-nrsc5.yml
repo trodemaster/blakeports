@@ -29,9 +29,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       
-    - name: Setup BlakePorts Environment
-      uses: ./.github/actions/setup-blakeports
-      
+    - name: Setup MacPorts and BlakePorts Environment
+      run: |
+        cd ~/code/blakeports
+        ./scripts/installmacports
+        
     - name: Install dependencies
       run: |
         cd ~/code/blakeports

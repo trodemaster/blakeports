@@ -161,8 +161,7 @@ gh workflow run "Build libfido2"
 gh workflow run "Build libcbor"
 gh workflow run "Build nrsc5"
 
-# Trigger the MacPorts installation workflow
-gh workflow run "Install MacPorts"
+# Note: MacPorts installation is now handled automatically by each build workflow
 ```
 
 ### Monitor Matrix Workflow Runs
@@ -274,8 +273,8 @@ cd ../blakeports && gh workflow run "Build libcbor"
 
 ## Workflow Structure
 
-All workflows use composite actions and matrix strategies for consistency and comprehensive testing:
-- `.github/actions/setup-blakeports/` - Reusable setup for checkout, configuration, and port indexing
+All workflows use consolidated setup and matrix strategies for consistency and comprehensive testing:
+- **Consolidated setup** - Each workflow uses `./scripts/installmacports` for idempotent MacPorts and BlakePorts configuration
 - **Matrix builds** - Each workflow runs on multiple macOS versions (`macOS_15`, `macOS_26_Beta`)
 - Individual port workflows automatically trigger on changes to their respective directories
 - Clean builds with automatic uninstall/cleanup of existing port installations
