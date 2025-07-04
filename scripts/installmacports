@@ -34,7 +34,6 @@ fi
 # test for macports and install if not present
 if [ ! -f /opt/local/bin/port ]; then
   echo "Installing macports..."
-  MACOS_VERSION=$(sw_vers -productVersion | cut -f 1 -d .)
   if [[ $MACOS_VERSION -ge 26 ]]; then
     cd
     echo "macOS version $MACOS_VERSION is not supported by macports installer"
@@ -53,9 +52,8 @@ if [ ! -f /opt/local/bin/port ]; then
     curl -s -L -o /tmp/macports.pkg $MACPORTS_PKG
     sudo installer -pkg /tmp/macports.pkg -target /
     rm /tmp/macports.pkg
+    # MacPorts package installer handles initial sync, no need to sync again
   fi
-  # MacPorts was just installed, we need to sync
-  NEED_SYNC=true
 else
   echo "✓ MacPorts already installed"
 fi
@@ -65,6 +63,14 @@ SOURCES_CONF="/opt/local/etc/macports/sources.conf"
 BLAKEPORTS_DIR="$HOME/code/blakeports"
 
 # Check if blakeports is already configured as default
+echo "Checking sources.conf configuration..."
+echo "BLAKEPORTS_DIR: ${BLAKEPORTS_DIR}"
+echo "SOURCES_CONF: ${SOURCES_CONF}"
+if [ -f "$SOURCES_CONF" ]; then
+    echo "Current sources.conf contents:"
+    cat "$SOURCES_CONF"
+fi
+
 if ! grep -q "file://${BLAKEPORTS_DIR} \\[default\\]" "$SOURCES_CONF" 2>/dev/null; then
     echo "Configuring blakeports as default MacPorts source..."
     sudo tee "$SOURCES_CONF" <<EOF

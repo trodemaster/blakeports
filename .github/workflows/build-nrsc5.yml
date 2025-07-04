@@ -31,12 +31,10 @@ jobs:
       
     - name: Setup MacPorts and BlakePorts Environment
       run: |
-        cd ~/code/blakeports
         ./scripts/installmacports
         
     - name: Install dependencies
       run: |
-        cd ~/code/blakeports
         ./scripts/install-deps nrsc5
         
     - name: Clean existing nrsc5 installation

@@ -31,12 +31,10 @@ jobs:
       
     - name: Setup MacPorts and BlakePorts Environment
       run: |
-        cd ~/code/blakeports
         ./scripts/installmacports
         
     - name: Install dependencies
       run: |
-        cd ~/code/blakeports
         ./scripts/install-deps libfido2
         
     - name: Clean existing libfido2 installation
