@@ -75,7 +75,7 @@ if ! grep -q "file://${BLAKEPORTS_DIR} \\[default\\]" "$SOURCES_CONF" 2>/dev/nul
     echo "Configuring blakeports as default MacPorts source..."
     sudo tee "$SOURCES_CONF" <<EOF
 file://${BLAKEPORTS_DIR} [default]
-rsync://rsync.macports.org/macports/release/tarballs/ports.tar.gz
+https://mirror.fcix.net/macports/release/tarballs/ports.tar [nosync]
 EOF
     echo "MacPorts sources.conf updated successfully"
     echo "blakeports directory set as default source"

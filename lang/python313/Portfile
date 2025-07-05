@@ -87,7 +87,7 @@ post-patch {
 
 build.target        all
 
-test.run            no
+#test.run            no
 #test.target         test
 
 destroot.target     frameworkinstall maninstall
