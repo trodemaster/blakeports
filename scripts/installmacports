@@ -105,7 +105,7 @@ fi
 
 # set up macports environment for current session
 export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
-export MANPATH="/opt/local/share/man:$MANPATH"
+export MANPATH="/opt/local/share/man:${MANPATH:-}"
 
 # sync macports to update port index (only if needed)
 if [[ "$NEED_SYNC" == "true" ]]; then
