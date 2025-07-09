@@ -76,7 +76,7 @@ if ! grep -q "file://${BLAKEPORTS_DIR} \\[default\\]" "$SOURCES_CONF" 2>/dev/nul
     echo "Configuring blakeports as default MacPorts source..."
     sudo tee "$SOURCES_CONF" <<EOF
 file://${BLAKEPORTS_DIR} [default]
-https://mirror.fcix.net/macports/release/tarballs/ports.tar
+https://mirror.fcix.net/macports/release/tarballs/ports.tar.gz
 EOF
     echo "MacPorts sources.conf updated successfully"
     echo "blakeports directory set as default source"
@@ -90,9 +90,6 @@ fi
 
 # configure macports.conf
 
-# set up macports environment for current session
-source ~/code/blakeports/setupenv.bash
-
 # add macports to path in .zshrc (idempotent)
 if ! grep -q "# MacPorts configuration" ~/.zshrc 2>/dev/null; then
     cat << 'EOF' >> ~/.zshrc
@@ -105,6 +102,10 @@ EOF
 else
     echo "✓ MacPorts configuration already exists in .zshrc"
 fi
+
+# set up macports environment for current session
+export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+export MANPATH="/opt/local/share/man:$MANPATH"
 
 # sync macports to update port index (only if needed)
 if [[ "$NEED_SYNC" == "true" ]]; then
