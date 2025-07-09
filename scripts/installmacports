@@ -54,6 +54,7 @@ if [ ! -f /opt/local/bin/port ]; then
     rm /tmp/macports.pkg
     # MacPorts package installer handles initial sync, no need to sync again
   fi
+  PORT_SYNC=true
 else
   echo "✓ MacPorts already installed"
 fi
