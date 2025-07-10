@@ -69,12 +69,12 @@ else
 fi
 
 # configure macports sources
-if [[ -d {{ (joinPath .chezmoi.homeDir "code/blakeports") }} ]]; then
-  echo "{{ (joinPath .chezmoi.homeDir "code/blakeports") }} directory found, adding to sources.conf"
+if [[ -d /Users/blake/code/blakeports ]]; then
+  echo "/Users/blake/code/blakeports directory found, adding to sources.conf"
   if ! grep -q "blakeports" /opt/local/etc/macports/sources.conf; then
     echo "Configuring macports /opt/local/etc/macports/sources.conf"
     sudo tee /opt/local/etc/macports/sources.conf <<EOF
-file://{{ (joinPath .chezmoi.homeDir "code/blakeports") }} [default]
+file:///Users/blake/code/blakeports [default]
 https://mirror.fcix.net/macports/release/tarballs/ports.tar
 EOF
   fi
