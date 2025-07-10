@@ -40,7 +40,7 @@ jobs:
     - name: Clean existing libfido2 installation
       run: |
         # Source MacPorts environment from our local copy
-        source ~/code/blakeports/setupenv.bash
+        source ./setupenv.bash
         
         # Uninstall and clean if port already exists
         if port installed libfido2 | grep -q libfido2; then
@@ -54,14 +54,14 @@ jobs:
     - name: Build libfido2 port
       run: |
         # Source MacPorts environment from our local copy
-        source ~/code/blakeports/setupenv.bash
+        source ./setupenv.bash
         
         sudo port -vs install libfido2
         
     - name: Verify libfido2 installation
       run: |
         # Source MacPorts environment from our local copy
-        source ~/code/blakeports/setupenv.bash
+        source ./setupenv.bash
         
         port installed libfido2
         ls -la /opt/local/lib/libfido2* || echo "libfido2 libraries not found"
