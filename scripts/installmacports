@@ -47,8 +47,8 @@ if [ ! -f /opt/local/bin/port ]; then
     #cd
     echo "macOS version $MACOS_VERSION is not supported by macports installer"
     echo "Attempting install from source..."
-    curl -O https://distfiles.macports.org/MacPorts/MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.bz2
-    tar xf MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.bz2
+    curl -O https://distfiles.macports.org/MacPorts/MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.gz
+    tar xf MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.gz
     cd MacPorts-${PORT_LATEST_RELEASE_NUMBER}/
     ./configure >/dev/null
     make >/dev/null
@@ -347,7 +347,7 @@ if [[ "$NEED_SYNC" == "true" ]]; then
   echo "Syncing MacPorts port index..."
   max_retries=5
   retry_count=0
-  until sudo port -d sync -f; do
+  until sudo port -v sync -f; do
     retry_count=$((retry_count + 1))
     if [[ $retry_count -ge $max_retries ]]; then
       echo "port sync failed after $max_retries attempts."
