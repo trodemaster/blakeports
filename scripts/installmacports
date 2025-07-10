@@ -347,7 +347,7 @@ if [[ "$NEED_SYNC" == "true" ]]; then
   echo "Syncing MacPorts port index..."
   max_retries=5
   retry_count=0
-  until sudo port sync -f; do
+  until sudo port -d sync -f; do
     retry_count=$((retry_count + 1))
     if [[ $retry_count -ge $max_retries ]]; then
       echo "port sync failed after $max_retries attempts."
