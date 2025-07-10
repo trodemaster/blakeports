@@ -63,6 +63,12 @@ if [ ! -f /opt/local/bin/port ]; then
     rm $SCRIPTPATH/macports.pkg
     # MacPorts package installer handles initial sync, no need to sync again
   fi
+  # I don't know why this is needed, but it is
+  if [ ! -d /opt/local/var/macports/home ]; then
+    echo "Creating missing MacPorts directory: /opt/local/var/macports/home"
+    sudo mkdir -p /opt/local/var/macports/home
+  fi
+
   NEED_SYNC=true
 else
   echo "✓ MacPorts already installed"
@@ -73,7 +79,7 @@ if ! grep -q "blakeports" /opt/local/etc/macports/sources.conf; then
   echo "Configuring macports /opt/local/etc/macports/sources.conf"
   sudo tee /opt/local/etc/macports/sources.conf <<EOF
 file:///opt/actions-runner/_work/blakeports/blakeports [default]
-rsync://rsync.macports.org/macports/release/tarballs/ports.tar.gz
+https://mirror.fcix.net/macports/release/tarballs/ports.tar
 EOF
 fi
 ## configure macports archive sites
