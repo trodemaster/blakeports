@@ -345,7 +345,7 @@ export MANPATH="/opt/local/share/man:${MANPATH:-}"
 # sync macports to update port index (only if needed)
 if [[ "$NEED_SYNC" == "true" ]]; then
   echo "Syncing MacPorts port index..."
-  sudo port sync
+  sudo port sync -f
 else
   echo "✓ Skipping port sync - no changes detected"
 fi
