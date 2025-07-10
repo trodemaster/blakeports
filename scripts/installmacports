@@ -9,7 +9,12 @@ ARCH=${ARCH/x86_64/amd64}
 ARCH=${ARCH/aarch64/arm64}
 
 # get latest release version from github for macports
+echo "Fetching latest MacPorts release version..."
 PORT_LATEST_RELEASE=$(curl -s https://api.github.com/repos/macports/macports-base/releases/latest | grep tag_name | cut -d '"' -f 4)
+if [ -z "$PORT_LATEST_RELEASE" ]; then
+    echo "Error: Failed to fetch latest MacPorts release version"
+    exit 1
+fi
 PORT_LATEST_RELEASE_NUMBER=${PORT_LATEST_RELEASE#v}
 
 # get macOS operating system version long name including california parks using system_profiler
@@ -23,10 +28,14 @@ NEED_SYNC=false
 echo "Setting up BlakePorts directory structure..."
 mkdir -p ~/code
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BLAKEPORTS_ROOT="$(dirname "$SCRIPT_DIR")"
+
 # Create symlink if it doesn't exist
 if [ ! -e ~/code/blakeports ]; then
   echo "Creating symlink to blakeports..."
-  ln -s "$(pwd)" ~/code/blakeports
+  ln -s "$BLAKEPORTS_ROOT" ~/code/blakeports
 else
   echo "✓ BlakePorts already exists at ~/code/blakeports"
 fi
@@ -54,7 +63,7 @@ if [ ! -f /opt/local/bin/port ]; then
     rm /tmp/macports.pkg
     # MacPorts package installer handles initial sync, no need to sync again
   fi
-  PORT_SYNC=true
+  NEED_SYNC=true
 else
   echo "✓ MacPorts already installed"
 fi
