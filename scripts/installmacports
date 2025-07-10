@@ -24,27 +24,28 @@ MACOS_VERSION_NAME=$(awk '/SOFTWARE LICENSE AGREEMENT FOR macOS/' '/System/Libra
 # track if we need to sync macports
 NEED_SYNC=false
 
-# Set up blakeports symlink and directory structure
-echo "Setting up BlakePorts directory structure..."
-mkdir -p ~/code
+## Set up blakeports symlink and directory structure
+#echo "Setting up BlakePorts directory structure..."
+#mkdir -p ~/code
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BLAKEPORTS_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Create symlink if it doesn't exist
-if [ ! -e ~/code/blakeports ]; then
-  echo "Creating symlink to blakeports..."
-  ln -s "$BLAKEPORTS_ROOT" ~/code/blakeports
-else
-  echo "✓ BlakePorts already exists at ~/code/blakeports"
-fi
+# path to self and parent dir
+SCRIPT=$(realpath $0)
+SCRIPTPATH=$(dirname $SCRIPT)
+
+## Create symlink if it doesn't exist
+#if [ ! -e ~/code/blakeports ]; then
+#  echo "Creating symlink to blakeports..."
+#  ln -s "$BLAKEPORTS_ROOT" ~/code/blakeports
+#else
+#  echo "✓ BlakePorts already exists at ~/code/blakeports"
+#fi
 
 # test for macports and install if not present
 if [ ! -f /opt/local/bin/port ]; then
   echo "Installing macports..."
   if [[ $MACOS_VERSION -ge 26 ]]; then
-    cd
+    #cd
     echo "macOS version $MACOS_VERSION is not supported by macports installer"
     echo "Attempting install from source..."
     curl -O https://distfiles.macports.org/MacPorts/MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.bz2
@@ -53,17 +54,17 @@ if [ ! -f /opt/local/bin/port ]; then
     ./configure >/dev/null
     make >/dev/null
     sudo make install >/dev/null
-    cd
+    cd $SCRIPTPATH
     rm -rf MacPorts-${PORT_LATEST_RELEASE_NUMBER}*
   else
     MACPORTS_PKG="https://github.com/macports/macports-base/releases/download/${PORT_LATEST_RELEASE}/MacPorts-${PORT_LATEST_RELEASE_NUMBER}-${MACOS_VERSION}-${MACOS_VERSION_NAME}.pkg"
     echo $MACPORTS_PKG
-    curl -s -L -o /tmp/macports.pkg $MACPORTS_PKG
-    sudo installer -pkg /tmp/macports.pkg -target / || true
-    rm /tmp/macports.pkg
+    curl -s -L -o $SCRIPTPATH/macports.pkg $MACPORTS_PKG
+    sudo installer -pkg $SCRIPTPATH/macports.pkg -target / || true
+    rm $SCRIPTPATH/macports.pkg
     # MacPorts package installer handles initial sync, no need to sync again
   fi
-  NEED_SYNC=true
+  NEED_SYNC=false
 else
   echo "✓ MacPorts already installed"
 fi
