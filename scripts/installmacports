@@ -12,8 +12,8 @@ ARCH=${ARCH/aarch64/arm64}
 echo "Fetching latest MacPorts release version..."
 PORT_LATEST_RELEASE=$(curl -s https://api.github.com/repos/macports/macports-base/releases/latest | grep tag_name | cut -d '"' -f 4)
 if [ -z "$PORT_LATEST_RELEASE" ]; then
-    echo "Error: Failed to fetch latest MacPorts release version"
-    exit 1
+  echo "Error: Failed to fetch latest MacPorts release version"
+  exit 1
 fi
 PORT_LATEST_RELEASE_NUMBER=${PORT_LATEST_RELEASE#v}
 
@@ -27,7 +27,6 @@ NEED_SYNC=false
 ## Set up blakeports symlink and directory structure
 #echo "Setting up BlakePorts directory structure..."
 #mkdir -p ~/code
-
 
 # path to self and parent dir
 SCRIPT=$(realpath $0)
@@ -69,24 +68,14 @@ else
   echo "✓ MacPorts already installed"
 fi
 
-## configure macports sources
-#if [[ -d /Users/blake/code/blakeports ]]; then
-#  echo "/Users/blake/code/blakeports directory found, adding to sources.conf"
-#  if ! grep -q "blakeports" /opt/local/etc/macports/sources.conf; then
-#    echo "Configuring macports /opt/local/etc/macports/sources.conf"
-#    sudo tee /opt/local/etc/macports/sources.conf <<EOF
-#file:///Users/blake/code/blakeports [default]
-#https://mirror.fcix.net/macports/release/tarballs/ports.tar
-#EOF
-#  fi
-#else
-#  if ! grep -q "fcix" /opt/local/etc/macports/sources.conf; then
-#    echo "Configuring macports /opt/local/etc/macports/sources.conf"
-#    sudo tee /opt/local/etc/macports/sources.conf <<EOF
-#https://mirror.fcix.net/macports/release/tarballs/ports.tar [default]
-#EOF
-#  fi
-#fi
+# configure macports sources
+if ! grep -q "blakeports" /opt/local/etc/macports/sources.conf; then
+  echo "Configuring macports /opt/local/etc/macports/sources.conf"
+  sudo tee /opt/local/etc/macports/sources.conf <<EOF
+file:///opt/actions-runner/_work/blakeports/blakeports [default]
+rsync://rsync.macports.org/macports/release/tarballs/ports.tar.gz
+EOF
+fi
 ## configure macports archive sites
 #if ! grep -q "fcix" /opt/local/etc/macports/archive_sites.conf; then
 #  echo "Configuring macports /opt/local/etc/macports/archive_sites.conf"
@@ -332,15 +321,15 @@ fi
 
 # add macports to path in .zshrc (idempotent)
 if ! grep -q "# MacPorts configuration" ~/.zshrc 2>/dev/null; then
-    cat << 'EOF' >> ~/.zshrc
+  cat <<'EOF' >>~/.zshrc
 
 # MacPorts configuration
 export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
 export MANPATH="/opt/local/share/man:$MANPATH"
 EOF
-    echo "Added MacPorts configuration to .zshrc"
+  echo "Added MacPorts configuration to .zshrc"
 else
-    echo "✓ MacPorts configuration already exists in .zshrc"
+  echo "✓ MacPorts configuration already exists in .zshrc"
 fi
 
 # set up macports environment for current session
@@ -349,10 +338,10 @@ export MANPATH="/opt/local/share/man:${MANPATH:-}"
 
 # sync macports to update port index (only if needed)
 if [[ "$NEED_SYNC" == "true" ]]; then
-    echo "Syncing MacPorts port index..."
-    sudo port sync
+  echo "Syncing MacPorts port index..."
+  sudo port sync
 else
-    echo "✓ Skipping port sync - no changes detected"
+  echo "✓ Skipping port sync - no changes detected"
 fi
 
 echo "✓ MacPorts setup complete!"

@@ -58,7 +58,7 @@ fi
 export MANPATH="${MANPATH:-}"
 
 # Source MacPorts environment from our local copy
-source ~/code/blakeports/setupenv.bash
+source /opt/actions-runner/_work/blakeports/blakeports/setupenv.bash
 
 echo "Getting dependencies for $PORTNAME..."
 
