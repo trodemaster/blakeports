@@ -54,7 +54,7 @@ jobs:
     - name: Build libcbor port
       run: |
         # Source MacPorts environment from our local copy
-        source ~/code/blakeports/setupenv.bash
+        #source ~/code/blakeports/setupenv.bash
         
         sudo port -v install libcbor
         
