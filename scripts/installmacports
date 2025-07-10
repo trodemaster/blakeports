@@ -345,7 +345,17 @@ export MANPATH="/opt/local/share/man:${MANPATH:-}"
 # sync macports to update port index (only if needed)
 if [[ "$NEED_SYNC" == "true" ]]; then
   echo "Syncing MacPorts port index..."
-  sudo port sync -f
+  max_retries=5
+  retry_count=0
+  until sudo port sync -f; do
+    retry_count=$((retry_count + 1))
+    if [[ $retry_count -ge $max_retries ]]; then
+      echo "port sync failed after $max_retries attempts."
+      exit 1
+    fi
+    echo "port sync failed. Retrying in 5 seconds... (Attempt $((retry_count + 1))/$max_retries)"
+    sleep 5
+  done
 else
   echo "✓ Skipping port sync - no changes detected"
 fi
