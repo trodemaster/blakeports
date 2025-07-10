@@ -40,7 +40,7 @@ jobs:
     - name: Clean existing libcbor installation
       run: |
         # Source MacPorts environment from our local copy
-        source ~/code/blakeports/setupenv.bash
+        # source ~/code/blakeports/setupenv.bash
         
         # Uninstall and clean if port already exists
         if port installed libcbor | grep -q libcbor; then
