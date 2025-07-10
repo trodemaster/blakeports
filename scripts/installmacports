@@ -134,7 +134,7 @@ portdbpath          	/opt/local/var/macports
 #developer_dir       	/Library/Developer/CommandLineTools
 
 # Location of PackageMaker. Defaults to
-# "${developer_dir}/Applications/Utilities/PackageMaker.app" with Xcode
+# /Applications/Utilities/PackageMaker.app" with Xcode
 # 4.2 and earlier and "/Applications/PackageMaker.app" with 4.3 and later.
 #packagemaker_path   	/Applications/PackageMaker.app
 
