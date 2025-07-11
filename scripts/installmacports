@@ -47,14 +47,16 @@ if [ ! -f /opt/local/bin/port ]; then
     #cd
     echo "macOS version $MACOS_VERSION is not supported by macports installer"
     echo "Attempting install from source..."
-    curl -L -O https://distfiles.macports.org/MacPorts/MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.gz
-    tar xzf MacPorts-${PORT_LATEST_RELEASE_NUMBER}.tar.gz
-    cd MacPorts-${PORT_LATEST_RELEASE_NUMBER}/
+    curl -fsSL -o macports.tar.gz "https://github.com/macports/macports-base/archive/refs/tags/${PORT_LATEST_RELEASE}.tar.gz"
+    tar xzf macports.tar.gz
+    mv "macports-base-${PORT_LATEST_RELEASE_NUMBER}" "MacPorts-${PORT_LATEST_RELEASE_NUMBER}"
+    rm macports.tar.gz
+    cd "MacPorts-${PORT_LATEST_RELEASE_NUMBER}"/
     ./configure >/dev/null
     make >/dev/null
     sudo make install >/dev/null
     cd $SCRIPTPATH
-    rm -rf MacPorts-${PORT_LATEST_RELEASE_NUMBER}*
+    rm -rf "MacPorts-${PORT_LATEST_RELEASE_NUMBER}"
   else
     MACPORTS_PKG="https://github.com/macports/macports-base/releases/download/${PORT_LATEST_RELEASE}/MacPorts-${PORT_LATEST_RELEASE_NUMBER}-${MACOS_VERSION}-${MACOS_VERSION_NAME}.pkg"
     echo $MACPORTS_PKG
