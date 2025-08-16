@@ -2,29 +2,44 @@ diff --git a/src/lib/platform/OSXKeyState.cpp b/src/lib/platform/OSXKeyState.cpp
 index 89e57e2b..e69d133d 100644
 --- a/src/lib/platform/OSXKeyState.cpp
 +++ b/src/lib/platform/OSXKeyState.cpp
-@@ -498,6 +498,8 @@ io_connect_t OSXKeyState::getEventDriver()
+@@ -498,6 +498,9 @@ io_connect_t OSXKeyState::getEventDriver()
  void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bool postDown)
  {
      static std::uint32_t modifiers = 0;
 +    static bool leftCommandPressed = false;
 +    static bool rightCommandPressed = false;
++    static std::uint32_t lastCommandEventTime = 0;
  
      NXEventData event;
      IOGPoint loc = { 0, 0 };
-@@ -529,10 +531,15 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bo
+@@ -528,11 +531,27 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bo
+                 break;
          case kVK_Command:
                  modifiersDelta = NX_COMMANDMASK | NX_DEVICELCMDKEYMASK;
 -                m_superPressed = postDown;
-+                leftCommandPressed = postDown;
++                // Prevent rapid press/release cycles that break key combinations
++                {
++                    std::uint32_t currentTime = static_cast<std::uint32_t>(time(nullptr) * 1000);
++                    if (leftCommandPressed && !postDown && (currentTime - lastCommandEventTime) < 100) {
++                        // Ignore command key release if it was just pressed recently (< 100ms)
++                        return;
++                    }
++                    leftCommandPressed = postDown;
++                    lastCommandEventTime = currentTime;
++                }
 +                m_superPressed = leftCommandPressed || rightCommandPressed;
                  break;
          case kVK_RightCommand:
                  modifiersDelta = NX_COMMANDMASK | NX_DEVICERCMDKEYMASK;
 -                m_superPressed = postDown;
-+                rightCommandPressed = postDown;
++                // Prevent rapid press/release cycles that break key combinations 
++                {
++                    std::uint32_t currentTime = static_cast<std::uint32_t>(time(nullptr) * 1000);
++                    if (rightCommandPressed && !postDown && (currentTime - lastCommandEventTime) < 100) {
++                        return;
++                    }
++                    rightCommandPressed = postDown;
++                }
 +                m_superPressed = leftCommandPressed || rightCommandPressed;
-+                // Adjust modifiersDelta based on which command key is actually being used
-+                if (leftCommandPressed) 
-+                    modifiersDelta = NX_COMMANDMASK | NX_DEVICELCMDKEYMASK;
                  break;
          case kVK_Option:
