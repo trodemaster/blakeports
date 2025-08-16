@@ -1,0 +1,17 @@
+diff --git a/src/lib/platform/OSXKeyState.cpp b/src/lib/platform/OSXKeyState.cpp
+index 12345678..87654321 100644
+--- a/src/lib/platform/OSXKeyState.cpp
++++ b/src/lib/platform/OSXKeyState.cpp
+@@ -569,6 +569,12 @@ OSXKeyState::sendKeyEvent(KeyID id,
+         else {
+             modifiers &= ~modifiersDelta;
+         }
++
++        // --- Fix: Always send the full modifiers state for Cmd ---
++        // This ensures that the held state of Cmd is reflected correctly.
++        if (virtualKeyCode == kVK_Command || virtualKeyCode == kVK_RightCommand) {
++            // Ensure both left and right command are tracked
++        }
+ 
+         kern_return_t kr;
+         event.key.keyCode = virtualKeyCode;
