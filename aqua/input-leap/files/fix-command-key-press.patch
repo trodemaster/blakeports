@@ -1,9 +1,8 @@
 diff --git a/src/lib/platform/OSXKeyState.cpp b/src/lib/platform/OSXKeyState.cpp
-index 12345678..87654321 100644
+index 89e57e2b..e69d133d 100644
 --- a/src/lib/platform/OSXKeyState.cpp
 +++ b/src/lib/platform/OSXKeyState.cpp
-@@ -528,11 +528,21 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bo
-                 break;
+@@ -530,6 +530,10 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bo
          case kVK_Command:
                  modifiersDelta = NX_COMMANDMASK | NX_DEVICELCMDKEYMASK;
 +                // Prevent setting the same state repeatedly
@@ -13,12 +12,3 @@ index 12345678..87654321 100644
                  m_superPressed = postDown;
                  break;
          case kVK_RightCommand:
-                 modifiersDelta = NX_COMMANDMASK | NX_DEVICERCMDKEYMASK;
-+                // Prevent setting the same state repeatedly
-+                if (m_superPressed == postDown) {
-+                    return; // Command key already in this state
-+                }
-                 m_superPressed = postDown;
-                 break;
-         case kVK_Option:
-                 modifiersDelta = NX_ALTERNATEMASK | NX_DEVICELALTKEYMASK;
