@@ -11,16 +11,24 @@ index 89e57e2b..e69d133d 100644
  
      NXEventData event;
      IOGPoint loc = { 0, 0 };
-@@ -530,9 +532,11 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bo
+@@ -530,9 +532,19 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bo
          case kVK_Command:
                  modifiersDelta = NX_COMMANDMASK | NX_DEVICELCMDKEYMASK;
 -                m_superPressed = postDown;
++                // Prevent processing duplicate state changes
++                if (leftCommandPressed == postDown) {
++                    return; // Skip if already in this state
++                }
 +                leftCommandPressed = postDown;
 +                m_superPressed = leftCommandPressed || rightCommandPressed;
                  break;
          case kVK_RightCommand:
                  modifiersDelta = NX_COMMANDMASK | NX_DEVICERCMDKEYMASK;
 -                m_superPressed = postDown;
++                // Prevent processing duplicate state changes
++                if (rightCommandPressed == postDown) {
++                    return; // Skip if already in this state
++                }
 +                rightCommandPressed = postDown;
 +                m_superPressed = leftCommandPressed || rightCommandPressed;
                  break;
