@@ -1,5 +1,3 @@
-diff --git a/src/lib/platform/OSXKeyState.cpp b/src/lib/platform/OSXKeyState.cpp
-index 89e57e2b..fe9116b8 100644
 --- a/src/lib/platform/OSXKeyState.cpp
 +++ b/src/lib/platform/OSXKeyState.cpp
 @@ -498,6 +498,8 @@ static io_connect_t getEventDriver(void)
@@ -39,3 +37,21 @@ index 89e57e2b..fe9116b8 100644
                  break;
          case kVK_Option:
                  modifiersDelta = NX_ALTERNATEMASK | NX_DEVICELALTKEYMASK;
+--- a/src/lib/inputleap/KeyMap.cpp
++++ b/src/lib/inputleap/KeyMap.cpp
+@@ -988,6 +988,15 @@ KeyMap::addKeystrokes(EKeystroke type, const KeyItem& keyItem,
+ 
+     case kKeystrokeModify:
+     case kKeystrokeUnmodify:
++        // Skip redundant Command key press/release cycles to prevent
++        // Command+C typing 'c' instead of copying
++        if ((keyItem.m_generates & (KeyModifierSuper | KeyModifierMeta)) && 
++            type == kKeystrokeModify && 
++            activeModifiers.count(keyItem.m_generates) > 0) {
++            // Command key is already active, don't generate additional press
++            return;
++        }
++        
+         if (keyItem.m_lock) {
+             // we assume there's just one button for this modifier
+             if (m_halfDuplex.count(button) > 0) {
