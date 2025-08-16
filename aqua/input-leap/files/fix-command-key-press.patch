@@ -1,35 +1,5 @@
-diff --git a/src/lib/inputleap/KeyMap.cpp b/src/lib/inputleap/KeyMap.cpp
-index 4dd10917..48bd7acd 100644
---- a/src/lib/inputleap/KeyMap.cpp
-+++ b/src/lib/inputleap/KeyMap.cpp
-@@ -652,6 +652,8 @@ const KeyMap::KeyItem* KeyMap::mapCharacterKey(Keystrokes& keys, KeyID id, std::
-         keys.push_back(Keystroke(group, true, true));
-     }
- 
-+    // Prefer Super over Meta to avoid bouncing modifiers during Command combos
-+    newState = (newState | KeyModifierSuper) & ~KeyModifierMeta;
-     // save new modifiers
-     activeModifiers = newModifiers;
-     currentState    = newState;
-@@ -988,6 +990,16 @@ KeyMap::addKeystrokes(EKeystroke type, const KeyItem& keyItem,
- 
-     case kKeystrokeModify:
-     case kKeystrokeUnmodify:
-+        // Skip redundant Command (Meta/Super) toggle on the same physical button
-+        if ((keyItem.m_generates & (KeyModifierSuper | KeyModifierMeta)) != 0) {
-+            for (const auto& it : activeModifiers) {
-+                if ((it.first & (KeyModifierSuper | KeyModifierMeta)) != 0 &&
-+                    it.second.m_button == keyItem.m_button) {
-+                    return;
-+                }
-+            }
-+        }
-+
-         if (keyItem.m_lock) {
-             // we assume there's just one button for this modifier
-             if (m_halfDuplex.count(button) > 0) {
 diff --git a/src/lib/platform/OSXKeyState.cpp b/src/lib/platform/OSXKeyState.cpp
-index 89e57e2b..fe9116b8 100644
+index 89e57e2b..cf9986db 100644
 --- a/src/lib/platform/OSXKeyState.cpp
 +++ b/src/lib/platform/OSXKeyState.cpp
 @@ -498,6 +498,8 @@ static io_connect_t getEventDriver(void)
@@ -41,31 +11,50 @@ index 89e57e2b..fe9116b8 100644
  
      NXEventData event;
      IOGPoint loc = { 0, 0 };
-@@ -528,11 +530,25 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const boo
+@@ -527,12 +529,18 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const boo
+                 m_shiftPressed = postDown;
                  break;
          case kVK_Command:
-                 modifiersDelta = NX_COMMANDMASK | NX_DEVICELCMDKEYMASK;
+-                modifiersDelta = NX_COMMANDMASK | NX_DEVICELCMDKEYMASK;
 -                m_superPressed = postDown;
-+                
-+                // Prevent processing duplicate state changes
-+                if (leftCommandPressed == postDown) {
-+                    return; // Skip if already in this state
-+                }
-+                
++                // Track left Command separately and update only the device bit here.
++                // The global NX_COMMANDMASK is computed from both sides below.
++                modifiersDelta = NX_DEVICELCMDKEYMASK;
 +                leftCommandPressed = postDown;
 +                m_superPressed = leftCommandPressed || rightCommandPressed;
                  break;
          case kVK_RightCommand:
-                 modifiersDelta = NX_COMMANDMASK | NX_DEVICERCMDKEYMASK;
+-                modifiersDelta = NX_COMMANDMASK | NX_DEVICERCMDKEYMASK;
 -                m_superPressed = postDown;
-+                
-+                // Prevent processing duplicate state changes
-+                if (rightCommandPressed == postDown) {
-+                    return; // Skip if already in this state
-+                }
-+                
++                // Track right Command separately and update only the device bit here.
++                // The global NX_COMMANDMASK is computed from both sides below.
++                modifiersDelta = NX_DEVICERCMDKEYMASK;
 +                rightCommandPressed = postDown;
 +                m_superPressed = leftCommandPressed || rightCommandPressed;
                  break;
          case kVK_Option:
                  modifiersDelta = NX_ALTERNATEMASK | NX_DEVICELALTKEYMASK;
+@@ -556,7 +564,7 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const boo
+                 break;
+         }
+ 
+-        // update the modifier bit
++        // update the modifier bit(s) for this specific key's device mask
+         if (postDown) {
+             modifiers |= modifiersDelta;
+         }
+@@ -564,6 +572,14 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const boo
+             modifiers &= ~modifiersDelta;
+         }
+ 
++        // Ensure global Command reflects combined left/right state.
++        if (leftCommandPressed || rightCommandPressed) {
++            modifiers |= NX_COMMANDMASK;
++        }
++        else {
++            modifiers &= ~NX_COMMANDMASK;
++        }
++
+         kern_return_t kr;
+         event.key.keyCode = virtualKeyCode;
+         kr = IOHIDPostEvent(getEventDriver(), NX_FLAGSCHANGED, loc,
