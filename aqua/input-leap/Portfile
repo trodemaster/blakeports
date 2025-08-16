@@ -24,7 +24,6 @@ checksums           rmd160  6bab5f3fad09ae90e340c4579d3c25b9f2da139a \
                     size    1765389
 
 patchfiles          fix-macos-scroll.patch \
-                    map-altgr-to-altr.patch \
                     workaround-for-unsafe-threads.patch \
                     fix-non-gui-build.patch \
                     fix-command-key-press.patch
