@@ -2,13 +2,29 @@ diff --git a/src/lib/platform/OSXKeyState.cpp b/src/lib/platform/OSXKeyState.cpp
 index 89e57e2b..e69d133d 100644
 --- a/src/lib/platform/OSXKeyState.cpp
 +++ b/src/lib/platform/OSXKeyState.cpp
-@@ -530,6 +530,10 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bo
+@@ -498,6 +498,8 @@ io_connect_t OSXKeyState::getEventDriver()
+ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bool postDown)
+ {
+     static std::uint32_t modifiers = 0;
++    static bool leftCommandPressed = false;
++    static bool rightCommandPressed = false;
+ 
+     NXEventData event;
+     IOGPoint loc = { 0, 0 };
+@@ -529,10 +531,15 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bo
          case kVK_Command:
                  modifiersDelta = NX_COMMANDMASK | NX_DEVICELCMDKEYMASK;
-+                // Prevent setting the same state repeatedly
-+                if (m_superPressed == postDown) {
-+                    return; // Command key already in this state
-+                }
-                 m_superPressed = postDown;
+-                m_superPressed = postDown;
++                leftCommandPressed = postDown;
++                m_superPressed = leftCommandPressed || rightCommandPressed;
                  break;
          case kVK_RightCommand:
+                 modifiersDelta = NX_COMMANDMASK | NX_DEVICERCMDKEYMASK;
+-                m_superPressed = postDown;
++                rightCommandPressed = postDown;
++                m_superPressed = leftCommandPressed || rightCommandPressed;
++                // Adjust modifiersDelta based on which command key is actually being used
++                if (leftCommandPressed) 
++                    modifiersDelta = NX_COMMANDMASK | NX_DEVICELCMDKEYMASK;
+                 break;
+         case kVK_Option:
