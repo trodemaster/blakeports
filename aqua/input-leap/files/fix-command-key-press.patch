@@ -1,19 +1,17 @@
 diff --git a/src/lib/platform/OSXKeyState.cpp b/src/lib/platform/OSXKeyState.cpp
-index 89e57e2b..07f04560 100644
+index 89e57e2b..fe9116b8 100644
 --- a/src/lib/platform/OSXKeyState.cpp
 +++ b/src/lib/platform/OSXKeyState.cpp
-@@ -498,6 +498,10 @@ static io_connect_t getEventDriver(void)
+@@ -498,6 +498,8 @@ static io_connect_t getEventDriver(void)
  void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const bool postDown)
  {
      static std::uint32_t modifiers = 0;
 +    static bool leftCommandPressed = false;
 +    static bool rightCommandPressed = false;
-+    static std::uint32_t lastCommandEventTime = 0;
-+    static std::uint32_t eventCounter = 0;
  
      NXEventData event;
      IOGPoint loc = { 0, 0 };
-@@ -528,11 +532,39 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const boo
+@@ -528,11 +530,25 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const boo
                  break;
          case kVK_Command:
                  modifiersDelta = NX_COMMANDMASK | NX_DEVICELCMDKEYMASK;
@@ -24,15 +22,8 @@ index 89e57e2b..07f04560 100644
 +                    return; // Skip if already in this state
 +                }
 +                
-+                // Timing protection - prevent rapid press/release cycles
-+                ++eventCounter;
-+                if (leftCommandPressed && !postDown && (eventCounter - lastCommandEventTime < 5)) {
-+                    return; // Prevent rapid release after press
-+                }
-+                
 +                leftCommandPressed = postDown;
 +                m_superPressed = leftCommandPressed || rightCommandPressed;
-+                lastCommandEventTime = eventCounter;
                  break;
          case kVK_RightCommand:
                  modifiersDelta = NX_COMMANDMASK | NX_DEVICERCMDKEYMASK;
@@ -43,15 +34,8 @@ index 89e57e2b..07f04560 100644
 +                    return; // Skip if already in this state
 +                }
 +                
-+                // Timing protection - prevent rapid press/release cycles
-+                ++eventCounter;
-+                if (rightCommandPressed && !postDown && (eventCounter - lastCommandEventTime < 5)) {
-+                    return; // Prevent rapid release after press
-+                }
-+                
 +                rightCommandPressed = postDown;
 +                m_superPressed = leftCommandPressed || rightCommandPressed;
-+                lastCommandEventTime = eventCounter;
                  break;
          case kVK_Option:
                  modifiersDelta = NX_ALTERNATEMASK | NX_DEVICELALTKEYMASK;
