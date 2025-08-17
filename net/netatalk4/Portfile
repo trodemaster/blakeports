@@ -30,18 +30,33 @@ long_description    Netatalk is a freely-available Open Source AFP fileserver. \
 homepage            https://netatalk.io
 
 depends_build-append       path:bin/pkg-config:pkgconfig \
-                           port:cmark
+                           port:cmark \
+                           port:bison \
+                           port:flex
 
-depends_lib         port:db48 \
+depends_lib         port:sqlite3 \
                     port:libevent \
                     port:libgcrypt \
-                    port:iniparser
+                    port:iniparser \
+                    port:tracker3 \
+                    port:dbus \
+                    port:talloc \
+                    port:glib2 \
+                    port:gobject-introspection \
+                    port:json-glib \
+                    port:libsoup-2.4 \
+                    port:libxml2 \
+                    port:ossp-uuid
 
 configure.args-append -Dwith-init-style=none \
                       -Dwith-pam-config-path=${prefix}/etc/pam.d \
-                      -Dwith-lockfile-path=${prefix}/var/run
+                      -Dwith-lockfile-path=${prefix}/var/run \
+                      -Dwith-cnid-backends=sqlite \
+                      -Dwith-cnid-default-backend=sqlite \
+                      -Dwith-spotlight=true
 
 # patchfiles          bison.diff
+# bstring https://github.com/msteinert/bstring
 
 startupitem.create  yes
 startupitem.executable  ${prefix}/sbin/netatalk -d -F ${prefix}/etc/afp.conf
@@ -50,13 +65,4 @@ startupitem.logfile.stderr ${prefix}/var/log/${name}-stderr.log
 startupitem.logevents yes
 startupitem.debug          yes
 
-notes "
-    
-    Upgrade details: https://netatalk.io/manual/en/Upgrading
-
-    Configuration files can be found in:
-        ${prefix}/etc/
-    
-    Log files can be found in:
-        ${prefix}/var/log/
-"
+notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/. This build uses SQLite as the CNID backend for improved performance and reliability compared to Berkeley DB. Spotlight support is enabled for metadata indexing and search."
