@@ -7,16 +7,16 @@ PortGroup           meson 1.0
 name                netatalk4
 conflicts           netatalk
 
-github.setup        Netatalk netatalk 4-2-4 netatalk-
+github.setup        Netatalk netatalk 4-3-0 netatalk-
 version             [string map {- .} ${github.version}]
 github.tarball_from releases
 distname            netatalk-${version}
 use_xz              yes
 revision            0
 
-checksums           rmd160  a682cfea457f5b78840c20b67e510b40f4d280bb \
-                    sha256  4f07bbe118a951dd740d3f51a87b5cafba2496bd0b22e704438f421aa6670f99 \
-                    size    935184
+checksums           rmd160  b0b026ced0d7af1f8f9aee9269d7c636eeb10711 \
+                    sha256  bc71a6a2f11cf00cb69ef13e8487ab78d1241ae535feb010220c74c89dc890fb \
+                    size    945292
 
 categories          net
 license             GPL-2+
@@ -41,7 +41,7 @@ configure.args-append -Dwith-init-style=none \
                       -Dwith-pam-config-path=${prefix}/etc/pam.d \
                       -Dwith-lockfile-path=${prefix}/var/run
 
-patchfiles          bison.diff
+# patchfiles          bison.diff
 
 startupitem.create  yes
 startupitem.executable  ${prefix}/sbin/netatalk -d -F ${prefix}/etc/afp.conf
