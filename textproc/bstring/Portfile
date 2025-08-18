@@ -21,10 +21,10 @@ long_description    ${name} is a fork of Paul Hsieh's Better String Library. \
 
 homepage            https://github.com/msteinert/bstring
 
-checksums           rmd160  9c54e5bf20d124279ed35a283a7079b7ef726c4f \
-                    sha256  f876fcf5e8fab22faef1ae363bccc8381e7049a5b897452e82ed871c092fdb31 \
-                    size    112479
-
+checksums           rmd160  f967ae6d2ec3162419f8d8792fa094bd1eaa4acf \
+                    sha256  ba3d3726bf70a0920196199097bd7d341cf362eb7dbd64018a8936815817a0cc \
+                    size    488074
+                    
 depends_build       port:pkgconfig \
                     port:autoconf \
                     port:automake \
