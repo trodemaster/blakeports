@@ -1,0 +1,83 @@
+name: Build bstring
+
+on:
+  push:
+    paths:
+      - 'textproc/bstring/**'
+    branches: [main]
+  pull_request:
+    paths:
+      - 'textproc/bstring/**'
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-bstring:
+    name: build-bstring (${{ matrix.runner }})
+    strategy:
+      matrix:
+        runner: [macOS_15, macOS_26_Beta]
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
+    
+    steps:
+    - name: Show macOS version
+      run: |
+        echo "Running on: ${{ matrix.runner }}"
+        sw_vers
+        
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup MacPorts and BlakePorts Environment
+      run: |
+        ./scripts/installmacports
+        
+    - name: Install dependencies
+      run: |
+        ./scripts/install-deps bstring
+        
+    - name: Clean existing bstring installation
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        # Uninstall and clean if port already exists
+        if port installed bstring | grep -q bstring; then
+          echo "Removing existing bstring installation..."
+          sudo port -f uninstall bstring
+          sudo port clean bstring
+        else
+          echo "No existing bstring installation found"
+        fi
+        
+    - name: Build bstring port
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        sudo port -v install bstring
+        
+    - name: Verify bstring installation
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        port installed bstring
+        pkg-config --exists bstring && echo "bstring pkg-config found" || echo "bstring pkg-config not found"
+        
+    - name: Test bstring with tests variant
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        # Test with tests variant
+        sudo port -v install bstring +tests
+        
+    - name: Test bstring with docs variant
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        # Test with docs variant
+        sudo port -v install bstring +docs
