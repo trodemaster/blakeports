@@ -46,7 +46,8 @@ depends_lib         port:sqlite3 \
                     port:json-glib \
                     port:libsoup-2.4 \
                     port:libxml2 \
-                    port:ossp-uuid
+                    port:ossp-uuid \
+                    port:bstring
 
 configure.args-append -Dwith-init-style=none \
                       -Dwith-pam-config-path=${prefix}/etc/pam.d \

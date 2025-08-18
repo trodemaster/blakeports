@@ -2,5 +2,6 @@ input-leap 0
 nrsc5 730
 libcbor 1425
 netatalk4 1898
-libfido2 2580
-doxygen 3222
+libfido2 2755
+bstring 3397
+doxygen 4100
