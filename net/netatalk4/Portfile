@@ -30,7 +30,7 @@ long_description    Netatalk is a freely-available Open Source AFP fileserver. \
 homepage            https://netatalk.io
 
 depends_build-append       path:bin/pkg-config:pkgconfig \
-                           port:cmark \
+                           port:cmark-gfm \
                            port:bison \
                            port:flex
 
@@ -65,4 +65,4 @@ startupitem.logfile.stderr ${prefix}/var/log/${name}-stderr.log
 startupitem.logevents yes
 startupitem.debug          yes
 
-notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/. This build uses SQLite as the CNID backend for improved performance and reliability compared to Berkeley DB. Spotlight support is enabled for metadata indexing and search."
+notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/. This build uses SQLite as the CNID backend for improved performance and reliability compared to Berkeley DB. Spotlight support is enabled for metadata indexing and search. Documentation is built using cmark-gfm for enhanced GitHub Flavored Markdown support."
