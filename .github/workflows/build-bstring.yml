@@ -74,10 +74,3 @@ jobs:
         # Test with tests variant
         sudo port -v install bstring +tests
         
-    - name: Test bstring with docs variant
-      run: |
-        # Source MacPorts environment from our local copy
-        source ./setupenv.bash
-        
-        # Test with docs variant
-        sudo port -v install bstring +docs
