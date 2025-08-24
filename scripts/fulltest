@@ -18,6 +18,7 @@ RUNNERS=("macOS_15" "macOS_26_Beta")
 WORKFLOWS=(
     "Build libcbor"
     "Build libfido2" 
+    "Build bstring"
     "Build netatalk4"
     "Build nrsc5"
 )
