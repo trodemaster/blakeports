@@ -42,11 +42,6 @@ depends_lib         port:sqlite3 \
                     port:dbus \
                     port:talloc \
                     port:glib2 \
-                    port:gobject-introspection \
-                    port:json-glib \
-                    port:libsoup-2.4 \
-                    port:libxml2 \
-                    port:ossp-uuid \
                     port:bstring
 
 configure.args-append -Dwith-init-style=none \
@@ -56,8 +51,7 @@ configure.args-append -Dwith-init-style=none \
                       -Dwith-cnid-default-backend=sqlite \
                       -Dwith-spotlight=true
 
-# patchfiles          bison.diff
-# bstring https://github.com/msteinert/bstring
+patchfiles          prefer-mdns-on-darwin.diff
 
 startupitem.create  yes
 startupitem.executable  ${prefix}/sbin/netatalk -d -F ${prefix}/etc/afp.conf

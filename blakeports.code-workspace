@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "../macports-ports"
+		},
+		{
+			"path": "../netatalk"
 		}
 	],
 	"settings": {}
