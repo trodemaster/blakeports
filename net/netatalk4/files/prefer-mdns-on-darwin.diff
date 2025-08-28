@@ -1,0 +1,58 @@
+--- meson.build	2024-01-01
++++ meson.build	2024-01-01
+@@ -917,44 +917,44 @@
+ enable_zeroconf = get_option('with-zeroconf')
+ 
+ have_zeroconf = false
+ 
+ zeroconf_provider = ''
+ 
+ avahi = dependency('avahi-client', required: false)
+ 
+ dns_sd_libs = []
+ 
+ dns_sd = cc.find_library('dns_sd', required: false)
+ if dns_sd.found()
+     dns_sd_libs += dns_sd
+ endif
+ 
+ system = cc.find_library('system', required: false)
+ if dns_sd.found()
+     dns_sd_libs += system
+ endif
+ 
+ have_dns = (
+     (dns_sd.found() or system.found())
+     and cc.has_header('dns_sd.h')
+     and cc.has_function(
+         'DNSServiceRegister',
+         dependencies: dns_sd_libs,
+     )
+ )
+ 
+ if enable_zeroconf
+-    if avahi.found()
++    if have_dns
+         have_zeroconf = true
+         cdata.set('USE_ZEROCONF', 1)
+-        cdata.set('HAVE_AVAHI', 1)
+-        cdata.set('freebsd_zeroconf', 'avahi_daemon')
+-        zeroconf_provider += 'Avahi'
+-    elif have_dns
+-        have_zeroconf = true
+-        cdata.set('USE_ZEROCONF', 1)
+-        cdata.set('HAVE_MDNS', 1)
+-        cdata.set('freebsd_zeroconf', 'mdnsd')
+-        zeroconf_provider += 'mDNS'
++        cdata.set('HAVE_MDNS', 1)
++        cdata.set('freebsd_zeroconf', 'mdnsd')
++        zeroconf_provider += 'mDNS'
++    elif avahi.found()
++        have_zeroconf = true
++        cdata.set('USE_ZEROCONF', 1)
++        cdata.set('HAVE_AVAHI', 1)
++        cdata.set('freebsd_zeroconf', 'avahi_daemon')
++        zeroconf_provider += 'Avahi'
+     endif
+ endif
+
