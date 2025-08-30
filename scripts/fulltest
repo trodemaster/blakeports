@@ -5,6 +5,10 @@
 
 set -e
 
+# Path to self and parent dir
+SCRIPT=$(realpath $0)
+SCRIPTPATH=$(dirname $SCRIPT)
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -13,7 +17,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-JIBB_RUNNERS_PATH="../jibb-runners"
+GHRUNNER_SCRIPT="$SCRIPTPATH/ghrunner"
 RUNNERS=("macOS_15" "macOS_26_Beta")
 WORKFLOWS=(
     "Build libcbor"
@@ -47,16 +51,15 @@ print_header() {
     echo "=================================================================="
 }
 
-# Function to check if jibb-runners directory exists
-check_jibb_runners() {
-    if [ ! -d "$JIBB_RUNNERS_PATH" ]; then
-        print_error "jibb-runners directory not found at: $JIBB_RUNNERS_PATH"
-        print_info "Please ensure jibb-runners is cloned at the expected location"
+# Function to check if ghrunner script exists
+check_ghrunner() {
+    if [ ! -f "$GHRUNNER_SCRIPT" ]; then
+        print_error "ghrunner script not found at: $GHRUNNER_SCRIPT"
         exit 1
     fi
     
-    if [ ! -f "$JIBB_RUNNERS_PATH/ghrunner.sh" ]; then
-        print_error "ghrunner.sh not found in: $JIBB_RUNNERS_PATH"
+    if [ ! -x "$GHRUNNER_SCRIPT" ]; then
+        print_error "ghrunner script is not executable: $GHRUNNER_SCRIPT"
         exit 1
     fi
 }
@@ -65,12 +68,10 @@ check_jibb_runners() {
 teardown_runners() {
     print_header "PHASE 1: Tearing Down All Existing Runners (Clean Slate)"
     
-    cd "$JIBB_RUNNERS_PATH"
-    
     # First, get current runner status to see what exists
     print_info "Checking current runner state..."
     local runner_list_output
-    if runner_list_output=$(./ghrunner.sh -list 2>/dev/null); then
+    if runner_list_output=$("$GHRUNNER_SCRIPT" -list 2>/dev/null); then
         echo "$runner_list_output"
     else
         print_warning "Could not get runner list, proceeding with removal anyway"
@@ -81,11 +82,11 @@ teardown_runners() {
         print_info "Removing runner: $runner"
         local runner_vm_name="${runner}_runner"
         
-        # Step 1: Remove via ghrunner.sh (handles service stop, GitHub removal, etc.)
-        if ./ghrunner.sh -remove "$runner"; then
-            print_success "ghrunner.sh removal completed for $runner"
+        # Step 1: Remove via ghrunner (handles service stop, GitHub removal, etc.)
+        if "$GHRUNNER_SCRIPT" -remove "$runner"; then
+            print_success "ghrunner removal completed for $runner"
         else
-            print_warning "ghrunner.sh removal failed for $runner, trying manual cleanup"
+            print_warning "ghrunner removal failed for $runner, trying manual cleanup"
         fi
         
         # Step 2: Ensure VM is actually stopped and deleted (belt and suspenders)
@@ -142,18 +143,15 @@ teardown_runners() {
     fi
     
     print_success "Complete runner teardown completed"
-    cd - > /dev/null
 }
 
 # Function to create all runners fresh
 setup_runners() {
     print_header "PHASE 2: Creating Fresh Runners"
     
-    cd "$JIBB_RUNNERS_PATH"
-    
     for runner in "${RUNNERS[@]}"; do
         print_info "Creating fresh runner: $runner"
-        if ./ghrunner.sh -tart "$runner"; then
+        if "$GHRUNNER_SCRIPT" -tart "$runner"; then
             print_success "Successfully created $runner"
         else
             print_error "Failed to create $runner"
@@ -162,14 +160,11 @@ setup_runners() {
     done
     
     print_success "All runners created fresh"
-    cd - > /dev/null
 }
 
 # Function to wait for runners to come online
 wait_for_runners() {
     print_header "PHASE 3: Waiting for All Runners to Come Online"
-    
-    cd "$JIBB_RUNNERS_PATH"
     
     local max_attempts=30
     local attempt=0
@@ -179,7 +174,7 @@ wait_for_runners() {
         
         # Get fresh runner status
         local runner_list_output
-        if ! runner_list_output=$(./ghrunner.sh -list 2>/dev/null); then
+        if ! runner_list_output=$("$GHRUNNER_SCRIPT" -list 2>/dev/null); then
             print_warning "Failed to get runner status, retrying..."
             attempt=$((attempt + 1))
             sleep 10
@@ -222,9 +217,7 @@ wait_for_runners() {
     
     # Final status check
     print_info "Final runner status:"
-    ./ghrunner.sh -list
-    
-    cd - > /dev/null
+    "$GHRUNNER_SCRIPT" -list
 }
 
 # Function to trigger all workflow builds
@@ -262,7 +255,7 @@ show_build_status() {
     
     echo
     print_info "To check runner status:"
-    echo "  cd $JIBB_RUNNERS_PATH && ./ghrunner.sh -list"
+    echo "  $GHRUNNER_SCRIPT -list"
     
     echo
     print_info "To view matrix job details:"
@@ -294,7 +287,7 @@ main() {
     fi
     
     # Pre-flight checks
-    check_jibb_runners
+    check_ghrunner
     
     # Check if gh CLI is available and authenticated
     if ! command -v gh &> /dev/null; then
