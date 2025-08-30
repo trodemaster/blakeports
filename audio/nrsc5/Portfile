@@ -45,5 +45,4 @@ depends_build-append \
 
 depends_lib-append  port:rtl-sdr \
                     port:libao \
-                    port:fftw-3-single \
-                    port:faad2
+                    port:fftw-3-single
