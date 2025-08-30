@@ -66,6 +66,7 @@ Closes: https://trac.macports.org/ticket/67890
 
 ### Testing Requirements
 - Always test builds locally before committing
+- Run `port lint --nitpick` to catch all potential issues
 - Test on multiple architectures when possible (arm64, x86_64)
 - Verify all dependencies are correctly specified
 - Check for livecheck functionality
@@ -82,10 +83,11 @@ Closes: https://trac.macports.org/ticket/67890
 
 ### Step 1: Development in blakeports
 1. Create and test Portfile in blakeports repo
-2. Run `port lint` to ensure compliance
-3. Test build and installation locally
-4. Verify all dependencies are correct
-5. Test on multiple architectures when possible
+2. Run `port lint --nitpick` to ensure strict compliance
+3. Fix any warnings reported by --nitpick flag
+4. Test build and installation locally
+5. Verify all dependencies are correct
+6. Test on multiple architectures when possible
 
 ### Step 2: Transfer to macports-ports
 1. **Create branch**: `git checkout -b category/portname-new-port`
@@ -117,6 +119,12 @@ functionality and benefits, not implementation details.
 - Focus on: functionality, performance, safety, API improvements
 - Wrap body text at 72 characters
 - Use bullet points for key features
+
+**Commit Message Rules for Updates:**
+- Subject: "portname: update to X.Y.Z" (under 55 chars)
+- Do NOT mention "update checksums" (always required, redundant)
+- Focus on significant changes like maintainer updates, dependency changes
+- Keep bullet points concise and meaningful
 
 ## Pull Request Workflow
 
@@ -160,6 +168,13 @@ Brief description of what the software does and its key benefits.
 
 macOS X.Y.Z Xcode A.B / Command Line Tools A.B.C.D.E.F (arm64)
 macOS X.Y.Z Command Line Tools A.B.C.D.E.F (x86_64)
+
+### PR Content Guidelines
+- **Do NOT mention**: checksums (always updated, redundant)
+- **Do NOT mention**: internal development repos (blakeports, etc.)
+- **Do NOT mention**: --nitpick flag (internal process)
+- **Focus on**: what changed, why it matters to users
+- **Keep professional**: avoid implementation details
 
 ### Port Details
 - **Category**: category
@@ -276,7 +291,8 @@ Description following MacPorts guidelines..."
 ## Automation and Tools
 
 ### Preferred Tools
-- Use `port lint` to check Portfile syntax
+- Use `port lint --nitpick` for strict Portfile compliance checking
+- Use `port lint` for basic syntax checking
 - Use `port checksum` for updating checksums
 - Use `port test` for running test suites
 - Use `port fetch --check-vulnerabilities` for security checks
@@ -295,13 +311,15 @@ Description following MacPorts guidelines..."
 - Reference relevant upstream documentation
 
 ### URL Formatting
-- **Always format URLs as clickable links** in responses and documentation
+- **ALWAYS format URLs as clickable links** in responses and documentation
+- **MANDATORY**: When returning PR URLs, format as: `**PR URL**: https://github.com/macports/macports-ports/pull/XXXXX`
 - Use markdown format: `[descriptive text](URL)` or just `URL` for direct links
 - Include full URLs for: Trac tickets, GitHub PRs, commit references
 - Examples:
-  - PR: `https://github.com/macports/macports-ports/pull/12345`
+  - PR: `**PR URL**: https://github.com/macports/macports-ports/pull/12345`
   - Trac: `https://trac.macports.org/ticket/67890`
   - Commit: Full SHA-1 hash with GitHub URL
+- **Never** use relative links or incomplete URLs in responses
 
 ### Collaboration
 - Be responsive to maintainer feedback
