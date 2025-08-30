@@ -1,0 +1,310 @@
+# BlakePorts - MacPorts Development Rules
+# Contributing to macports-ports repository via blakeports
+
+## Project Overview
+This is a development repository for MacPorts Portfiles. The workflow is:
+1. Develop and test Portfiles in blakeports
+2. Once verified working, create PRs to macports-ports repo
+3. Submit to MacPorts team for inclusion
+
+## Commit Message Rules (MacPorts Standards)
+
+### Subject Line Format
+- **Include port names first**: Start with modified port names followed by colon (e.g., "autoconf, libtool:")
+- **Use glob notation for multiple related ports**: (e.g., "py3*-numpy:", "clang-3.[6-9]:")
+- **Be specific**: Avoid vague subjects like "Update to latest version" or "Fix the build"
+- **Include version numbers**: When updating ports, mention the version (e.g., "update to 3.0.3")
+- **Character limits**: 
+  - Target: 50-55 characters
+  - Hard maximum: 60 characters
+- **Examples**:
+  - "libfido2: update to 1.15.0"
+  - "py3*-numpy: fix build on arm64"
+  - "netatalk4: add variant for kerberos support"
+
+### Message Body
+- **Separate with blank line**: Always have blank line between subject and body
+- **Wrap at 72 characters**: Hard-wrap all body text
+- **Use full URLs**: 
+  - Trac tickets: "https://trac.macports.org/ticket/12345" (not "#12345")
+  - GitHub PRs: Full URLs preferred over "#n" syntax
+  - Commits: Use full SHA-1 hashes
+- **Provide context**: Explain what was wrong, why this fix, why this approach
+- **Don't just translate diff**: Explain the reasoning behind changes
+
+### Keywords for Ticket Management
+Use these keywords followed by full URLs:
+- **References/Addresses**: "References https://trac.macports.org/ticket/12345"
+- **Closes/Fixes**: "Closes: https://trac.macports.org/ticket/12345" (auto-closes ticket)
+
+### Example Commit Message
+```
+libfido2: update to version 1.15.0
+
+* update to version 1.15.0
+* add support for new USB HID features
+* fix build issues on macOS 14+
+* remove obsolete patches
+
+Closes: https://trac.macports.org/ticket/67890
+```
+
+## Portfile Development Rules
+
+### File Structure
+- Always follow MacPorts Portfile syntax
+- Use consistent indentation (4 spaces, no tabs)
+- Organize sections in standard order:
+  1. PortSystem declaration
+  2. Basic port info (name, version, etc.)
+  3. Description and homepage
+  4. Master sites and checksums
+  5. Dependencies
+  6. Configure/build options
+  7. Variants
+  8. Post-install notes
+
+### Testing Requirements
+- Always test builds locally before committing
+- Test on multiple architectures when possible (arm64, x86_64)
+- Verify all dependencies are correctly specified
+- Check for livecheck functionality
+- Validate checksums match upstream
+
+### Version Updates
+- Update version number
+- Update checksums (use `port checksum`)
+- Review and update patches if needed
+- Update dependencies if upstream changed requirements
+- Test that existing variants still work
+
+## New Port Submission Workflow
+
+### Step 1: Development in blakeports
+1. Create and test Portfile in blakeports repo
+2. Run `port lint` to ensure compliance
+3. Test build and installation locally
+4. Verify all dependencies are correct
+5. Test on multiple architectures when possible
+
+### Step 2: Transfer to macports-ports
+1. **Create branch**: `git checkout -b category/portname-new-port`
+   - Use descriptive branch names: `textproc/bstring-new-port`
+   - Always branch from updated master: `git pull origin master`
+2. **Create directory**: `mkdir -p category/portname`
+3. **Copy files**: Copy Portfile and any files/ directory from blakeports
+4. **Verify**: Run `port lint category/portname` in macports-ports
+5. **Stage**: `git add category/portname/`
+
+### Step 3: Commit with MacPorts Standards
+For new ports, use this format:
+```
+portname: new port, version X.Y.Z
+
+Brief description of what the software does - focus on 
+functionality and benefits, not implementation details.
+
+* key feature 1
+* key feature 2  
+* key feature 3
+* enhanced capability for specific use case
+```
+
+**Commit Message Rules for New Ports:**
+- Subject: "portname: new port, version X.Y.Z" (under 55 chars)
+- Describe what the software provides, not how it's built
+- Avoid mentioning: build systems, test frameworks, CI/CD
+- Focus on: functionality, performance, safety, API improvements
+- Wrap body text at 72 characters
+- Use bullet points for key features
+
+## Pull Request Workflow
+
+### Before Creating PR to macports-ports
+1. Ensure Portfile works in blakeports
+2. Run full test suite locally
+3. Check for any linting issues
+4. Verify commit messages follow MacPorts standards
+5. Ensure all patches are properly documented
+6. Complete new port submission workflow above
+
+### GitHub CLI PR Creation
+After pushing branch to your fork, use gh CLI:
+```bash
+gh pr create --repo macports/macports-ports --title "portname: new port, version X.Y.Z" --body "PR_DESCRIPTION"
+```
+
+### PR Description Template
+For new ports, use this template:
+```markdown
+## New Port Submission
+
+This PR adds a new port for [portname] version [X.Y.Z] to the [category] category.
+
+### Description
+Brief description of what the software does and its key benefits.
+
+### Key Features
+* Feature 1
+* Feature 2
+* Feature 3
+* Feature 4
+
+### Testing Performed
+- [x] Port builds successfully locally
+- [x] Port lint passes with 0 errors and 0 warnings
+- [x] Dependencies verified
+- [x] Installation tested
+
+**Tested on**
+
+macOS X.Y.Z Xcode A.B / Command Line Tools A.B.C.D.E.F (arm64)
+macOS X.Y.Z Command Line Tools A.B.C.D.E.F (x86_64)
+
+### Port Details
+- **Category**: category
+- **Version**: X.Y.Z
+- **Homepage**: https://...
+- **License**: LICENSE
+- **Dependencies**: dep1, dep2, dep3
+
+### Maintainer
+@yourusername (openmaintainer)
+```
+
+### System Information Commands
+```bash
+# Get system details for PR testing information
+sw_vers                                    # macOS version
+uname -m                                   # Architecture
+xcodebuild -version                        # Xcode version
+pkgutil --pkg-info=com.apple.pkg.CLTools_Executables  # CLT version
+port version                               # MacPorts version
+
+# For remote systems
+ssh hostname sw_vers
+ssh hostname uname -m
+ssh hostname port version
+```
+
+## Code Quality Standards
+
+### Portfile Best Practices
+- Use variables for repeated values
+- Include comprehensive descriptions
+- Add appropriate long_description
+- Include homepage URL
+- Use livecheck when possible
+- Add maintainer information
+- Follow naming conventions for variants
+
+### Patch Management
+- Store patches in `files/` directory
+- Use descriptive patch names
+- Include patch descriptions in comments
+- Minimize patch size and scope
+- Prefer upstream patches when available
+
+### Dependencies
+- Be explicit about build vs runtime dependencies
+- Use appropriate dependency types (depends_build, depends_lib, etc.)
+- Avoid unnecessary dependencies
+- Check for circular dependencies
+
+## File Organization
+
+### Directory Structure
+```
+category/
+├── portname/
+│   ├── Portfile
+│   └── files/
+│       ├── patch-fix-build.diff
+│       └── patch-disable-feature.diff
+```
+
+### Naming Conventions
+- Port directories: lowercase, hyphens for separation
+- Patch files: descriptive names with .diff or .patch extension
+- Follow upstream naming when possible
+
+## Git Workflow
+
+### Branch Strategy
+- **New ports**: `category/portname-new-port` (e.g., `textproc/bstring-new-port`)
+- **Port updates**: `category/portname-update-version` (e.g., `security/libfido2-update-1.15.0`)
+- **Port fixes**: `category/portname-fix-description` (e.g., `net/netatalk4-fix-arm64-build`)
+- One feature/fix per branch
+- Keep commits atomic and focused
+- Squash commits before final PR if needed
+
+### Standard Workflow Commands
+```bash
+# Start new port submission
+cd /path/to/macports-ports
+git checkout master && git pull origin master
+git checkout -b category/portname-new-port
+mkdir -p category/portname
+cp /path/to/blakeports/category/portname/* category/portname/
+port lint category/portname
+git add category/portname/
+git commit -m "portname: new port, version X.Y.Z
+
+Description following MacPorts guidelines..."
+```
+
+### Commit Best Practices
+- Commit early and often during development
+- Use meaningful commit messages even for WIP
+- Review commits before pushing
+- Ensure each commit builds successfully
+
+## Documentation Requirements
+
+### README Updates
+- Document any special testing procedures
+- Note any platform-specific considerations
+- Include links to upstream documentation
+- Maintain changelog for significant changes
+
+### Comments in Portfiles
+- Explain non-obvious configuration choices
+- Document why specific patches are needed
+- Note any upstream issues or workarounds
+- Include references to relevant tickets/discussions
+
+## Automation and Tools
+
+### Preferred Tools
+- Use `port lint` to check Portfile syntax
+- Use `port checksum` for updating checksums
+- Use `port test` for running test suites
+- Use `port fetch --check-vulnerabilities` for security checks
+
+### Continuous Integration
+- Ensure all changes pass local testing
+- Consider testing on multiple macOS versions
+- Validate against different Xcode versions when relevant
+
+## Communication Guidelines
+
+### Issue Reporting
+- Always include system information (macOS version, Xcode version)
+- Provide complete build logs for failures
+- Include steps to reproduce issues
+- Reference relevant upstream documentation
+
+### URL Formatting
+- **Always format URLs as clickable links** in responses and documentation
+- Use markdown format: `[descriptive text](URL)` or just `URL` for direct links
+- Include full URLs for: Trac tickets, GitHub PRs, commit references
+- Examples:
+  - PR: `https://github.com/macports/macports-ports/pull/12345`
+  - Trac: `https://trac.macports.org/ticket/67890`
+  - Commit: Full SHA-1 hash with GitHub URL
+
+### Collaboration
+- Be responsive to maintainer feedback
+- Follow MacPorts community guidelines
+- Participate constructively in discussions
+- Help review other contributors' work when possible
