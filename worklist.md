@@ -2,8 +2,8 @@
 bstring 1.0.1 new port ✅
 libcbor 0.13.0 update ✅
 libfido2 1.16.0 update ✅
-nrsc5 3.0.1 update
-  clean up dependencies
+nrsc5 3.0.1 update ✅
+  clean up dependencies ✅
 
 
 netatalk4 4.3.1 update
