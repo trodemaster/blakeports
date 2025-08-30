@@ -32,8 +32,10 @@ mkdir -p category/portname
 
 ### 1.2 Local Testing
 ```bash
-# Lint check
-port lint category/portname
+# Strict lint check (catches more potential issues)
+port lint --nitpick category/portname
+
+# Fix any warnings reported by --nitpick flag before proceeding
 
 # Build test
 sudo port install category/portname
@@ -76,7 +78,7 @@ cp -r /Users/blake/code/blakeports/category/portname/* category/portname/
 
 ### 2.3 Verification
 ```bash
-# Final lint check in macports-ports
+# Final lint check in macports-ports (basic check since --nitpick was done in blakeports)
 port lint category/portname
 
 # Should return: "0 errors and 0 warnings found"
@@ -103,7 +105,9 @@ git add category/portname/
 - Avoid mentioning: build systems, test frameworks, CI/CD
 - Use bullet points for key features
 
-**Example:**
+**Examples:**
+
+*New Port:*
 ```
 bstring: new port, version 1.0.1
 
@@ -116,6 +120,19 @@ programming with improved memory safety and performance.
 * improved performance over traditional string operations
 * enhanced API for modern C development
 ```
+
+*Port Update:*
+```
+libfido2: update to 1.16.0
+
+* update to version 1.16.0
+* update maintainer email address
+```
+
+**Commit Message Guidelines:**
+- **Never mention**: "update checksums" (always required, redundant)
+- **Focus on**: meaningful changes that affect users
+- **Keep concise**: avoid unnecessary technical details
 
 ### 3.2 Commit Command
 ```bash
@@ -171,6 +188,13 @@ Brief description of what the software does and its key benefits.
 - [x] Port lint passes with 0 errors and 0 warnings
 - [x] Dependencies verified
 - [x] Installation tested
+
+### PR Content Guidelines
+- **Do NOT mention**: checksums (always updated, redundant)
+- **Do NOT mention**: internal development repos (blakeports, etc.)
+- **Do NOT mention**: --nitpick flag (internal process)
+- **Focus on**: what changed, why it matters to users
+- **Keep professional**: avoid implementation details
 
 **Tested on**
 
@@ -242,10 +266,11 @@ This example demonstrates the complete workflow from development through success
 ## Troubleshooting
 
 ### Common Issues
-1. **Port lint failures**: Fix Portfile syntax and style issues
-2. **Build failures**: Check dependencies and configure options
-3. **Checksum mismatches**: Update checksums with `port checksum`
-4. **Branch conflicts**: Rebase against updated master
+1. **Port lint --nitpick warnings**: Address all style and best practice issues in blakeports
+2. **Port lint failures**: Fix Portfile syntax and style issues
+3. **Build failures**: Check dependencies and configure options
+4. **Checksum mismatches**: Update checksums with `port checksum`
+5. **Branch conflicts**: Rebase against updated master
 
 ### Getting Help
 - MacPorts mailing lists
