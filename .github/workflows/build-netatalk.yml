@@ -39,19 +39,22 @@ jobs:
       run: |
         ./scripts/install-deps ${{ matrix.subport }}
         
-    - name: Clean existing netatalk installation
+    - name: Clean existing netatalk installations
       run: |
         # Source MacPorts environment from our local copy
         source ./setupenv.bash
         
-        # Uninstall and clean if port already exists
-        if port installed ${{ matrix.subport }} | grep -q ${{ matrix.subport }}; then
-          echo "Removing existing ${{ matrix.subport }} installation..."
-          sudo port -f uninstall ${{ matrix.subport }}
-          sudo port clean ${{ matrix.subport }}
-        else
-          echo "No existing ${{ matrix.subport }} installation found"
-        fi
+        # Uninstall and clean both netatalk and netatalk4 if they exist
+        # since they're now subports of the same port and could conflict
+        for subport in netatalk netatalk4; do
+          if port installed $subport | grep -q $subport; then
+            echo "Removing existing $subport installation..."
+            sudo port -f uninstall $subport
+            sudo port clean $subport
+          else
+            echo "No existing $subport installation found"
+          fi
+        done
         
     - name: Build ${{ matrix.subport }} port
       run: |
@@ -69,11 +72,6 @@ jobs:
         which afpd || echo "afpd binary not found in PATH"
         ls -la /opt/local/sbin/afpd || echo "afpd binary not found"
         
-        # Show which version was installed
-        if [ "${{ matrix.subport }}" = "netatalk4" ]; then
-          echo "Checking netatalk4 version..."
-          /opt/local/sbin/afpd -V || echo "Could not get afpd version"
-        else
-          echo "Checking legacy netatalk version..."
-          /opt/local/sbin/afpd -V || echo "Could not get afpd version"
-        fi
+        # Show which version was installed (both subports install the same 4.x version)
+        echo "Checking netatalk version for subport: ${{ matrix.subport }}"
+        /opt/local/sbin/afpd -V || echo "Could not get afpd version"
