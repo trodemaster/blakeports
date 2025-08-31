@@ -1,0 +1,79 @@
+name: Build netatalk
+
+on:
+  push:
+    paths:
+      - 'net/netatalk/**'
+    branches: [main]
+  pull_request:
+    paths:
+      - 'net/netatalk/**'
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-netatalk:
+    name: build-netatalk (${{ matrix.runner }}, ${{ matrix.subport }})
+    strategy:
+      matrix:
+        runner: [macOS_15, macOS_26_Beta]
+        subport: [netatalk, netatalk4]
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
+    
+    steps:
+    - name: Show macOS version
+      run: |
+        echo "Running on: ${{ matrix.runner }}"
+        echo "Building subport: ${{ matrix.subport }}"
+        sw_vers
+        
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup MacPorts and BlakePorts Environment
+      run: |
+        ./scripts/installmacports
+        
+    - name: Install dependencies
+      run: |
+        ./scripts/install-deps ${{ matrix.subport }}
+        
+    - name: Clean existing netatalk installation
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        # Uninstall and clean if port already exists
+        if port installed ${{ matrix.subport }} | grep -q ${{ matrix.subport }}; then
+          echo "Removing existing ${{ matrix.subport }} installation..."
+          sudo port -f uninstall ${{ matrix.subport }}
+          sudo port clean ${{ matrix.subport }}
+        else
+          echo "No existing ${{ matrix.subport }} installation found"
+        fi
+        
+    - name: Build ${{ matrix.subport }} port
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        sudo port -v install ${{ matrix.subport }}
+        
+    - name: Verify ${{ matrix.subport }} installation
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        port installed ${{ matrix.subport }}
+        which afpd || echo "afpd binary not found in PATH"
+        ls -la /opt/local/sbin/afpd || echo "afpd binary not found"
+        
+        # Show which version was installed
+        if [ "${{ matrix.subport }}" = "netatalk4" ]; then
+          echo "Checking netatalk4 version..."
+          /opt/local/sbin/afpd -V || echo "Could not get afpd version"
+        else
+          echo "Checking legacy netatalk version..."
+          /opt/local/sbin/afpd -V || echo "Could not get afpd version"
+        fi
