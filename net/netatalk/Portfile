@@ -7,7 +7,6 @@ PortGroup           meson 1.0
 name                netatalk
 subport             netatalk4 {}
 
-# Modern netatalk 4.x configuration (for both netatalk and netatalk4 subports)
 github.setup        Netatalk netatalk 4-3-1 netatalk-
 version             [string map {- .} ${github.version}]
 github.tarball_from releases
@@ -18,31 +17,22 @@ revision            0
 checksums           rmd160  a70789864f4dfe1dc091ef48658453f272a65387 \
                     sha256  248e2eea8066c7d3e7fed62c54a3df37b4158bb45247ebdf64efe2e3797c04d5 \
                     size    956212
-
+                    
 categories          net
 license             GPL-2+
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
 
-if {${subport} eq "netatalk4"} {
-    description     Netatalk is a freely-available Open Source AFP fileserver (netatalk4 alias).
-    long_description Netatalk is a freely-available Open Source AFP fileserver. \
+description         Netatalk is a freely-available Open Source AFP fileserver.
+long_description    Netatalk is a freely-available Open Source AFP fileserver. \
                     It allows Unix-like operating systems to serve as file \
-                    servers for Macintosh computers. This is an alias for the \
-                    main netatalk port.
-} else {
-    description     Netatalk is a freely-available Open Source AFP fileserver.
-    long_description Netatalk is a freely-available Open Source AFP fileserver. \
-                    It allows Unix-like operating systems to serve as file \
-                    servers for Macintosh computers. This is the modern 4.x version.
-}
+                    servers for Macintosh computers.
 
 homepage            https://netatalk.io
 
-depends_build-append \
-                    path:bin/pkg-config:pkgconfig \
-                    port:cmark-gfm \
-                    port:bison \
-                    port:flex
+depends_build-append       path:bin/pkg-config:pkgconfig \
+                           port:cmark-gfm \
+                           port:bison \
+                           port:flex
 
 depends_lib         port:sqlite3 \
                     port:libevent \
@@ -54,13 +44,12 @@ depends_lib         port:sqlite3 \
                     port:glib2 \
                     port:bstring
 
-configure.args-append \
-                    -Dwith-init-style=none \
-                    -Dwith-pam-config-path=${prefix}/etc/pam.d \
-                    -Dwith-lockfile-path=${prefix}/var/run \
-                    -Dwith-cnid-backends=sqlite \
-                    -Dwith-cnid-default-backend=sqlite \
-                    -Dwith-spotlight=true
+configure.args-append -Dwith-init-style=none \
+                      -Dwith-pam-config-path=${prefix}/etc/pam.d \
+                      -Dwith-lockfile-path=${prefix}/var/run \
+                      -Dwith-cnid-backends=sqlite \
+                      -Dwith-cnid-default-backend=sqlite \
+                      -Dwith-spotlight=true
 
 patchfiles          prefer-mdns-on-darwin.diff
 

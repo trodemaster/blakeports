@@ -23,7 +23,7 @@ WORKFLOWS=(
     "Build libcbor"
     "Build libfido2" 
     "Build bstring"
-    "Build netatalk4"
+    "Build netatalk"
     "Build nrsc5"
 )
 
