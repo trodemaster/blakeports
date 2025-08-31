@@ -7,6 +7,13 @@ PortGroup           meson 1.0
 name                netatalk
 subport             netatalk4 {}
 
+# Set up mutual conflicts between subports
+if {${subport} eq "netatalk4"} {
+    conflicts       netatalk
+} elseif {${subport} eq "netatalk"} {
+    conflicts       netatalk4
+}
+
 github.setup        Netatalk netatalk 4-3-1 netatalk-
 version             [string map {- .} ${github.version}]
 github.tarball_from releases
@@ -61,3 +68,4 @@ startupitem.logevents yes
 startupitem.debug          yes
 
 notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/. This build uses SQLite as the CNID backend for improved performance and reliability compared to Berkeley DB. Spotlight support is enabled for metadata indexing and search. Documentation is built using cmark-gfm for enhanced GitHub Flavored Markdown support."
+
