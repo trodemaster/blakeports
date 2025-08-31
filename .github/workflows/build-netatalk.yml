@@ -43,17 +43,14 @@ jobs:
         # Source MacPorts environment from our local copy
         source ./setupenv.bash
         
-        # Uninstall and clean both netatalk and netatalk4 if they exist
-        # since they're now subports of the same port and could conflict
-        for subport in netatalk netatalk4; do
-          if port installed $subport | grep -q $subport; then
-            echo "Removing existing $subport installation..."
-            sudo port -f uninstall $subport
-            sudo port clean $subport
-          else
-            echo "No existing $subport installation found"
-          fi
-        done
+        # Uninstall and clean netatalk if it exists
+        if port installed netatalk | grep -q netatalk; then
+          echo "Removing existing netatalk installation..."
+          sudo port -f uninstall netatalk
+          sudo port clean netatalk
+        else
+          echo "No existing netatalk installation found"
+        fi
         
     - name: Build netatalk port
       run: |
