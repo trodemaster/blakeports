@@ -67,5 +67,5 @@ startupitem.logfile.stderr ${prefix}/var/log/${name}-stderr.log
 startupitem.logevents yes
 startupitem.debug          yes
 
-notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/. This build uses SQLite as the CNID backend for improved performance and reliability compared to Berkeley DB. Spotlight support is enabled for metadata indexing and search. Documentation is built using cmark-gfm for enhanced GitHub Flavored Markdown support."
+notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/."
 
