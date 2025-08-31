@@ -13,11 +13,10 @@ on:
 
 jobs:
   build-netatalk:
-    name: build-netatalk (${{ matrix.runner }}, ${{ matrix.subport }})
+    name: build-netatalk (${{ matrix.runner }})
     strategy:
       matrix:
         runner: [macOS_15, macOS_26_Beta]
-        subport: [netatalk, netatalk4]
       fail-fast: false
     runs-on: ${{ matrix.runner }}
     
@@ -25,7 +24,7 @@ jobs:
     - name: Show macOS version
       run: |
         echo "Running on: ${{ matrix.runner }}"
-        echo "Building subport: ${{ matrix.subport }}"
+        echo "Building port: netatalk"
         sw_vers
         
     - name: Checkout repository
@@ -37,7 +36,7 @@ jobs:
         
     - name: Install dependencies
       run: |
-        ./scripts/install-deps ${{ matrix.subport }}
+        ./scripts/install-deps netatalk
         
     - name: Clean existing netatalk installations
       run: |
@@ -56,22 +55,22 @@ jobs:
           fi
         done
         
-    - name: Build ${{ matrix.subport }} port
+    - name: Build netatalk port
       run: |
         # Source MacPorts environment from our local copy
         source ./setupenv.bash
         
-        sudo port -v install ${{ matrix.subport }}
+        sudo port -v install netatalk
         
-    - name: Verify ${{ matrix.subport }} installation
+    - name: Verify netatalk installation
       run: |
         # Source MacPorts environment from our local copy
         source ./setupenv.bash
         
-        port installed ${{ matrix.subport }}
+        port installed netatalk
         which afpd || echo "afpd binary not found in PATH"
         ls -la /opt/local/sbin/afpd || echo "afpd binary not found"
         
-        # Show which version was installed (both subports install the same 4.x version)
-        echo "Checking netatalk version for subport: ${{ matrix.subport }}"
+        # Show which version was installed
+        echo "Checking netatalk version..."
         /opt/local/sbin/afpd -V || echo "Could not get afpd version"
