@@ -30,6 +30,13 @@ patchfiles          fix-macos-scroll.patch \
 
 patch.pre_args          -p1
 
+post-patch {
+    # Change default log path from /var/log/ to ~/Library/Logs/ on macOS
+    if {${os.platform} eq "darwin"} {
+        reinplace "s|/var/log/|~/Library/Logs/|" ${worksrcpath}/src/gui/src/AppConfig.cpp
+    }
+}
+
 compiler.cxx_standard 2014
 
 configure.args-append \
