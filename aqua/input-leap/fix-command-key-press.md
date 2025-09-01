@@ -100,4 +100,15 @@
     - Compare expected vs actual behavior on Host 2
   - **Success Criteria**: All modifier combinations work reliably without dropping modifier state when sent from Host 1 to Host 2
 
+## Log Path Fix (2025-01-09)
+- **Problem**: Input-leap was hardcoded to log to `/var/log/input-leap.log`, which requires admin privileges and doesn't follow macOS conventions
+- **Solution**: Changed default log path to `~/Library/Logs/input-leap.log` on macOS using post-patch phase in Portfile
+- **Implementation**: Added post-patch phase that replaces `/var/log/` with `~/Library/Logs/` in `AppConfig.cpp`
+- **Status**: ✅ Successfully implemented and built
+- **Benefits**:
+  - Follows macOS logging conventions (`~/Library/Logs/`)
+  - No admin privileges required
+  - User-writable location
+  - Consistent with other macOS applications
+
 
