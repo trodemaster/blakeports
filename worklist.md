@@ -7,9 +7,10 @@ nrsc5 3.0.1 update ✅
 
 
 netatalk4 4.3.1 update
-  merge with netatalk
-  make alias for netatalk4
-  cleanup bison.diff
+  merge with netatalk ✅
+  make alias for netatalk4 ✅
+  cleanup bison.diff ✅
+  create PR that removes files for netatalk4 and updates netatalk
 
 
 

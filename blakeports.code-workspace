@@ -17,6 +17,9 @@
 		},
 		{
 			"path": "../macos-image-templates"
+		},
+		{
+			"path": "../input-leap"
 		}
 	],
 	"settings": {}
