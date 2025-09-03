@@ -5,8 +5,7 @@ PortGroup           github 1.0
 PortGroup           cmake 1.1
 
 github.setup        PJK libcbor 0.13.0 v
-# Change github.tarball_from to 'releases' or 'archive' next update
-github.tarball_from tarball
+github.tarball_from archive
 revision            0
 
 categories          devel
@@ -16,9 +15,9 @@ license             MIT
 description         library for parsing and generating CBOR
 long_description    {*}${description}, the general-purpose schema-less binary data format.
 
-checksums           rmd160  12865dfc3f2771c3ed40fb475bf69accb829535f \
-                    sha256  1ccfc992f62dc7db424e3d17640ccb4facea5256913b56c295d3b3188a1b07bb \
-                    size    299950
+checksums           rmd160  ad9bb702516b6d055650a1e3f90335f33005e97b \
+                    sha256  95a7f0dd333fd1dce3e4f92691ca8be38227b27887599b21cd3c4f6d6a7abb10 \
+                    size    307200
                     
 configure.args-append    -DBUILD_SHARED_LIBS=ON
 
