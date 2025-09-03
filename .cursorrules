@@ -71,6 +71,7 @@ Closes: https://trac.macports.org/ticket/67890
 - Verify all dependencies are correctly specified
 - Check for livecheck functionality
 - Validate checksums match upstream
+- **If seeing checksum mismatches**: Use `sudo port clean --dist <PORTNAME>` to clear cached files before re-running checksum validation
 
 ### Version Updates
 - Update version number

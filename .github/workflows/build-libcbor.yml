@@ -50,7 +50,7 @@ jobs:
         if port installed libcbor | grep -q libcbor; then
           echo "Removing existing libcbor installation..."
           sudo port -f uninstall libcbor
-          sudo port clean libcbor
+          sudo port clean --dist libcbor
         else
           echo "No existing libcbor installation found"
         fi

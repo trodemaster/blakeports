@@ -50,7 +50,7 @@ jobs:
         if port installed nrsc5 | grep -q nrsc5; then
           echo "Removing existing nrsc5 installation..."
           sudo port -f uninstall nrsc5
-          sudo port clean nrsc5
+          sudo port clean --dist nrsc5
         else
           echo "No existing nrsc5 installation found"
         fi

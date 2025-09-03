@@ -51,7 +51,7 @@ jobs:
         if port installed netatalk | grep -q netatalk; then
           echo "Removing existing netatalk installation..."
           sudo port -f uninstall netatalk
-          sudo port clean netatalk
+          sudo port clean --dist netatalk
         else
           echo "No existing netatalk installation found"
         fi
