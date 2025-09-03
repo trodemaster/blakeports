@@ -32,24 +32,46 @@ jobs:
     - name: Setup MacPorts and BlakePorts Environment
       run: |
         ./scripts/installmacports
-        
-    - name: Install dependencies
-      run: |
-        ./scripts/install-deps bstring
-        
+
     - name: Clean existing bstring installation
       run: |
         # Source MacPorts environment from our local copy
         source ./setupenv.bash
-        
-        # Uninstall and clean if port already exists
-        if port installed bstring | grep -q bstring; then
-          echo "Removing existing bstring installation..."
-          sudo port -f uninstall bstring
-          sudo port clean bstring
+
+        # Check if any version of bstring is installed
+        echo "Checking for existing bstring installations..."
+        if port installed bstring >/dev/null 2>&1; then
+          echo "📋 Current bstring installations:"
+          port installed bstring
+
+          echo ""
+          echo "🗑️  Removing ALL existing bstring installation(s)..."
+
+          # Force uninstall all versions of bstring
+          if sudo port -f uninstall installed and name=bstring; then
+            sudo port clean bstring
+            echo "✅ All existing bstring installation(s) removed successfully"
+
+            # Verify cleanup was successful
+            echo ""
+            echo "🔍 Verifying cleanup..."
+            if port installed bstring >/dev/null 2>&1; then
+              echo "⚠️  Warning: Some bstring installations may still exist"
+              port installed bstring
+            else
+              echo "✅ Confirmed: No bstring installations remain"
+            fi
+          else
+            echo "❌ Failed to uninstall bstring"
+            exit 1
+          fi
         else
-          echo "No existing bstring installation found"
+          echo "ℹ️  No existing bstring installation found"
         fi
+
+    - name: Install dependencies
+      run: |
+        ./scripts/install-deps bstring
         
     - name: Build bstring port
       run: |
@@ -70,7 +92,41 @@ jobs:
       run: |
         # Source MacPorts environment from our local copy
         source ./setupenv.bash
-        
+
         # Test with tests variant
         sudo port -v install bstring +tests
+
+    - name: Final cleanup - Remove all bstring installations
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+
+        echo "🧹 Performing final cleanup of all bstring installations..."
+        if port installed bstring >/dev/null 2>&1; then
+          echo "📋 Final bstring installations before cleanup:"
+          port installed bstring
+
+          echo ""
+          echo "🗑️  Removing ALL bstring installations for clean state..."
+
+          # Final comprehensive cleanup
+          if sudo port -f uninstall installed and name=bstring; then
+            sudo port clean --all bstring
+            echo "✅ Final cleanup completed successfully"
+
+            # Final verification
+            if port installed bstring >/dev/null 2>&1; then
+              echo "⚠️  Final verification: Some installations may remain"
+              port installed bstring
+              exit 1
+            else
+              echo "🎉 Final verification: Clean state confirmed - no bstring installations remain"
+            fi
+          else
+            echo "❌ Final cleanup failed"
+            exit 1
+          fi
+        else
+          echo "ℹ️  No bstring installations found - already clean"
+        fi
         
