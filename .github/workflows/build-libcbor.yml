@@ -11,6 +11,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-libcbor:
     name: build-libcbor (${{ matrix.runner }})

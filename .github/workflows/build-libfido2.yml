@@ -11,6 +11,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-libfido2:
     name: build-libfido2 (${{ matrix.runner }})

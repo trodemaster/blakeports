@@ -11,6 +11,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-nrsc5:
     name: build-nrsc5 (${{ matrix.runner }})
