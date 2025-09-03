@@ -50,7 +50,7 @@ jobs:
         if port installed libfido2 | grep -q libfido2; then
           echo "Removing existing libfido2 installation..."
           sudo port -f uninstall libfido2
-          sudo port clean libfido2
+          sudo port clean --dist libfido2
         else
           echo "No existing libfido2 installation found"
         fi

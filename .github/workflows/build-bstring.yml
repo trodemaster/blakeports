@@ -41,7 +41,7 @@ jobs:
       run: |
         source ./setupenv.bash
         sudo port -f uninstall bstring
-        sudo port clean bstring
+        sudo port clean --dist bstring
 
     - name: Install dependencies
       run: |
