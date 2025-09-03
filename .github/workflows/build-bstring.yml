@@ -47,9 +47,25 @@ jobs:
           echo ""
           echo "🗑️  Removing ALL existing bstring installation(s)..."
 
-          # Force uninstall all versions of bstring
-          if sudo port -f uninstall installed and name=bstring; then
-            sudo port clean bstring
+          # Get list of installed bstring versions and uninstall each one individually
+          # This approach works even with broken MacPorts sources configuration
+          INSTALLED_VERSIONS=$(port installed bstring | grep "bstring @" | sed 's/.*bstring @//' | sed 's/ .*//')
+
+          UNINSTALL_SUCCESS=true
+          for version in $INSTALLED_VERSIONS; do
+            echo "  Uninstalling bstring @${version}..."
+            if sudo port -f uninstall "bstring@${version}"; then
+              echo "  ✅ bstring @${version} removed"
+            else
+              echo "  ❌ Failed to remove bstring @${version}"
+              UNINSTALL_SUCCESS=false
+            fi
+          done
+
+          # Clean up any remaining files
+          sudo port clean bstring
+
+          if $UNINSTALL_SUCCESS; then
             echo "✅ All existing bstring installation(s) removed successfully"
 
             # Verify cleanup was successful
@@ -62,7 +78,7 @@ jobs:
               echo "✅ Confirmed: No bstring installations remain"
             fi
           else
-            echo "❌ Failed to uninstall bstring"
+            echo "❌ Failed to uninstall some bstring versions"
             exit 1
           fi
         else
@@ -109,9 +125,25 @@ jobs:
           echo ""
           echo "🗑️  Removing ALL bstring installations for clean state..."
 
+          # Get list of remaining bstring versions and uninstall each one individually
+          # This approach works even with broken MacPorts sources configuration
+          INSTALLED_VERSIONS=$(port installed bstring | grep "bstring @" | sed 's/.*bstring @//' | sed 's/ .*//')
+
+          FINAL_CLEANUP_SUCCESS=true
+          for version in $INSTALLED_VERSIONS; do
+            echo "  Final cleanup: Uninstalling bstring @${version}..."
+            if sudo port -f uninstall "bstring@${version}"; then
+              echo "  ✅ bstring @${version} removed"
+            else
+              echo "  ❌ Failed to remove bstring @${version}"
+              FINAL_CLEANUP_SUCCESS=false
+            fi
+          done
+
           # Final comprehensive cleanup
-          if sudo port -f uninstall installed and name=bstring; then
-            sudo port clean --all bstring
+          sudo port clean --all bstring
+
+          if $FINAL_CLEANUP_SUCCESS; then
             echo "✅ Final cleanup completed successfully"
 
             # Final verification
@@ -123,7 +155,7 @@ jobs:
               echo "🎉 Final verification: Clean state confirmed - no bstring installations remain"
             fi
           else
-            echo "❌ Final cleanup failed"
+            echo "❌ Final cleanup failed - some versions could not be removed"
             exit 1
           fi
         else
