@@ -49,8 +49,8 @@ jobs:
         # Uninstall and clean if port already exists
         if port installed libfido2 | grep -q libfido2; then
           echo "Removing existing libfido2 installation..."
-          sudo port -f uninstall libfido2
-          sudo port clean --dist libfido2
+          sudo port -f uninstall libfido2 libcbor
+          sudo port clean --dist libfido2 libcbor
         else
           echo "No existing libfido2 installation found"
         fi
