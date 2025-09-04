@@ -49,8 +49,8 @@ jobs:
         # Uninstall and clean if port already exists
         if port installed libcbor | grep -q libcbor; then
           echo "Removing existing libcbor installation..."
-          sudo port -f uninstall libcbor
-          sudo port clean --dist libcbor
+          sudo port -f uninstall libcbor libfido2
+          sudo port clean --dist libcbor libfido2
         else
           echo "No existing libcbor installation found"
         fi
