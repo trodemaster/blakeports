@@ -38,10 +38,6 @@ jobs:
       run: |
         ./scripts/installmacports
         
-    - name: Install dependencies
-      run: |
-        ./scripts/install-deps netatalk
-        
     - name: Clean existing netatalk installations
       run: |
         # Source MacPorts environment from our local copy
@@ -55,6 +51,10 @@ jobs:
         else
           echo "No existing netatalk installation found"
         fi
+
+    - name: Install dependencies
+      run: |
+        ./scripts/install-deps netatalk
         
     - name: Build netatalk port
       run: |

@@ -37,10 +37,6 @@ jobs:
       run: |
         ./scripts/installmacports
         
-    - name: Install dependencies
-      run: |
-        ./scripts/install-deps libfido2
-        
     - name: Clean existing libfido2 installation
       run: |
         # Source MacPorts environment from our local copy
@@ -49,11 +45,15 @@ jobs:
         # Uninstall and clean if port already exists
         if port installed libfido2 | grep -q libfido2; then
           echo "Removing existing libfido2 installation..."
-          sudo port -f uninstall libfido2 libcbor
-          sudo port clean --dist libfido2 libcbor
+          sudo port -f uninstall libfido2 libcbor openssl3
+          sudo port clean --dist libfido2 libcbor openssl3
         else
           echo "No existing libfido2 installation found"
         fi
+ 
+    - name: Install dependencies
+      run: |
+        ./scripts/install-deps libfido2
         
     - name: Build libfido2 port
       run: |
