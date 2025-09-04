@@ -37,10 +37,6 @@ jobs:
       run: |
         ./scripts/installmacports
         
-    - name: Install dependencies
-      run: |
-        ./scripts/install-deps nrsc5
-        
     - name: Clean existing nrsc5 installation
       run: |
         # Source MacPorts environment from our local copy
@@ -54,7 +50,11 @@ jobs:
         else
           echo "No existing nrsc5 installation found"
         fi
-        
+
+    - name: Install dependencies
+      run: |
+        ./scripts/install-deps nrsc5
+            
     - name: Build nrsc5 port
       run: |
         # Source MacPorts environment from our local copy
