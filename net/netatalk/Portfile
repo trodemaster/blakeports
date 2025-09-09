@@ -24,7 +24,7 @@ revision            0
 checksums           rmd160  46af4f1c71fafc9e1cfca470d3e90f97d91b8117 \
                     sha256  2977b4fd113182f0cc183337ba23d5701fb2be4e0dfcec7ee575b4d73a738d3a \
                     size    956356
-                                        
+
 categories          net
 license             GPL-2+
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
@@ -58,8 +58,6 @@ configure.args-append -Dwith-init-style=none \
                       -Dwith-cnid-default-backend=sqlite \
                       -Dwith-spotlight=true
 
-# patchfiles          prefer-mdns-on-darwin.diff
-
 startupitem.create  yes
 startupitem.executable  ${prefix}/sbin/netatalk -d -F ${prefix}/etc/afp.conf
 startupitem.logfile ${prefix}/var/log/${name}.log
@@ -68,4 +66,3 @@ startupitem.logevents yes
 startupitem.debug          yes
 
 notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/."
-

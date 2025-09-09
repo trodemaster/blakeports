@@ -21,6 +21,30 @@ Our workflow follows a three-stage process:
 - **blakeports**: Development and testing repository
 - **macports-ports**: Local fork of https://github.com/macports/macports-ports
 
+## Special Workflow: Port Consolidation
+
+When consolidating multiple ports into a single port (e.g., netatalk + netatalk4 → netatalk with subports):
+
+### Prerequisites
+- Ensure the consolidated port works in blakeports first
+- Test both the main port and subport functionality
+- Verify that conflicts are properly set up between subports
+
+### Workflow
+1. **Develop consolidated port** in blakeports with subport structure
+2. **Test thoroughly** with `port lint --nitpick` and build tests
+3. **Create branch** in macports-ports: `category/portname-consolidate-ports`
+4. **Copy updated Portfile** to macports-ports
+5. **Remove obsolete directories/files** using `git rm`
+6. **Commit with proper message** focusing on the update, not consolidation
+7. **Create PR** with comprehensive description of changes
+
+### Key Considerations
+- **Subject line**: Focus on the update (e.g., "netatalk: update to 4.3.2") not the consolidation
+- **Body details**: Describe the consolidation in bullet points
+- **Ticket references**: Use "Closes:" for fixed tickets, "Please also close:" for others
+- **Subport conflicts**: Ensure mutual conflicts are properly configured
+
 ## Stage 1: Development in blakeports
 
 ### 1.1 Port Creation
@@ -69,11 +93,27 @@ git checkout -b category/portname-new-port
 - New ports: `category/portname-new-port`
 - Updates: `category/portname-update-version`
 - Fixes: `category/portname-fix-description`
+- Port consolidation: `category/portname-consolidate-ports`
 
 ### 2.2 File Transfer
 ```bash
 mkdir -p category/portname
 cp -r /Users/blake/code/blakeports/category/portname/* category/portname/
+```
+
+**For Port Consolidation:**
+When consolidating multiple ports into one:
+```bash
+# Copy the updated Portfile
+cp /path/to/updated/Portfile category/portname/Portfile
+
+# Remove obsolete directories and files
+rm -rf category/obsolete-portname
+rm -f category/portname/files/obsolete-file
+
+# Stage changes
+git add category/portname/Portfile
+git rm -r category/obsolete-portname category/portname/files/obsolete-file
 ```
 
 ### 2.3 Verification
@@ -94,9 +134,11 @@ git add category/portname/
 ### 3.1 MacPorts-Standard Commit
 
 **Subject Line Requirements:**
-- Format: `portname: new port, version X.Y.Z`
+- Format: `portname: new port, version X.Y.Z` or `portname: update to X.Y.Z`
 - Maximum 55 characters (60 absolute maximum)
 - Start with port name followed by colon
+- **Avoid implementation details**: Don't use terms like "consolidate ports" in subject line
+- **Keep it simple**: Focus on what the commit does, not how it does it
 
 **Body Requirements:**
 - Blank line after subject
@@ -129,10 +171,27 @@ libfido2: update to 1.16.0
 * update maintainer email address
 ```
 
+*Port Consolidation:*
+```
+netatalk: update to 4.3.2
+
+* combine netatalk and netatalk4 into single port with subports
+* switch to GitHub source and Meson build system
+* modernize dependencies and configuration
+* remove unused netatalk4 port files
+
+Closes: https://trac.macports.org/ticket/69609
+Closes: https://trac.macports.org/ticket/36674  
+Closes: https://trac.macports.org/ticket/36673
+Please also close: https://trac.macports.org/ticket/23313 as the solution is in the new docs
+```
+
 **Commit Message Guidelines:**
 - **Never mention**: "update checksums" (always required, redundant)
 - **Focus on**: meaningful changes that affect users
 - **Keep concise**: avoid unnecessary technical details
+- **Use proper ticket keywords**: "Closes:" for tickets that are fixed, "Please also close:" for tickets that should be closed for other reasons
+- **Reference full URLs**: Always use complete Trac ticket URLs, not just ticket numbers
 
 ### 3.2 Commit Command
 ```bash
@@ -195,6 +254,8 @@ Brief description of what the software does and its key benefits.
 - **Do NOT mention**: --nitpick flag (internal process)
 - **Focus on**: what changed, why it matters to users
 - **Keep professional**: avoid implementation details
+- **Use proper ticket references**: Include full URLs for all referenced tickets
+- **Format URLs as clickable links**: Use markdown format for better readability
 
 **Tested on**
 
@@ -251,7 +312,9 @@ The PR will automatically update with new commits.
 - **Your Fork**: https://github.com/trodemaster/macports-ports
 - **Development**: https://github.com/trodemaster/blakeports
 
-## Example: bstring Port Submission
+## Examples
+
+### Example 1: bstring Port Submission
 
 **Successfully submitted as**: https://github.com/macports/macports-ports/pull/29227
 
@@ -263,6 +326,17 @@ The PR will automatically update with new commits.
 
 This example demonstrates the complete workflow from development through successful PR submission.
 
+### Example 2: netatalk Port Consolidation
+
+**Successfully submitted as**: https://github.com/macports/macports-ports/pull/29293
+
+**Branch**: `net/netatalk-consolidate-ports`
+
+**Testing Environment**:
+- macOS 15.6.1 Xcode 16.4 / Command Line Tools 16.4.0.0.1.1747106510 (arm64)
+
+This example demonstrates port consolidation, updating to a new upstream maintainer, and addressing multiple long-standing tickets in a single PR.
+
 ## Troubleshooting
 
 ### Common Issues
@@ -271,6 +345,9 @@ This example demonstrates the complete workflow from development through success
 3. **Build failures**: Check dependencies and configure options
 4. **Checksum mismatches**: Update checksums with `port checksum`
 5. **Branch conflicts**: Rebase against updated master
+6. **Commit message too long**: Keep subject line under 55 characters, move details to body
+7. **Implementation details in subject**: Focus on what changed, not how it changed
+8. **Missing ticket references**: Always include full URLs for referenced tickets
 
 ### Getting Help
 - MacPorts mailing lists
@@ -280,5 +357,6 @@ This example demonstrates the complete workflow from development through success
 
 ---
 
-*Last updated: August 30, 2025*
+*Last updated: January 8, 2025*
 *Workflow established for blakeports → macports-ports contribution process*
+*Updated with port consolidation guidelines and commit message best practices*

@@ -1,0 +1,312 @@
+#!/bin/bash
+
+# AFP Testing Script
+# Uses environment variables for configuration
+# Based on mount_afp(8) man page
+
+set -e  # Exit on any error
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to show usage
+show_usage() {
+    cat << EOF
+AFP Testing Script
+
+Environment Variables (required):
+  AFP_SERVER     - AFP server hostname or IP address
+  AFP_VOLUME     - Volume name on the AFP server
+  AFP_USER       - Username for authentication (optional for guest)
+  AFP_PASSWORD   - Password for authentication (optional for guest)
+
+Environment Variables (optional):
+  AFP_PORT       - AFP server port (default: 548)
+  AFP_AUTH       - Authentication method (e.g., "Client%20Krb%20v2" for Kerberos)
+  AFP_MOUNT_POINT - Local mount point directory (default: /tmp/afp_test_mount)
+  AFP_MOUNT_OPTS - Additional mount options (e.g., "nobrowse,automounted")
+  AFP_INTERACTIVE - Set to "1" for interactive password prompt
+  AFP_HARD_MOUNT - Set to "1" for hard mount (default is soft mount)
+
+Examples:
+  # Basic AFP mount with username/password
+  export AFP_SERVER="server.company.com"
+  export AFP_VOLUME="shared"
+  export AFP_USER="myuser"
+  export AFP_PASSWORD="mypass"
+  ./afp_tests
+
+  # Guest mount
+  export AFP_SERVER="myserver"
+  export AFP_VOLUME="guestVolume"
+  ./afp_tests
+
+  # Kerberos authentication
+  export AFP_SERVER="myserver"
+  export AFP_VOLUME="myVolume"
+  export AFP_AUTH="Client%20Krb%20v2"
+  ./afp_tests
+
+  # Interactive password prompt
+  export AFP_SERVER="server.company.com"
+  export AFP_VOLUME="shared"
+  export AFP_USER="myuser"
+  export AFP_INTERACTIVE="1"
+  ./afp_tests
+
+Operations:
+  mount    - Mount the AFP share
+  unmount  - Unmount the AFP share
+  test     - Test mounting and unmounting
+  status   - Check if share is currently mounted
+  help     - Show this help message
+
+Usage: $0 [mount|unmount|test|status|help]
+EOF
+}
+
+# Function to validate required environment variables
+validate_env() {
+    if [[ -z "$AFP_SERVER" ]]; then
+        log_error "AFP_SERVER environment variable is required"
+        show_usage
+        exit 1
+    fi
+
+    if [[ -z "$AFP_VOLUME" ]]; then
+        log_error "AFP_VOLUME environment variable is required"
+        show_usage
+        exit 1
+    fi
+}
+
+# Function to build AFP URL
+build_afp_url() {
+    local url="afp://"
+    
+    # Add authentication info if provided
+    if [[ -n "$AFP_USER" || -n "$AFP_AUTH" ]]; then
+        if [[ -n "$AFP_USER" ]]; then
+            url+="$AFP_USER"
+        fi
+        
+        if [[ -n "$AFP_AUTH" ]]; then
+            url+=";AUTH=$AFP_AUTH"
+        fi
+        
+        if [[ -n "$AFP_PASSWORD" && "$AFP_INTERACTIVE" != "1" ]]; then
+            url+=":$AFP_PASSWORD"
+        fi
+        
+        url+="@"
+    fi
+    
+    # Add server
+    url+="$AFP_SERVER"
+    
+    # Add port if specified
+    if [[ -n "$AFP_PORT" ]]; then
+        url+=":$AFP_PORT"
+    fi
+    
+    # Add volume
+    url+="/$AFP_VOLUME"
+    
+    echo "$url"
+}
+
+# Function to build mount options
+build_mount_options() {
+    local options=""
+    
+    # Add interactive flag
+    if [[ "$AFP_INTERACTIVE" == "1" ]]; then
+        options+=" -i"
+    fi
+    
+    # Add hard mount flag
+    if [[ "$AFP_HARD_MOUNT" == "1" ]]; then
+        options+=" -k"
+    else
+        options+=" -s"  # Soft mount (default)
+    fi
+    
+    # Add additional mount options
+    if [[ -n "$AFP_MOUNT_OPTS" ]]; then
+        options+=" -o $AFP_MOUNT_OPTS"
+    fi
+    
+    echo "$options"
+}
+
+# Function to check if mount point is already mounted
+is_mounted() {
+    local mount_point="$1"
+    mount | grep -q "$mount_point"
+}
+
+# Function to mount AFP share
+mount_afp() {
+    local afp_url=$(build_afp_url)
+    local mount_options=$(build_mount_options)
+    local mount_point="${AFP_MOUNT_POINT:-/tmp/afp_test_mount}"
+    
+    log_info "Mounting AFP share..."
+    log_info "Server: $AFP_SERVER"
+    log_info "Volume: $AFP_VOLUME"
+    log_info "Mount Point: $mount_point"
+    
+    # Create mount point if it doesn't exist
+    if [[ ! -d "$mount_point" ]]; then
+        log_info "Creating mount point directory: $mount_point"
+        mkdir -p "$mount_point"
+    fi
+    
+    # Check if already mounted
+    if is_mounted "$mount_point"; then
+        log_warning "Mount point $mount_point is already in use"
+        return 1
+    fi
+    
+    # Construct and execute mount command using full path to avoid function conflict
+    local cmd="/sbin/mount_afp$mount_options \"$afp_url\" \"$mount_point\""
+    log_info "Executing: $cmd"
+    
+    if eval "$cmd" 2>/dev/null; then
+        log_success "AFP share mounted successfully at $mount_point"
+        log_info "You can now access files at: $mount_point"
+        return 0
+    else
+        log_error "Failed to mount AFP share"
+        return 1
+    fi
+}
+
+# Function to unmount AFP share
+unmount_afp() {
+    local mount_point="${AFP_MOUNT_POINT:-/tmp/afp_test_mount}"
+    
+    log_info "Unmounting AFP share from $mount_point"
+    
+    if ! is_mounted "$mount_point"; then
+        log_warning "No AFP share mounted at $mount_point"
+        return 1
+    fi
+    
+    if umount "$mount_point"; then
+        log_success "AFP share unmounted successfully"
+        
+        # Remove mount point if it's the default temporary one
+        if [[ "$mount_point" == "/tmp/afp_test_mount" && -d "$mount_point" ]]; then
+            log_info "Removing temporary mount point directory"
+            rmdir "$mount_point" 2>/dev/null || true
+        fi
+        return 0
+    else
+        log_error "Failed to unmount AFP share"
+        return 1
+    fi
+}
+
+# Function to check mount status
+check_status() {
+    local mount_point="${AFP_MOUNT_POINT:-/tmp/afp_test_mount}"
+    
+    log_info "Checking AFP mount status..."
+    
+    if is_mounted "$mount_point"; then
+        log_success "AFP share is mounted at $mount_point"
+        log_info "Mount details:"
+        mount | grep "$mount_point"
+        return 0
+    else
+        log_info "No AFP share mounted at $mount_point"
+        return 1
+    fi
+}
+
+# Function to run full test
+run_test() {
+    log_info "Running AFP mount test..."
+    
+    # Test mount
+    if mount_afp; then
+        sleep 2
+        
+        # Test status
+        if check_status; then
+            sleep 2
+            
+            # Test unmount
+            if unmount_afp; then
+                log_success "AFP test completed successfully!"
+                return 0
+            fi
+        fi
+    fi
+    
+    log_error "AFP test failed"
+    return 1
+}
+
+# Main script logic
+main() {
+    # Show deprecation warning
+    log_warning "AFP client is deprecated in macOS and will be removed in a future version"
+    log_warning "Consider migrating to alternative protocols like SMB"
+    echo
+    
+    local action="${1:-mount}"
+    
+    case "$action" in
+        "help"|"-h"|"--help")
+            show_usage
+            exit 0
+            ;;
+        "mount")
+            validate_env
+            mount_afp
+            ;;
+        "unmount"|"umount")
+            unmount_afp
+            ;;
+        "test")
+            validate_env
+            run_test
+            ;;
+        "status")
+            check_status
+            ;;
+        *)
+            log_error "Unknown action: $action"
+            show_usage
+            exit 1
+            ;;
+    esac
+}
+
+# Check if script is being sourced or executed
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
