@@ -35,10 +35,20 @@ depends_build-append \
 depends_lib-append  path:lib/pkgconfig/gtk4.pc:gtk4 \
                     path:lib/pkgconfig/libadwaita-1.pc:libadwaita
 
-build.args-append   --bin ${name}
+# Build the binary first, then create the macOS app bundle
+build {
+    system -W ${worksrcpath} "${prefix}/bin/cargo build --release"
+    system -W ${worksrcpath} "/Users/blake/.cargo/bin/cargo-bundle --release"
+}
 
 destroot {
-    xinstall -m 0755 ${worksrcpath}/target/[option triplet.${muniversal.build_arch}]/release/${name} ${destroot}${prefix}/bin/
+    # Install the binary
+    xinstall -m 0755 ${worksrcpath}/target/release/${name} ${destroot}${prefix}/bin/
+
+    # Install the macOS app bundle
+    set app_dir "${destroot}/Applications/MacPorts"
+    xinstall -d ${app_dir}
+    copy ${worksrcpath}/target/release/bundle/osx/${name}.app ${app_dir}/
 }
 
 # Use default cargo destroot behavior
