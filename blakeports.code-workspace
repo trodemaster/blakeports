@@ -20,6 +20,12 @@
 		},
 		{
 			"path": "../input-leap"
+		},
+		{
+			"path": "../lan-mouse"
+		},
+		{
+			"path": "../macports-guide"
 		}
 	],
 	"settings": {}
