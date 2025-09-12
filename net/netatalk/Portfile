@@ -3,6 +3,7 @@
 PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           meson 1.0
+PortGroup           legacysupport 1.1
 
 name                netatalk
 subport             netatalk4 {}
@@ -14,6 +15,7 @@ if {${subport} eq "netatalk4"} {
     conflicts       netatalk4
 }
 
+compiler.c_standard     2011
 github.setup        Netatalk netatalk 4-3-2 netatalk-
 version             [string map {- .} ${github.version}]
 github.tarball_from releases
@@ -66,3 +68,6 @@ startupitem.logevents yes
 startupitem.debug          yes
 
 notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/."
+
+# Support up to macOS 10.11 for getline function
+legacysupport.newest_darwin_requires_legacy 15
