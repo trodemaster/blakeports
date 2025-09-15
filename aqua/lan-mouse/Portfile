@@ -4,7 +4,7 @@ PortSystem          1.0
 PortGroup           cargo   1.0
 PortGroup           github  1.0
 
-github.setup        feschber lan-mouse v0.10.0
+github.setup        feschber lan-mouse e46fe60b3e24be83de38701faa99a4fbd9186f08
 github.tarball_from archive
 revision            0
 
@@ -25,9 +25,9 @@ maintainers         {gmail.com:blake.ports @blakeports} \
                     openmaintainer
 
 checksums           ${distname}${extract.suffix} \
-                    rmd160  b19f8bdfc24bfdd2177f0cfbf08098a6a1363022 \
-                    sha256  dad750d5e38bc564cb5fff37b21b747d652d363efd292dc57dd69be460c5459e \
-                    size    217131
+                    rmd160  190b412b6f80cd8c1ce060a8e2b50a42fa21a183 \
+                    sha256  60f9afa749987d581cd10e6e6fb3c71eec8b7303c899e11ffd4af21330185293 \
+                    size    260100
 
 depends_build-append \
                     path:bin/pkg-config:pkgconfig
@@ -48,7 +48,10 @@ destroot {
     # Install the macOS app bundle
     set app_dir "${destroot}/Applications/MacPorts"
     xinstall -d ${app_dir}
-    copy ${worksrcpath}/target/release/bundle/osx/${name}.app ${app_dir}/
+    copy ${worksrcpath}/target/release/bundle/osx/Lan\ Mouse.app ${app_dir}/
+    
+    # Replace Info.plist with custom one that includes privacy usage descriptions
+    xinstall -m 0644 ${filespath}/Info.plist ${app_dir}/Lan\ Mouse.app/Contents/
 }
 
 # Use default cargo destroot behavior

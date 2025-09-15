@@ -73,6 +73,31 @@ Closes: https://trac.macports.org/ticket/67890
 - Validate checksums match upstream
 - **If seeing checksum mismatches**: Use `sudo port clean --dist <PORTNAME>` to clear cached files before re-running checksum validation
 
+### Standard Testing Process
+When testing a port, follow this sequence from the root of the blakeports repo:
+```bash
+# Update port index
+portindex
+
+# check portfile syntax
+port lint --nitpick <PORTNAME>
+
+# Clean uninstall any existing version
+sudo port uninstall <PORTNAME>
+
+# Clean distribution files
+sudo port clean --dist <PORTNAME>
+
+# Install with verbose output
+sudo port install -sv <PORTNAME>
+```
+
+This process ensures:
+- Fresh port index with latest changes
+- Complete removal of previous installation
+- Clean distribution files (prevents checksum issues)
+- Verbose installation output for debugging
+
 ### Version Updates
 - Update version number
 - Update checksums (use `port checksum`)
