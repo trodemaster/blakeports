@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Start VMware VM
-        uses: trodemaster/ssh-action@v1
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.HYPERVISOR_HOST }}
           username: ${{ secrets.HYPERVISOR_USERNAME }}
