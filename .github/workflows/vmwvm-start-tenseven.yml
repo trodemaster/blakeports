@@ -88,4 +88,4 @@ jobs:
             fi
             
             echo "✅ VM IP Address: $VM_IP"
-            echo "::set-output name=vm_ip::$VM_IP"
+            echo "vm_ip=$VM_IP" >> $GITHUB_OUTPUT
