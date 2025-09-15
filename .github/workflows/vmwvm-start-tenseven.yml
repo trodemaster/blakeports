@@ -12,7 +12,7 @@ jobs:
   start-vm:
     runs-on: [self-hosted, ubuntu, noble]
     outputs:
-      vm_ip: ${{ steps.get-vm-ip.outputs.VM_IP }}
+      vm_ip: ${{ steps.get-vm-ip.outputs.vm_ip }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -93,5 +93,4 @@ jobs:
             fi
             
             echo "✅ VM IP Address: $VM_IP"
-            echo "VM_IP=$VM_IP" > /tmp/vm_ip_output.txt
-          envs: VM_IP
+            echo "::set-output name=vm_ip::$VM_IP"
