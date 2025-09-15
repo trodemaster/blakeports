@@ -66,10 +66,6 @@ jobs:
             # Verify VM is running
             echo "Running VMs after start:"
             "$VMRUN" -T fusion list
-            
-            # Wait for VM to boot and get IP address
-            echo "Waiting for VM to boot and get IP address..."
-            sleep 30
       
       - name: Get VM IP Address
         id: get-vm-ip
