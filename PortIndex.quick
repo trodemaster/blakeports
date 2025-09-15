@@ -1,9 +1,6 @@
-input-leap 0
-lan-mouse 730
-nrsc5 1530
-libcbor 2214
-netatalk 2687
-libfido2 3474
-bstring 4116
-doxygen 4806
-netatalk4 6053
+nrsc5 0
+libcbor 684
+netatalk 1157
+libfido2 1944
+bstring 2586
+netatalk4 3276
