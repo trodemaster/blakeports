@@ -1,0 +1,65 @@
+name: VMware VM Cleanup - TenSeven
+
+on:
+  workflow_dispatch:
+    inputs:
+      vm_name:
+        description: 'VM name to cleanup'
+        required: true
+        default: 'tenseven-test'
+
+jobs:
+  cleanup-vm:
+    runs-on: [self-hosted, ubuntu, noble]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Cleanup VMware VM
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HYPERVISOR_HOST }}
+          username: ${{ secrets.HYPERVISOR_USERNAME }}
+          key: ${{ secrets.HYPERVISOR_KEY }}
+          debug: true
+          script: |
+            export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner/tenseven-runner.vmx"
+            export VMW_VM_NAME="${{ inputs.vm_name }}"
+            VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
+            
+            echo VM Path: "$VMW_VM_PATH"
+            echo VM Name: "$VMW_VM_NAME"
+            
+            # Check if VM is running
+            echo "Checking if VM is running..."
+            if "$VMRUN" -T fusion list | grep -q "$VMW_VM_PATH"; then
+                echo "✅ VM is running, stopping it..."
+                "$VMRUN" -T fusion stop "$VMW_VM_PATH" hard
+                echo "✅ VM stopped successfully"
+            else
+                echo "ℹ️ VM is not running, skipping stop"
+            fi
+            
+            # List VMs after stop
+            echo "VMs after stop:"
+            "$VMRUN" -T fusion list
+            
+            # Remove VM directory
+            VM_DIR="/Volumes/JonesFarm/actions-runners/tenseven-runner"
+            echo "Removing VM directory: $VM_DIR"
+            if [ -d "$VM_DIR" ]; then
+                echo "✅ Directory exists, removing it..."
+                rm -rf "$VM_DIR"
+                echo "✅ VM directory and contents removed successfully"
+            else
+                echo "ℹ️ Directory does not exist, nothing to remove"
+            fi
+            
+            # Verify cleanup
+            echo "Verifying cleanup..."
+            if [ ! -d "$VM_DIR" ]; then
+                echo "✅ Cleanup completed successfully - directory removed"
+            else
+                echo "❌ Cleanup failed - directory still exists"
+                exit 1
+            fi
