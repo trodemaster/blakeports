@@ -26,23 +26,23 @@ jobs:
             export VMW_SOURCE_VM_PATH="/Volumes/JonesFarm/actions-runners/Mac OS X 10.7.vmwarevm"
             export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner.vmwarevm"
             export VMW_VM_NAME="tenseven-runner"
-            alias vmrun="/Applications/VMware Fusion.app/Contents/Public/vmrun"
+            VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
             echo Source VM Path: "$VMW_SOURCE_VM_PATH"
             echo VM Path: "$VMW_VM_PATH"
             echo VM Name: "$VMW_VM_NAME"
             
             # List current VMs
             echo "Current VMs:"
-            vmrun -T fusion list
+            "$VMRUN" -T fusion list
             
             # Create linked clone from source VM
             echo "Creating linked clone..."
-            vmrun -T fusion clone "$VMW_SOURCE_VM_PATH" "$VMW_VM_PATH" linked -cloneName="$VMW_VM_NAME"
+            "$VMRUN" -T fusion clone "$VMW_SOURCE_VM_PATH" "$VMW_VM_PATH" linked -cloneName="$VMW_VM_NAME"
             
             # Start the cloned VM
             echo "Starting cloned VM..."
-            vmrun -T fusion start "$VMW_VM_PATH"
+            "$VMRUN" -T fusion start "$VMW_VM_PATH"
             
             # Verify VM is running
             echo "Running VMs after start:"
-            vmrun -T fusion list
+            "$VMRUN" -T fusion list
