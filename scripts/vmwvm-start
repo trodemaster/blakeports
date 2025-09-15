@@ -1,0 +1,9 @@
+#!/bin/bash
+
+echo Source VM Path: "$VMW_SOURCE_VM_PATH"
+echo VM Path: "$VMW_VM_PATH"
+echo VM Name: "$VMW_VM_NAME"
+
+which vmrun
+
+exit 0
