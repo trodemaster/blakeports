@@ -24,7 +24,7 @@ jobs:
           debug: true
           script: |
             export VMW_SOURCE_VM_PATH="/Volumes/JonesFarm/actions-runners/Mac OS X 10.7.vmwarevm/Mac OS X 10.7.vmx"
-            export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner.vmwarevm/tenseven-runner.vmx"
+            export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner/tenseven-runner.vmx"
             export VMW_VM_NAME="tenseven-runner"
             VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
             echo Source VM Path: "$VMW_SOURCE_VM_PATH"
@@ -34,6 +34,16 @@ jobs:
             # List current VMs
             echo "Current VMs:"
             "$VMRUN" -T fusion list
+            
+            # Create destination directory if it doesn't exist
+            DEST_DIR="$(dirname "$VMW_VM_PATH")"
+            echo "Checking destination directory: $DEST_DIR"
+            if [ ! -d "$DEST_DIR" ]; then
+                echo "Directory doesn't exist, creating it..."
+                mkdir -p "$DEST_DIR"
+            else
+                echo "Directory already exists"
+            fi
             
             # Create linked clone from source VM
             echo "Creating linked clone..."
