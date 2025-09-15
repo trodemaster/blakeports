@@ -40,6 +40,31 @@ jobs:
                 echo "ℹ️ VM is not running, skipping stop"
             fi
             
+            # Wait for VM to fully stop (up to 5 minutes)
+            echo "Waiting for VM to fully stop..."
+            WAIT_TIME=0
+            MAX_WAIT=300  # 5 minutes in seconds
+            SLEEP_INTERVAL=5  # 5 seconds
+            
+            while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+                if ! "$VMRUN" -T fusion list | grep -q "$VMW_VM_PATH"; then
+                    echo "✅ VM has stopped successfully after ${WAIT_TIME}s"
+                    break
+                else
+                    echo "⏳ VM still running, waiting... (${WAIT_TIME}s/${MAX_WAIT}s)"
+                    sleep $SLEEP_INTERVAL
+                    WAIT_TIME=$((WAIT_TIME + SLEEP_INTERVAL))
+                fi
+            done
+            
+            # Final check - if VM is still running after timeout, fail
+            if "$VMRUN" -T fusion list | grep -q "$VMW_VM_PATH"; then
+                echo "❌ VM failed to stop within ${MAX_WAIT}s timeout"
+                echo "VMs still running:"
+                "$VMRUN" -T fusion list
+                exit 1
+            fi
+            
             # List VMs after stop
             echo "VMs after stop:"
             "$VMRUN" -T fusion list
