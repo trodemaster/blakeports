@@ -1,0 +1,28 @@
+name: VMware VM Start - TenSeven
+
+on:
+  workflow_dispatch:
+    inputs:
+      vm_name:
+        description: 'Start the 10.7 VM'
+        required: true
+        default: 'tenseven-test'
+
+jobs:
+  start-vm:
+    runs-on: [self-hosted, ubuntu, noble]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Start VMware VM
+        uses: trodemaster/ssh-action@v1
+        with:
+          host: ${{ secrets.HYPERVISOR_HOST }}
+          username: ${{ secrets.HYPERVISOR_USERNAME }}
+          key: ${{ secrets.HYPERVISOR_KEY }}
+          script: |
+            export VMW_SOURCE_VM_PATH="/Volumes/JonesFarm/actions-runners/Mac OS X 10.7.vmwarevm"
+            export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner.vmwarevm"
+            export VMW_VM_NAME="tenseven-runner"
+            bash scripts/vmwvm-start
