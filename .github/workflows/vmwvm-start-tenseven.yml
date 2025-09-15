@@ -83,14 +83,14 @@ jobs:
             export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner/tenseven-runner.vmx"
             VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
             
-            # Get VM IP address (vmrun -wait handles the waiting automatically)
-            echo "Getting VM IP address..."
-            VM_IP="$("$VMRUN" -T fusion getGuestIPAddress "$VMW_VM_PATH" -wait)"
+            # Get VM IPv4 address (vmrun -wait handles the waiting automatically)
+            echo "Getting VM IPv4 address..."
+            VM_IP="$("$VMRUN" -T fusion getGuestIPAddress "$VMW_VM_PATH" -wait -ipv4)"
             
             if [ -z "$VM_IP" ]; then
                 echo "❌ Failed to get VM IP address"
                 exit 1
             fi
             
-            echo "✅ VM IP Address: $VM_IP"
-            echo "::set-output name=vm_ip::$VM_IP"
+            echo "✅ VM IPv4 Address: $VM_IP"
+            echo "vm_ip=$VM_IP" >> $GITHUB_OUTPUT
