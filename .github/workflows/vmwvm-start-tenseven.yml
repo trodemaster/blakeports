@@ -74,7 +74,6 @@ jobs:
           host: ${{ secrets.HYPERVISOR_HOST }}
           username: ${{ secrets.HYPERVISOR_USERNAME }}
           key: ${{ secrets.HYPERVISOR_KEY }}
-          debug: true
           script: |
             export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner/tenseven-runner.vmx"
             VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
@@ -89,4 +88,4 @@ jobs:
             fi
             
             echo "✅ VM IP Address: $VM_IP"
-            echo "vm_ip=$VM_IP" >> "$GITHUB_OUTPUT"
+            echo "::set-output name=vm_ip::$VM_IP"
