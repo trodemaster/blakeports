@@ -23,8 +23,8 @@ jobs:
           key: ${{ secrets.HYPERVISOR_KEY }}
           debug: true
           script: |
-            export VMW_SOURCE_VM_PATH="/Volumes/JonesFarm/actions-runners/Mac OS X 10.7.vmwarevm"
-            export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner.vmwarevm"
+            export VMW_SOURCE_VM_PATH="/Volumes/JonesFarm/actions-runners/Mac OS X 10.7.vmwarevm/Mac OS X 10.7.vmx"
+            export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner.vmwarevm/tenseven-runner.vmx"
             export VMW_VM_NAME="tenseven-runner"
             VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
             echo Source VM Path: "$VMW_SOURCE_VM_PATH"
