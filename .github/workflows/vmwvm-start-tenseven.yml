@@ -74,24 +74,27 @@ jobs:
           host: ${{ secrets.HYPERVISOR_HOST }}
           username: ${{ secrets.HYPERVISOR_USERNAME }}
           key: ${{ secrets.HYPERVISOR_KEY }}
-          envs: VM_IP
+          capture_stdout: 'true'
           script: |
             export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner/tenseven-runner.vmx"
             VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
             
             # Get VM IP address (vmrun -wait handles the waiting automatically)
-            echo "Getting VM IP address..."
+            echo "Getting VM IP address..." >&2
             VM_IP="$("$VMRUN" -T fusion getGuestIPAddress "$VMW_VM_PATH" -wait)"
             
             if [ -z "$VM_IP" ]; then
-                echo "❌ Failed to get VM IP address"
+                echo "❌ Failed to get VM IP address" >&2
                 exit 1
             fi
             
-            echo "✅ VM IP Address: $VM_IP"
-            # Export for envs to capture
-            export VM_IP
+            echo "✅ VM IP Address: $VM_IP" >&2
+            # Output only the IP address to stdout (this gets captured)
+            echo "$VM_IP"
       
       - name: Set VM IP Output
         id: set-vm-ip
-        run: echo "vm_ip=${{ env.VM_IP }}" >> $GITHUB_OUTPUT
+        run: |
+          VM_IP="${{ steps.get-vm-ip.outputs.stdout }}"
+          echo "vm_ip=$VM_IP" >> $GITHUB_OUTPUT
+          echo "✅ VM IP Address captured: $VM_IP"
