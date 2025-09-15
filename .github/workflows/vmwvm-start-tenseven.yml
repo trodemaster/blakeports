@@ -80,21 +80,19 @@ jobs:
             VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
             
             # Get VM IP address (vmrun -wait handles the waiting automatically)
-            echo "Getting VM IP address..." >&2
             VM_IP="$("$VMRUN" -T fusion getGuestIPAddress "$VMW_VM_PATH" -wait)"
             
             if [ -z "$VM_IP" ]; then
-                echo "❌ Failed to get VM IP address" >&2
                 exit 1
             fi
             
-            echo "✅ VM IP Address: $VM_IP" >&2
-            # Output only the IP address to stdout (this gets captured)
+            # Output only the IP address - no extra text
             echo "$VM_IP"
       
       - name: Set VM IP Output
         id: set-vm-ip
         run: |
-          VM_IP="${{ steps.get-vm-ip.outputs.stdout }}"
+          # Extract just the IP address (last line of output)
+          VM_IP=$(echo "${{ steps.get-vm-ip.outputs.stdout }}" | tail -1 | tr -d '\r\n')
           echo "vm_ip=$VM_IP" >> $GITHUB_OUTPUT
           echo "✅ VM IP Address captured: $VM_IP"
