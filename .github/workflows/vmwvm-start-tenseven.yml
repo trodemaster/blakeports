@@ -49,9 +49,9 @@ jobs:
             echo "Creating linked clone..."
             "$VMRUN" -T fusion clone "$VMW_SOURCE_VM_PATH" "$VMW_VM_PATH" linked -cloneName="$VMW_VM_NAME"
             
-            # Start the cloned VM
-            echo "Starting cloned VM..."
-            "$VMRUN" -T fusion start "$VMW_VM_PATH"
+            # Start the cloned VM in headless mode
+            echo "Starting cloned VM in headless mode..."
+            "$VMRUN" -T fusion start "$VMW_VM_PATH" nogui
             
             # Verify VM is running
             echo "Running VMs after start:"
