@@ -21,8 +21,14 @@ jobs:
           host: ${{ secrets.HYPERVISOR_HOST }}
           username: ${{ secrets.HYPERVISOR_USERNAME }}
           key: ${{ secrets.HYPERVISOR_KEY }}
+          debug: true
           script: |
             export VMW_SOURCE_VM_PATH="/Volumes/JonesFarm/actions-runners/Mac OS X 10.7.vmwarevm"
             export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner.vmwarevm"
             export VMW_VM_NAME="tenseven-runner"
-            bash scripts/vmwvm-start
+            
+            echo Source VM Path: "$VMW_SOURCE_VM_PATH"
+            echo VM Path: "$VMW_VM_PATH"
+            echo VM Name: "$VMW_VM_NAME"
+            
+            which vmrun
