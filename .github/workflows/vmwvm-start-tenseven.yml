@@ -31,6 +31,14 @@ jobs:
             echo VM Path: "$VMW_VM_PATH"
             echo VM Name: "$VMW_VM_NAME"
             
+            # Check if VM is already running
+            echo "Checking if VM is already running..."
+            if "$VMRUN" -T fusion list | grep -q "$VMW_VM_PATH"; then
+                echo "✅ VM is already running: $VMW_VM_PATH"
+                echo "✅ Exiting gracefully - no action needed"
+                exit 0
+            fi
+            
             # List current VMs
             echo "Current VMs:"
             "$VMRUN" -T fusion list
