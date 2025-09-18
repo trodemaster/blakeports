@@ -20,7 +20,7 @@ jobs:
     name: build-nrsc5 (${{ matrix.runner }})
     strategy:
       matrix:
-        runner: [macOS_15, macOS_26_Beta]
+        runner: [macOS_15, macOS_26]
       fail-fast: false
     runs-on: ${{ matrix.runner }}
     
