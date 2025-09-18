@@ -19,7 +19,25 @@ PORT_LATEST_RELEASE_NUMBER=${PORT_LATEST_RELEASE#v}
 
 # get macOS operating system version long name including california parks using system_profiler
 MACOS_VERSION=$(sw_vers --ProductVersion | cut -d . -f1)
-MACOS_VERSION_NAME=$(awk '/SOFTWARE LICENSE AGREEMENT FOR macOS/' '/System/Library/CoreServices/Setup Assistant.app/Contents/Resources/en.lproj/OSXSoftwareLicense.rtf' | awk -F 'macOS ' '{print $NF}' | awk '{print substr($0, 0, length($0)-1)}')
+
+# Map macOS version to release name
+case "$MACOS_VERSION" in
+    "15") MACOS_VERSION_NAME="Sequoia" ;;
+    "26") MACOS_VERSION_NAME="Tahoe" ;;
+    "14") MACOS_VERSION_NAME="Sonoma" ;;
+    "13") MACOS_VERSION_NAME="Ventura" ;;
+    "12") MACOS_VERSION_NAME="Monterey" ;;
+    "11") MACOS_VERSION_NAME="BigSur" ;;
+    "10") MACOS_VERSION_NAME="Catalina" ;;
+    *)
+        # Fallback: try to extract from system file
+        MACOS_VERSION_NAME=$(awk '/SOFTWARE LICENSE AGREEMENT FOR macOS/' '/System/Library/CoreServices/Setup Assistant.app/Contents/Resources/en.lproj/OSXSoftwareLicense.rtf' 2>/dev/null | awk -F 'macOS ' '{print $NF}' | awk '{print substr($0, 0, length($0)-1)}' | head -1)
+        if [ -z "$MACOS_VERSION_NAME" ]; then
+            echo "Warning: Unknown macOS version $MACOS_VERSION, using generic name"
+            MACOS_VERSION_NAME="Unknown"
+        fi
+        ;;
+esac
 
 # track if we need to sync macports
 NEED_SYNC=false
