@@ -10,7 +10,7 @@ PortGroup           legacysupport 1.1
 legacysupport.newest_darwin_requires_legacy 15
 
 github.setup        Yubico libfido2 1.16.0
-github.tarball_from releases
+github.tarball_from archive
 revision            0
 
 categories          security crypto
