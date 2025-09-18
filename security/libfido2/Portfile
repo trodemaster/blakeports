@@ -11,11 +11,8 @@ legacysupport.newest_darwin_requires_legacy 15
 
 github.setup        Yubico libfido2 1.16.0
 github.tarball_from releases
-revision            0
-
-# Force directory renaming to handle GitHub's inconsistent tarball directory naming
-# GitHub releases sometimes use commit hashes instead of version tags for directory names
 extract.rename      yes
+revision            2
 
 categories          security crypto
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
