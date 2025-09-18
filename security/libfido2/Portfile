@@ -20,9 +20,9 @@ license             bsd
 description         library to communicate with a FIDO device over USB
 long_description    provides library functionality and command-line tools to communicate with a FIDO device over USB, and to verify attestation and assertion signatures.
 
-checksums           rmd160  4adb73f4f695393b92ab32d541f0a9980b2c2586 \
-                    sha256  c9795fff9183eaf111114e8619ff79a4aea9aeac2ddc5935616b1e32dd60e3b2 \
-                    size    682408
+checksums           rmd160  7c1d9e6598c83a13b9fe28be203c4dd433db159c \
+                    sha256  7d86088ef4a48f9faad4ff6f41343328157849153a8dc94d88f4b5461cb29474 \
+                    size    682395
 
 depends_build-append \
                     port:mandoc \
