@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 GHRUNNER_SCRIPT="$SCRIPTPATH/ghrunner"
-RUNNERS=("macOS_15" "macOS_26_Beta")
+RUNNERS=("macOS_15" "macOS_26")
 WORKFLOWS=(
     "Build bstring"
     "Build netatalk"

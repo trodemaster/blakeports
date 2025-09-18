@@ -43,7 +43,7 @@ SCRIPTPATH=$(dirname $SCRIPT)
 # test for macports and install if not present
 if [ ! -f /opt/local/bin/port ]; then
   echo "Installing macports..."
-  if [[ $MACOS_VERSION -ge 26 ]]; then
+  if [[ $MACOS_VERSION -ge 27 ]]; then # update this after a macos release
     #cd
     echo "macOS version $MACOS_VERSION is not supported by macports installer"
     echo "Attempting install from source..."

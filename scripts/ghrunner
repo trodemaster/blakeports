@@ -27,7 +27,7 @@ GITHUB_REPO="${GITHUB_REPO:-blakeports}"
 # JSON format with type, name, ssh_host, and optional labels/description
 DEFAULT_RUNNER_CONFIG='[
   {"type":"tart","name":"macOS_15","ssh_host":""},
-  {"type":"tart","name":"macOS_26_Beta","ssh_host":""}
+  {"type":"tart","name":"macOS_26","ssh_host":""}
 ]'
 RUNNER_CONFIG="${RUNNER_CONFIG:-$DEFAULT_RUNNER_CONFIG}"
 
@@ -101,7 +101,7 @@ Configuration Examples:
     # Local tart runners only
     export RUNNER_CONFIG='[
       {"type":"tart","name":"macOS_15","ssh_host":""},
-      {"type":"tart","name":"macOS_26_Beta","ssh_host":""}
+      {"type":"tart","name":"macOS_26","ssh_host":""}
     ]'
     
     # Mixed local and remote runners
@@ -628,6 +628,75 @@ start_vmware_runner() {
     fi
 }
 
+# Helper function to start a single runner (for parallel execution)
+start_single_runner_parallel() {
+    local runner_type="$1"
+    local name="$2"
+    local ssh_host="$3"
+    local runner_token="$4"
+    local index="$5"
+    local temp_dir="$6"
+    
+    # Create result file for this runner
+    local result_file="$temp_dir/runner_$index.result"
+    local log_file="$temp_dir/runner_$index.log"
+    
+    # Set up environment for this runner
+    local original_ssh_host="$SSH_HOST"
+    if [ -n "$ssh_host" ]; then
+        SSH_HOST="$ssh_host"
+    fi
+    
+    # Use the shared token
+    RUNNER_TOKEN="$runner_token"
+    
+    # Redirect output to log file and capture result
+    exec > "$log_file" 2>&1
+    
+    print_info "Starting runner $((index+1)): $name ($runner_type)"
+    if [ -n "$ssh_host" ]; then
+        print_info "Using SSH host: $ssh_host"
+    fi
+    
+    # Start the runner based on type
+    case "$runner_type" in
+        "tart")
+            if start_tart_runner "$name"; then
+                echo "SUCCESS:$name:$runner_type" > "$result_file"
+                print_success "Successfully started tart runner: $name"
+            else
+                echo "FAILURE:$name:$runner_type" > "$result_file"
+                print_error "Failed to start tart runner: $name"
+            fi
+            ;;
+        "lima")
+            if start_lima_runner "$name"; then
+                echo "SUCCESS:$name:$runner_type" > "$result_file"
+                print_success "Successfully started lima runner: $name"
+            else
+                echo "FAILURE:$name:$runner_type" > "$result_file"
+                print_error "Failed to start lima runner: $name"
+            fi
+            ;;
+        "vmware")
+            if start_vmware_runner "$name"; then
+                echo "SUCCESS:$name:$runner_type" > "$result_file"
+                print_success "Successfully started vmware runner: $name"
+            else
+                echo "FAILURE:$name:$runner_type" > "$result_file"
+                print_error "Failed to start vmware runner: $name"
+            fi
+            ;;
+        *)
+            echo "FAILURE:$name:$runner_type:Unknown runner type" > "$result_file"
+            print_error "Unknown runner type: $runner_type"
+            ;;
+    esac
+    
+    # Restore original SSH_HOST
+    SSH_HOST="$original_ssh_host"
+}
+
 # Function to start all runners
 start_all_runners() {
     print_info "Starting all configured runners..."
@@ -651,10 +720,13 @@ start_all_runners() {
     # Generate GitHub token once for all runners
     generate_runner_token
     
-    local success_count=0
-    local failure_count=0
+    # Create temporary directory for parallel execution results
+    local temp_dir=$(mktemp -d)
+    local pids=()
     
-    # Process each configured runner
+    print_info "Starting all runners in parallel..."
+    
+    # Start each configured runner in parallel
     for ((i=0; i<runner_count; i++)); do
         local runner_config runner_type name ssh_host labels description
         runner_config=$(get_runner_config_at_index "$RUNNER_CONFIG" "$i")
@@ -662,58 +734,67 @@ start_all_runners() {
         # Parse the configuration
         IFS=':' read -r runner_type name ssh_host labels description <<< "$runner_config"
         
-        print_info "Starting runner $((i+1))/$runner_count: $name ($runner_type)"
+        print_info "Initiating parallel start for runner $((i+1))/$runner_count: $name ($runner_type)"
         
-        # Set SSH_HOST if specified for this runner
-        local original_ssh_host="$SSH_HOST"
-        if [ -n "$ssh_host" ]; then
-            SSH_HOST="$ssh_host"
-            print_info "Using SSH host: $ssh_host"
+        # Start runner in background
+        start_single_runner_parallel "$runner_type" "$name" "$ssh_host" "$RUNNER_TOKEN" "$i" "$temp_dir" &
+        pids+=($!)
+    done
+    
+    print_info "All runners initiated. Waiting for completion..."
+    
+    # Wait for all background processes to complete
+    local completed=0
+    local total=${#pids[@]}
+    
+    for pid in "${pids[@]}"; do
+        if wait "$pid"; then
+            completed=$((completed + 1))
+            print_info "Runner process completed ($completed/$total)"
+        else
+            print_warning "Runner process failed ($completed/$total)"
+        fi
+    done
+    
+    # Collect and display results
+    local success_count=0
+    local failure_count=0
+    
+    echo
+    print_info "Parallel execution completed. Processing results..."
+    echo
+    
+    # Display logs in order and count results
+    for ((i=0; i<runner_count; i++)); do
+        local result_file="$temp_dir/runner_$i.result"
+        local log_file="$temp_dir/runner_$i.log"
+        
+        # Display the log output
+        if [ -f "$log_file" ]; then
+            cat "$log_file"
         fi
         
-        # Start the runner based on type
-        case "$runner_type" in
-            "tart")
-                if start_tart_runner "$name"; then
-                    success_count=$((success_count + 1))
-                    print_success "Successfully started tart runner: $name"
-                else
-                    failure_count=$((failure_count + 1))
-                    print_error "Failed to start tart runner: $name"
-                fi
-                ;;
-            "lima")
-                if start_lima_runner "$name"; then
-                    success_count=$((success_count + 1))
-                    print_success "Successfully started lima runner: $name"
-                else
-                    failure_count=$((failure_count + 1))
-                    print_error "Failed to start lima runner: $name"
-                fi
-                ;;
-            "vmware")
-                if start_vmware_runner "$name"; then
-                    success_count=$((success_count + 1))
-                    print_success "Successfully started vmware runner: $name"
-                else
-                    failure_count=$((failure_count + 1))
-                    print_error "Failed to start vmware runner: $name"
-                fi
-                ;;
-            *)
-                print_error "Unknown runner type: $runner_type"
+        # Process the result
+        if [ -f "$result_file" ]; then
+            local result=$(cat "$result_file")
+            if [[ "$result" == SUCCESS:* ]]; then
+                success_count=$((success_count + 1))
+            else
                 failure_count=$((failure_count + 1))
-                ;;
-        esac
-        
-        # Restore original SSH_HOST
-        SSH_HOST="$original_ssh_host"
+            fi
+        else
+            failure_count=$((failure_count + 1))
+            print_error "No result file found for runner $((i+1))"
+        fi
         
         # Add separator between runners (except for the last one)
         if [ $((i + 1)) -lt "$runner_count" ]; then
             echo
         fi
     done
+    
+    # Clean up temporary directory
+    rm -rf "$temp_dir"
     
     # Print summary
     echo

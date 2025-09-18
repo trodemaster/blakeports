@@ -61,7 +61,7 @@ Complete end-to-end testing script that recreates the entire CI/CD pipeline from
 ./scripts/fulltest
 
 # What it does:
-# 1. Removes all existing runners (macOS_15, macOS_26_Beta)
+# 1. Removes all existing runners (macOS_15, macOS_26)
 # 2. Creates fresh runner VMs 
 # 3. Waits for runners to come online
 # 4. Triggers all port build workflows
@@ -77,7 +77,7 @@ Complete end-to-end testing script that recreates the entire CI/CD pipeline from
 **Prerequisites:**
 - [jibb-runners](https://github.com/trodemaster/jibb-runners) cloned at `../jibb-runners`
 - GitHub CLI authenticated (`gh auth login`)
-- Base VMs (`macOS_15`, `macOS_26_Beta`) available in tart
+- Base VMs (`macOS_15`, `macOS_26`) available in tart
 
 ## Ports
 
@@ -95,7 +95,7 @@ This repository uses self-hosted GitHub runners managed by the [jibb-runners](ht
 **Prerequisites:**
 - [Tart](https://tart.run/) - macOS virtualization  
 - [GitHub CLI](https://cli.github.com/) - GitHub API access
-- Base VMs named `macOS_15` and `macOS_26_Beta`
+- Base VMs named `macOS_15` and `macOS_26`
 
 **Start Runners:**
 ```bash
@@ -103,7 +103,7 @@ cd ../jibb-runners
 
 # Start both runners
 ./ghrunner.sh -tart macOS_15
-./ghrunner.sh -tart macOS_26_Beta
+./ghrunner.sh -tart macOS_26
 
 # Check runner status
 ./ghrunner.sh -list
@@ -127,7 +127,7 @@ cd ../jibb-runners
 # Expected output:
 # NAME          STATUS    BUSY    OS      LABELS
 # macOS_15      online    false   macOS   self-hosted,macOS,ARM64,tart  
-# macOS_26_Beta online    false   macOS   self-hosted,macOS,ARM64,tart
+# macOS_26 online    false   macOS   self-hosted,macOS,ARM64,tart
 ```
 
 ## GitHub Actions Workflows
@@ -191,8 +191,8 @@ gh run view --json jobs --jq '.jobs[] | {name: .name, runner_name: .runner_name,
 #   "conclusion": "success"
 # }
 # {
-#   "name": "build-libcbor (macOS_26_Beta)",
-#   "runner_name": "macOS_26_Beta",
+#   "name": "build-libcbor (macOS_26)",
+#   "runner_name": "macOS_26",
 #   "status": "completed", 
 #   "conclusion": "success"
 # }
@@ -205,14 +205,14 @@ gh run view -w
 
 # You'll see both jobs with their macOS versions:
 # ✅ build-libcbor (macOS_15)
-# ✅ build-libcbor (macOS_26_Beta)
+# ✅ build-libcbor (macOS_26)
 ```
 
 **Check Logs by macOS Version:**
 ```bash
 # View logs for specific matrix job
 gh run view --log --job "build-libcbor (macOS_15)"
-gh run view --log --job "build-libcbor (macOS_26_Beta)"
+gh run view --log --job "build-libcbor (macOS_26)"
 
 # View only failed logs across all jobs
 gh run view --log-failed
@@ -242,17 +242,17 @@ cd ../jibb-runners && ./ghrunner.sh -list
 cd ../jibb-runners && ./ghrunner.sh -list
 
 # If a runner shows offline or busy=true, restart it:
-./ghrunner.sh -remove macOS_26_Beta
-./ghrunner.sh -tart macOS_26_Beta
+./ghrunner.sh -remove macOS_26
+./ghrunner.sh -tart macOS_26
 ```
 
 **Issue: Matrix job fails on specific macOS version**
 ```bash
 # View logs for the failing job
-gh run view --log --job "build-libcbor (macOS_26_Beta)"
+gh run view --log --job "build-libcbor (macOS_26)"
 
 # Check runner-specific issues
-ssh admin@$(tart ip macOS_26_Beta_runner) "system_profiler SPSoftwareDataType"
+ssh admin@$(tart ip macOS_26_runner) "system_profiler SPSoftwareDataType"
 ```
 
 **Issue: Runner stuck in busy state**
@@ -275,7 +275,7 @@ cd ../blakeports && gh workflow run "Build libcbor"
 
 All workflows use consolidated setup and matrix strategies for consistency and comprehensive testing:
 - **Consolidated setup** - Each workflow uses `./scripts/installmacports` for idempotent MacPorts and BlakePorts configuration
-- **Matrix builds** - Each workflow runs on multiple macOS versions (`macOS_15`, `macOS_26_Beta`)
+- **Matrix builds** - Each workflow runs on multiple macOS versions (`macOS_15`, `macOS_26`)
 - Individual port workflows automatically trigger on changes to their respective directories
 - Clean builds with automatic uninstall/cleanup of existing port installations
 - Self-hosted runners using isolated tart VMs for each macOS version
@@ -297,7 +297,7 @@ openssl dgst -sha256 rrdtool-1.2.23.tar.gz
 cd ../jibb-runners
 ./ghrunner.sh -list                    # Check runner status
 ./ghrunner.sh -tart macOS_15          # Start macOS 15 runner  
-./ghrunner.sh -tart macOS_26_Beta     # Start macOS 26 Beta runner
+./ghrunner.sh -tart macOS_26     # Start macOS 26 Beta runner
 ```
 
 **Trigger Matrix Builds:**
@@ -316,7 +316,7 @@ gh run view --json jobs --jq '.jobs[] | {name: .name, status: .status}'  # CLI s
 **Fix Issues:**
 ```bash
 # Restart stuck runner
-./ghrunner.sh -remove macOS_26_Beta && ./ghrunner.sh -tart macOS_26_Beta
+./ghrunner.sh -remove macOS_26 && ./ghrunner.sh -tart macOS_26
 
 # View specific job logs
 gh run view --log --job "build-libcbor (macOS_15)"
