@@ -6,15 +6,20 @@ PortGroup           meson 1.0
 PortGroup           legacysupport 1.1
 
 name                netatalk
+version             4.3.2
+revision            0
+epoch               1
+categories          net
+description         Netatalk is a freely-available Open Source AFP fileserver.
+long_description    Netatalk is a freely-available Open Source AFP fileserver. \
+                    It allows Unix-like operating systems to serve as file \
+                    servers for Macintosh computers.
 
 # Main netatalk port - stub that selects appropriate version based on macOS
 if {${subport} eq ${name}} {
     PortGroup       stub 1.0
-    version         4.3.2
-    revision        0
-    epoch           1
+
     
-    # Platform-specific version selection based on build health data
     # netatalk4 builds successfully on El Capitan (10.11) and later
     if {${os.major} >= 11} {
         # macOS 10.11 (El Capitan) and later get netatalk 4.x
@@ -24,7 +29,6 @@ if {${subport} eq ${name}} {
         depends_run port:netatalk2
     }
     
-    #conflicts       netatalk4 netatalk2
 }
 
 # Netatalk 4.x subport (modern version for macOS 10.11+)
@@ -93,6 +97,7 @@ subport netatalk4 {
 # Netatalk 2.x subport (legacy version for macOS 10.10 and earlier)
 subport netatalk2 {
     PortGroup           openssl 1.0
+
     
     version             2.2.10
     revision            0
