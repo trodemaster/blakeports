@@ -36,6 +36,11 @@ jobs:
     - name: Setup MacPorts and BlakePorts Environment
       run: |
         ./scripts/installmacports
+
+    - name: Lint portfile
+      run: |
+        source ./setupenv.bash
+        port lint --verbose security/libfido2
         
     - name: Clean existing libfido2 installation
       run: |

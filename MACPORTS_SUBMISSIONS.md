@@ -300,6 +300,96 @@ git push origin category/portname-new-port
 
 The PR will automatically update with new commits.
 
+### 5.4 Updating Existing PRs and Squashing Commits
+
+When you need to update an existing PR with fixes or improvements:
+
+#### 5.4.1 Making Changes to Existing PR
+```bash
+cd /Users/blake/code/macports-ports
+git checkout your-branch-name
+
+# Make your changes to the Portfile
+# Edit the Portfile as needed
+
+# Stage and commit changes
+git add category/portname/
+git commit -m "portname: fix linting issues"
+```
+
+#### 5.4.2 Squashing Multiple Commits
+If you have multiple commits that should be combined into one:
+
+```bash
+# Check current commit history
+git log --oneline -5
+
+# Soft reset to combine the last N commits (replace N with number of commits to squash)
+git reset --soft HEAD~N
+
+# Commit with the desired message (keep existing message if appropriate)
+git commit -m "portname: update to X.Y.Z"
+
+# Force push to update the PR
+git push origin your-branch-name --force
+```
+
+#### 5.4.3 Preserving Existing Commit Messages
+When updating a PR, you often want to keep the original commit message:
+```bash
+# After making changes and staging them
+git commit -m "portname: update to 4.3.2"  # Use same message as original
+
+# Force push to update PR
+git push origin your-branch-name --force
+```
+
+#### 5.4.4 Complete Update Workflow Example
+```bash
+# 1. Switch to your PR branch
+cd /Users/blake/code/macports-ports
+git checkout net/netatalk-consolidate-ports
+
+# 2. Make changes (edit Portfile, fix linting, etc.)
+# Edit files as needed
+
+# 3. Stage changes
+git add category/portname/
+
+# 4. If you have multiple commits to squash:
+git reset --soft HEAD~2  # Squash last 2 commits
+git commit -m "portname: update to X.Y.Z"  # Use original message
+
+# 5. Force push to update PR
+git push origin net/netatalk-consolidate-ports --force
+```
+
+#### 5.4.5 Best Practices for PR Updates
+- **Keep commit messages consistent**: Use the same subject line as the original commit
+- **Squash related commits**: Combine multiple small fixes into single logical commits
+- **Test before pushing**: Always run `port lint --nitpick` before updating PR
+- **Use force push carefully**: Only force push to your own feature branches, never to shared branches
+- **Document changes**: Update PR description if significant changes are made
+
+#### 5.4.6 When to Squash Commits
+- **Multiple small fixes**: Combine several "fix typo" or "address feedback" commits
+- **Clean up development history**: Remove "WIP" or "debug" commits before final submission
+- **Maintainer requests**: When reviewers ask for cleaner commit history
+- **Before final review**: Ensure PR has clean, logical commit structure
+
+#### 5.4.7 Verifying PR Updates
+After updating a PR, verify the changes:
+```bash
+# Check commit history is clean
+git log --oneline -3
+
+# Verify the PR shows updated files
+# Check GitHub PR page for updated diff
+
+# Confirm all changes are included
+git show --stat HEAD
+```
+
 ## Reference Links
 
 ### MacPorts Documentation
@@ -337,6 +427,42 @@ This example demonstrates the complete workflow from development through success
 
 This example demonstrates port consolidation, updating to a new upstream maintainer, and addressing multiple long-standing tickets in a single PR.
 
+### Example 3: Updating Existing PR with Linting Fixes
+
+**PR**: https://github.com/macports/macports-ports/pull/29293
+
+**Scenario**: After initial PR submission, linting issues were discovered that needed to be fixed.
+
+**Process**:
+1. **Fixed in blakeports first**: Made all linting corrections in development repo
+2. **Verified fixes**: Ran `port lint --nitpick` on all subports (netatalk, netatalk2, netatalk4)
+3. **Updated macports-ports**: Copied fixed Portfile to PR branch
+4. **Squashed commits**: Combined multiple fix commits into single clean commit
+5. **Preserved message**: Kept original commit message "netatalk: update to 4.3.2"
+6. **Force pushed**: Updated PR with clean history
+
+**Commands used**:
+```bash
+# Fix in blakeports
+cd /Users/blake/code/blakeports
+# Edit Portfile, fix linting issues
+port lint --nitpick net/netatalk
+
+# Update macports-ports PR
+cd /Users/blake/code/macports-ports
+git checkout net/netatalk-consolidate-ports
+# Copy fixed Portfile
+git add net/netatalk/Portfile
+git commit -m "netatalk: fix linting issues"
+
+# Squash commits
+git reset --soft HEAD~2
+git commit -m "netatalk: update to 4.3.2"
+git push origin net/netatalk-consolidate-ports --force
+```
+
+This example demonstrates the complete workflow for updating an existing PR with fixes while maintaining clean commit history.
+
 ## Troubleshooting
 
 ### Common Issues
@@ -348,6 +474,14 @@ This example demonstrates port consolidation, updating to a new upstream maintai
 6. **Commit message too long**: Keep subject line under 55 characters, move details to body
 7. **Implementation details in subject**: Focus on what changed, not how it changed
 8. **Missing ticket references**: Always include full URLs for referenced tickets
+
+### PR Update Issues
+9. **Multiple commits in PR**: Use `git reset --soft HEAD~N` to squash commits
+10. **Force push rejected**: Ensure you're pushing to your own fork, not upstream
+11. **Lost changes after squash**: Use `git reflog` to recover lost commits
+12. **Wrong commit message**: Use `git commit --amend` for the last commit, or squash and recommit
+13. **PR not updating**: Check that you're on the correct branch and pushed to the right remote
+14. **Merge conflicts in PR**: Rebase against updated master: `git rebase origin/master`
 
 ### Getting Help
 - MacPorts mailing lists
