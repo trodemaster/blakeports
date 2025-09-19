@@ -40,7 +40,7 @@ jobs:
     - name: Lint portfile
       run: |
         source ./setupenv.bash
-        port lint --verbose devel/libcbor
+        port lint --nitpick devel/libcbor
          
     - name: Clean existing libcbor installation
       run: |

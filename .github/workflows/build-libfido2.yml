@@ -40,7 +40,7 @@ jobs:
     - name: Lint portfile
       run: |
         source ./setupenv.bash
-        port lint --verbose security/libfido2
+        port lint --nitpick security/libfido2
         
     - name: Clean existing libfido2 installation
       run: |

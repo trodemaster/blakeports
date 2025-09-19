@@ -40,7 +40,7 @@ jobs:
     - name: Lint portfile
       run: |
         source ./setupenv.bash
-        port lint --verbose textproc/bstring
+        port lint --nitpick textproc/bstring
 
     - name: Clean existing bstring installation
       run: |

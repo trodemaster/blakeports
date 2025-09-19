@@ -41,7 +41,7 @@ jobs:
     - name: Lint portfile
       run: |
         source ./setupenv.bash
-        port lint --verbose net/netatalk
+        port lint --nitpick net/netatalk
         
     - name: Clean existing netatalk installations
       run: |
