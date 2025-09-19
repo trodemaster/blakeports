@@ -40,7 +40,7 @@ jobs:
     - name: Lint portfile
       run: |
         source ./setupenv.bash
-        port lint --verbose audio/nrsc5
+        port lint --nitpick audio/nrsc5
         
     - name: Clean existing nrsc5 installation
       run: |
