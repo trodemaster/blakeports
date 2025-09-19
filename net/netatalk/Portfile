@@ -24,7 +24,7 @@ if {${subport} eq ${name}} {
         depends_run port:netatalk2
     }
     
-    conflicts       netatalk4 netatalk2
+    #conflicts       netatalk4 netatalk2
 }
 
 # Netatalk 4.x subport (modern version for macOS 10.11+)
