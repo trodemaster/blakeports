@@ -37,6 +37,11 @@ jobs:
     - name: Setup MacPorts and BlakePorts Environment
       run: |
         ./scripts/installmacports
+
+    - name: Lint portfile
+      run: |
+        source ./setupenv.bash
+        port lint --verbose net/netatalk
         
     - name: Clean existing netatalk installations
       run: |

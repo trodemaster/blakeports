@@ -37,6 +37,11 @@ jobs:
       run: |
         ./scripts/installmacports
 
+    - name: Lint portfile
+      run: |
+        source ./setupenv.bash
+        port lint --verbose textproc/bstring
+
     - name: Clean existing bstring installation
       run: |
         source ./setupenv.bash

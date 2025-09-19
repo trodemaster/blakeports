@@ -36,6 +36,11 @@ jobs:
     - name: Setup MacPorts and BlakePorts Environment
       run: |
         ./scripts/installmacports
+
+    - name: Lint portfile
+      run: |
+        source ./setupenv.bash
+        port lint --verbose audio/nrsc5
         
     - name: Clean existing nrsc5 installation
       run: |
