@@ -41,7 +41,7 @@ subport netatalk4 {
     revision            0
     
     platforms           {darwin >= 11}
-    conflicts           netatalk netatalk2
+    conflicts           netatalk2
     
     compiler.c_standard 2011
     checksums           rmd160  46af4f1c71fafc9e1cfca470d3e90f97d91b8117 \
@@ -102,7 +102,7 @@ subport netatalk2 {
     version             2.2.10
     revision            0
     platforms           {darwin < 11}
-    conflicts           netatalk netatalk4
+    conflicts           netatalk4
     
     categories          net
     license             GPL-2
