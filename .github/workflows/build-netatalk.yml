@@ -10,6 +10,12 @@ on:
       - 'net/netatalk/**'
     branches: [main]
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: false
+        default: 'main'
+        type: string
 
 defaults:
   run:
@@ -29,10 +35,13 @@ jobs:
       run: |
         echo "Running on: ${{ matrix.runner }}"
         echo "Building port: netatalk"
+        echo "Building from branch: ${{ inputs.branch || github.ref_name }}"
         sw_vers
         
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.branch || github.ref }}
       
     - name: Setup MacPorts and BlakePorts Environment
       run: |
