@@ -18,6 +18,7 @@ RUNNER_NAME=""
 SSH_HOST=""
 ACTION=""
 RUNNER_TOKEN=""
+DEBUG_MODE=""
 
 # GitHub repository settings (can be overridden with command line options)
 GITHUB_OWNER="${GITHUB_OWNER:-trodemaster}"
@@ -66,6 +67,7 @@ Options:
     -remove-all             Remove/de-register all GitHub runners
     -remove <runner_name>   Remove/de-register a GitHub runner
     -cancel-workflows       Cancel all running workflows
+    -debug                  Enable debug mode for SSH connections
     -h, --help              Show this help message
 
 Examples:
@@ -342,6 +344,111 @@ get_runner_config_at_index() {
     echo "$runner_type:$name:$ssh_host:$labels:$description"
 }
 
+# Function to debug basic connectivity to VM
+debug_vm_connectivity() {
+    local vm_ip=$1
+    
+    print_info "=== VM Connectivity Debug ==="
+    print_info "VM IP: $vm_ip"
+    
+    # Test basic ping
+    print_info "Testing ping to $vm_ip..."
+    if ping -c 3 -W 3000 "$vm_ip" &>/dev/null; then
+        print_success "Ping successful"
+    else
+        print_error "Ping failed - VM may not be reachable"
+        return 1
+    fi
+    
+    # Test if SSH port is open
+    print_info "Testing SSH port (22) connectivity..."
+    if nc -z -w 5 "$vm_ip" 22 2>/dev/null; then
+        print_success "SSH port 22 is open"
+    else
+        print_error "SSH port 22 is not accessible"
+        return 1
+    fi
+    
+    # Test SSH with verbose output (first attempt only)
+    print_info "Testing SSH with verbose output (first attempt)..."
+    local ssh_verbose_output
+    ssh_verbose_output=$(ssh -v "${SSH_OPTS[@]}" -o ConnectTimeout=10 admin@"$vm_ip" "echo 'SSH test'" 2>&1)
+    local ssh_verbose_exit_code=$?
+    
+    if [ $ssh_verbose_exit_code -eq 0 ]; then
+        print_success "SSH verbose test successful"
+    else
+        print_error "SSH verbose test failed (exit code: $ssh_verbose_exit_code)"
+        print_error "SSH verbose output:"
+        echo "$ssh_verbose_output" | head -20 | while IFS= read -r line; do
+            print_error "  $line"
+        done
+    fi
+    
+    print_info "=== End VM Connectivity Debug ==="
+    return 0
+}
+
+# Function to test SSH connection with retries
+test_ssh_connection_with_retries() {
+    local vm_ip=$1
+    local max_attempts=24  # 24 attempts * 5 seconds = 2 minutes
+    local attempt=0
+    
+    print_info "Testing SSH connection to admin@$vm_ip (will retry for up to 2 minutes)..."
+    print_info "SSH options: ${SSH_OPTS[*]}"
+    
+    # Run connectivity debug first if debug mode is enabled
+    if [ "$DEBUG_MODE" = "true" ]; then
+        debug_vm_connectivity "$vm_ip"
+    fi
+    
+    while [ $attempt -lt $max_attempts ]; do
+        attempt=$((attempt + 1))
+        
+        # Try SSH connection and capture both stdout and stderr for debugging
+        local ssh_output
+        local ssh_exit_code
+        
+        print_info "SSH attempt $attempt/$max_attempts: ssh ${SSH_OPTS[*]} -o ConnectTimeout=5 admin@$vm_ip"
+        
+        # Capture SSH output for debugging
+        ssh_output=$(ssh "${SSH_OPTS[@]}" -o ConnectTimeout=5 admin@"$vm_ip" "echo 'SSH connection successful'" 2>&1)
+        ssh_exit_code=$?
+        
+        if [ $ssh_exit_code -eq 0 ]; then
+            print_success "SSH connection established (attempt $attempt/$max_attempts)"
+            return 0
+        else
+            print_warning "SSH attempt $attempt failed (exit code: $ssh_exit_code)"
+            if [ -n "$ssh_output" ]; then
+                print_error "SSH error details:"
+                echo "$ssh_output" | while IFS= read -r line; do
+                    print_error "  $line"
+                done
+            else
+                print_error "No SSH error output captured"
+            fi
+        fi
+        
+        if [ $attempt -lt $max_attempts ]; then
+            print_info "SSH connection attempt $attempt/$max_attempts failed, retrying in 5 seconds..."
+            sleep 5
+        fi
+    done
+    
+    print_error "SSH connection failed after $max_attempts attempts (2 minutes)"
+    print_error "Command used: ssh ${SSH_OPTS[*]} -o ConnectTimeout=5 admin@$vm_ip \"echo 'SSH connection successful'\""
+    print_error "Troubleshooting steps:"
+    print_error "  1. Verify VM is fully booted"
+    print_error "  2. Check if SSH service is running on the VM"
+    print_error "  3. Verify the admin user exists and has SSH access"
+    print_error "  4. Try connecting manually: ssh admin@$vm_ip"
+    print_error "  5. Check if the VM IP is correct: $vm_ip"
+    print_error "  6. Verify SSH key authentication is working"
+    return 1
+}
+
 # Function to detect VM architecture and get appropriate runner package
 detect_vm_architecture() {
     local vm_ip=$1
@@ -491,20 +598,17 @@ start_tart_runner() {
             fi
         fi
         
-        # Wait for SSH to be available
-        print_info "Testing SSH connection to admin@$vm_ip..."
-        
-        # Simple SSH test with timeout
-        if ssh "${SSH_OPTS[@]}" -o ConnectTimeout=10 admin@"$vm_ip" "echo 'SSH connection successful'" 2>/dev/null; then
-            print_success "SSH connection established"
-        else
-            print_error "SSH connection failed"
-            print_error "Command used: ssh ${SSH_OPTS[*]} -o ConnectTimeout=10 admin@$vm_ip \"echo 'SSH connection successful'\""
-            print_error "Troubleshooting steps:"
-            print_error "  1. Verify VM is fully booted"
-            print_error "  2. Check if SSH service is running on the VM"
-            print_error "  3. Verify the admin user exists and has SSH access"
-            print_error "  4. Try connecting manually: ssh admin@$vm_ip"
+        # Wait for SSH to be available with retries
+        if ! test_ssh_connection_with_retries "$vm_ip"; then
+            print_error "Failed to establish SSH connection to VM after all retry attempts"
+            print_error "This usually indicates one of the following issues:"
+            print_error "  1. VM is not fully booted or SSH service is not running"
+            print_error "  2. Network connectivity issues between host and VM"
+            print_error "  3. SSH authentication problems (key not found or incorrect)"
+            print_error "  4. VM IP address is incorrect or VM is not accessible"
+            print_error ""
+            print_error "Try running with -debug flag for more detailed information:"
+            print_error "  $0 -tart $base_vm_name -debug"
             exit 1
         fi
         
@@ -963,45 +1067,13 @@ remove_all_tart_runners() {
             vm_ip=$("$TART_PATH" ip "$vm_name" 2>/dev/null || echo "")
         fi
         
-        # If VM is running and accessible, clean up GitHub runner
+        # Skip SSH cleanup - just proceed with VM cleanup
         if [ -n "$vm_ip" ] && [ "$vm_ip" != "null" ]; then
-            print_info "VM '$vm_name' is running (IP: $vm_ip)"
-            
-            # Test SSH connection with timeout
-            if timeout 10 ssh "${SSH_OPTS[@]}" -o ConnectTimeout=5 admin@"$vm_ip" "echo 'SSH test'" &>/dev/null; then
-                print_info "SSH connection successful, cleaning up GitHub runner..."
-                
-                # Check if runner directory exists
-                if timeout 10 ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "test -d /opt/actions-runner" 2>/dev/null; then
-                    # Stop the runner service
-                    print_info "Stopping runner service on $vm_name..."
-                    timeout 30 ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "cd /opt/actions-runner && ./svc.sh stop" 2>/dev/null || print_warning "Service may not be running"
-                    
-                    # Uninstall the service
-                    print_info "Uninstalling runner service on $vm_name..."
-                    timeout 30 ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "cd /opt/actions-runner && ./svc.sh uninstall" 2>/dev/null || print_warning "Service may not be installed"
-                    
-                    # Remove the runner from GitHub
-                    print_info "Removing runner '$base_name' from GitHub..."
-                    if timeout 60 ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "cd /opt/actions-runner && ./config.sh remove --token '$RUNNER_TOKEN'" 2>/dev/null; then
-                        print_success "Runner '$base_name' removed from GitHub successfully"
-                    else
-                        print_warning "Failed to remove runner from GitHub automatically"
-                    fi
-                    
-                    # Clean up the installation directory
-                    print_info "Cleaning up installation directory on $vm_name..."
-                    timeout 30 ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "sudo rm -rf /opt/actions-runner" 2>/dev/null || print_warning "Failed to clean up installation directory"
-                else
-                    print_info "No GitHub runner installation found on $vm_name"
-                fi
-            else
-                print_warning "SSH connection failed to $vm_ip, proceeding with VM cleanup"
-            fi
+            print_info "VM '$vm_name' is running (IP: $vm_ip) - skipping SSH cleanup, will rely on GitHub API"
         elif [ "$vm_state" = "running" ]; then
-            print_warning "VM '$vm_name' is running but IP is unavailable, proceeding with VM cleanup"
+            print_info "VM '$vm_name' is running but IP is unavailable - proceeding with VM cleanup"
         else
-            print_info "VM '$vm_name' is $vm_state, proceeding with VM cleanup"
+            print_info "VM '$vm_name' is $vm_state - proceeding with VM cleanup"
         fi
         
         # Stop the VM (don't exit on failure)
@@ -1227,9 +1299,9 @@ remove_runner() {
     
     # If VM is running, clean up the runner first
     if [ "$runner_found" = true ]; then
-        # Test SSH connection
+        # Test SSH connection with retries
         print_info "Testing SSH connection to admin@$vm_ip..."
-        if ! ssh "${SSH_OPTS[@]}" -o ConnectTimeout=5 admin@"$vm_ip" "echo 'SSH connection successful'" 2>/dev/null; then
+        if ! test_ssh_connection_with_retries "$vm_ip" 2>/dev/null; then
             print_error "SSH connection failed to $vm_ip"
             print_warning "Cannot automatically remove runner. Will proceed to shutdown and delete VM."
         else
@@ -1421,6 +1493,10 @@ main() {
                 ;;
             -list)
                 ACTION="list"
+                shift
+                ;;
+            -debug)
+                DEBUG_MODE="true"
                 shift
                 ;;
             *)
