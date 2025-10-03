@@ -14,7 +14,6 @@ long_description    Netatalk is a freely-available Open Source AFP fileserver. \
                     It allows Unix-like operating systems to serve as file \
                     servers for Macintosh computers.
 
-# Main netatalk port - contains the actual netatalk4 implementation
 if {${subport} eq ${name}} {
     github.setup        Netatalk netatalk 4-3-2 netatalk-
     version             [string map {- .} ${github.version}]
@@ -65,11 +64,10 @@ if {${subport} eq ${name}} {
     
     notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/."
     
-    # Support up to macOS 10.11 for getline function
     legacysupport.newest_darwin_requires_legacy 15
 }
 
-# Netatalk 4.x stub port (alias for main netatalk port)
+# Netatalk 4.x stub port
 subport netatalk4 {
     PortGroup           stub 1.0
     
