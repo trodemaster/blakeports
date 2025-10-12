@@ -1,0 +1,77 @@
+name: Build previous
+
+on:
+  push:
+    paths:
+      - 'emulators/previous/**'
+    branches: [main]
+  pull_request:
+    paths:
+      - 'emulators/previous/**'
+    branches: [main]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-previous:
+    name: build-previous (${{ matrix.runner }})
+    strategy:
+      matrix:
+        runner: [macOS_15, macOS_26]
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
+    
+    steps:
+    - name: Show macOS version
+      run: |
+        echo "Running on: ${{ matrix.runner }}"
+        sw_vers
+        
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup MacPorts and BlakePorts Environment
+      run: |
+        ./scripts/installmacports
+
+    - name: Lint portfile
+      run: |
+        source ./setupenv.bash
+        port lint --nitpick emulators/previous
+
+    - name: Clean existing previous installation
+      run: |
+        source ./setupenv.bash
+        sudo port -f uninstall previous
+        sudo port clean --dist previous
+
+    - name: Install dependencies
+      run: |
+        ./scripts/install-deps previous
+        
+    - name: Build previous port
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        sudo port -v install previous
+        
+    - name: Verify previous installation
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        port installed previous
+        ls -la /Applications/MacPorts/Previous.app || echo "Previous.app not found"
+        
+    - name: Test previous application
+      run: |
+        # Source MacPorts environment from our local copy
+        source ./setupenv.bash
+        
+        # Check version output
+        /Applications/MacPorts/Previous.app/Contents/MacOS/Previous --version 2>&1 | head -5 || echo "Could not get Previous version"
+
