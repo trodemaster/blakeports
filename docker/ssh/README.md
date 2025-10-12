@@ -59,11 +59,11 @@ Generate a key on your modern client to authenticate to the proxy:
 
 ```bash
 # On your modern system
-ssh-keygen -t ed25519 -f ~/.ssh/ssh-proxy -C "ssh-proxy"
+ssh-keygen -t ed25519 -f ~/.ssh/macports -C "macports-proxy"
 
 # Create authorized_keys for the proxy
 mkdir -p keys
-cat ~/.ssh/ssh-proxy.pub > keys/authorized_keys
+cat ~/.ssh/macports.pub > keys/authorized_keys
 chmod 644 keys/authorized_keys
 ```
 
@@ -83,7 +83,7 @@ Host ssh-proxy
   Hostname localhost
   Port 2222
   User sshproxy
-  IdentityFile ~/.ssh/ssh-proxy
+  IdentityFile ~/.ssh/macports
   
 # Legacy Mac OS X 10.7 system via proxy
 Host tenseven
