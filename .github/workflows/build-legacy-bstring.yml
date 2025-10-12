@@ -1,0 +1,199 @@
+name: Build bstring (Legacy macOS)
+
+on:
+  push:
+    paths:
+      - 'textproc/bstring/**'
+    branches: [main]
+  pull_request:
+    paths:
+      - 'textproc/bstring/**'
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      vm_ip:
+        description: 'Override Lion VM IP (optional, uses LION_IP var if not provided)'
+        required: false
+        type: string
+      macos_version:
+        description: 'macOS version to test (lion, snowleopard, mountainlion)'
+        required: false
+        type: choice
+        default: 'lion'
+        options:
+          - lion
+          - snowleopard
+          - mountainlion
+          - mavericks
+          - yosemite
+
+env:
+  # Default to Lion VM for now (only one configured)
+  VM_IP: ${{ inputs.vm_ip || vars.LION_IP }}
+  VM_USERNAME: ${{ vars.LION_USERNAME }}
+
+jobs:
+  build-bstring-lion:
+    name: Build bstring on Mac OS X 10.7 Lion
+    runs-on: [self-hosted, docker, ssh-capable]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Verify VM configuration
+      run: |
+        if [ -z "$VM_IP" ]; then
+          echo "Error: VM_IP not set. Provide vm_ip input or set LION_IP repository variable."
+          exit 1
+        fi
+        if [ -z "$VM_USERNAME" ]; then
+          echo "Error: VM_USERNAME not set. Set LION_USERNAME repository variable."
+          exit 1
+        fi
+        echo "Will connect to: $VM_USERNAME@$VM_IP"
+    
+    - name: Show macOS version on Lion VM
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.LION_KEY }}
+        script: |
+          echo "=================================================="
+          echo "  Building bstring on Mac OS X Lion"
+          echo "=================================================="
+          sw_vers
+          echo ""
+          uname -a
+    
+    - name: Transfer repository to Lion VM
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.LION_KEY }}
+        source: "."
+        target: "~/blakeports-ci"
+        rm: true
+    
+    - name: Setup MacPorts and BlakePorts Environment
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.LION_KEY }}
+        command_timeout: 30m
+        script: |
+          cd ~/blakeports-ci
+          
+          echo "Setting up MacPorts environment..."
+          ./scripts/installmacports
+          
+          echo "✅ MacPorts setup complete"
+    
+    - name: Lint portfile
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.LION_KEY }}
+        script: |
+          cd ~/blakeports-ci
+          source ./setupenv.bash
+          
+          echo "Linting textproc/bstring portfile..."
+          port lint --nitpick textproc/bstring
+          
+          echo "✅ Lint passed"
+    
+    - name: Clean existing bstring installation
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.LION_KEY }}
+        script: |
+          cd ~/blakeports-ci
+          source ./setupenv.bash
+          
+          echo "Cleaning existing bstring installation..."
+          sudo port -f uninstall bstring || true
+          sudo port clean --dist bstring
+          
+          echo "✅ Clean complete"
+    
+    - name: Install dependencies
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.LION_KEY }}
+        command_timeout: 30m
+        script: |
+          cd ~/blakeports-ci
+          
+          echo "Installing bstring dependencies..."
+          ./scripts/install-deps bstring
+          
+          echo "✅ Dependencies installed"
+    
+    - name: Build bstring port
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.LION_KEY }}
+        command_timeout: 30m
+        script: |
+          cd ~/blakeports-ci
+          source ./setupenv.bash
+          
+          echo "Building bstring port..."
+          sudo port -v install bstring
+          
+          echo "✅ Build complete"
+    
+    - name: Verify bstring installation
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.LION_KEY }}
+        script: |
+          cd ~/blakeports-ci
+          source ./setupenv.bash
+          
+          echo "Verifying bstring installation..."
+          port installed bstring
+          
+          echo "✅ Installation verified"
+    
+    - name: Test bstring with tests variant
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.LION_KEY }}
+        command_timeout: 30m
+        script: |
+          cd ~/blakeports-ci
+          source ./setupenv.bash
+          
+          echo "Testing bstring with tests variant..."
+          sudo port -v install bstring +tests
+          
+          echo "✅ Tests variant passed"
+    
+    - name: Cleanup
+      if: always()
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.LION_KEY }}
+        script: |
+          echo "Cleaning up CI directory..."
+          rm -rf ~/blakeports-ci
+          echo "✅ Cleanup complete"
+
