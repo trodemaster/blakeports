@@ -44,12 +44,11 @@ RUN mkdir -p /home/runner/.ssh && \
 
 # Copy SSH keys if they exist in build context
 # Place your SSH keys in ./ssh_keys/ before building
-COPY ssh_keys/* /home/runner/.ssh/ 2>/dev/null || true
+COPY --chmod=600 ssh_keys/* /home/runner/.ssh/
 
 # Change ownership of runner directory
 RUN chown -R runner:runner /home/runner && \
-    chmod 700 /home/runner/.ssh 2>/dev/null || true && \
-    chmod 600 /home/runner/.ssh/id_* 2>/dev/null || true
+    chmod 700 /home/runner/.ssh
 
 # Switch to runner user
 USER runner
