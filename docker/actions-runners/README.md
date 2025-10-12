@@ -8,6 +8,7 @@ This directory contains a Docker-based GitHub Actions self-hosted runner with Op
 - **OpenSSH 9.x Client**: Compatible with legacy systems requiring older SSH algorithms
 - **Self-Hosted Runner**: Executes GitHub Actions workflows locally
 - **SSH Capabilities**: Can connect to target VMs for remote command execution
+- **Pre-installed drone-ssh**: No repeated downloads during workflow execution
 - **Docker Containerized**: Easy deployment and management
 - **Auto-Registration**: Automatically registers with GitHub on startup
 - **Multi-VM Support**: Single runner can connect to multiple legacy macOS VMs (10.6-10.10)
