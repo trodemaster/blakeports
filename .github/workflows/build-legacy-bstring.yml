@@ -115,23 +115,38 @@ jobs:
           echo "Contents: $(ls -la | head -10)"
           echo "✅ Repository ready"
     
-    - name: Setup MacPorts and BlakePorts Environment
+    - name: Verify MacPorts installation and setup environment
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
         key: ${{ secrets.TENSEVEN_KEY }}
-        command_timeout: 30m
         script: |
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
           
+          echo "Verifying MacPorts installation..."
+          
+          # Check if port command exists
+          if ! command -v port &> /dev/null; then
+            echo "❌ ERROR: MacPorts not found. Please install MacPorts on this VM."
+            exit 1
+          fi
+          
+          # Show MacPorts version
+          echo "MacPorts version:"
+          port version
+          
+          # Setup BlakePorts environment
           cd ~/blakeports-ci
+          source ./setupenv.bash
           
-          echo "Setting up MacPorts environment..."
-          ./scripts/installmacports
+          # Update port index for BlakePorts
+          echo "Updating port index..."
+          portindex
           
-          echo "✅ MacPorts setup complete"
+          echo "✅ MacPorts verified and BlakePorts index updated"
     
     - name: Lint portfile
       uses: appleboy/ssh-action@v1
@@ -142,6 +157,7 @@ jobs:
         script: |
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
           
           cd ~/blakeports-ci
           source ./setupenv.bash
@@ -180,6 +196,7 @@ jobs:
         script: |
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
           
           cd ~/blakeports-ci
           
@@ -198,6 +215,7 @@ jobs:
         script: |
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
           
           cd ~/blakeports-ci
           source ./setupenv.bash
