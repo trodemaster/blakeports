@@ -67,29 +67,44 @@ jobs:
           echo ""
           uname -a
     
-    - name: Prepare repository on TenSeven VM
+    - name: Download repository tarball
+      run: |
+        echo "Downloading blakeports repository from GitHub..."
+        curl -L -o /tmp/blakeports.tar.gz https://github.com/trodemaster/blakeports/archive/refs/heads/main.tar.gz
+        echo "✅ Tarball downloaded: $(ls -lh /tmp/blakeports.tar.gz)"
+    
+    - name: Transfer tarball to TenSeven VM
+      run: |
+        echo "Transferring tarball to TenSeven VM..."
+        scp -i /home/runner/.ssh/oldmac \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            /tmp/blakeports.tar.gz \
+            ${{ env.VM_USERNAME }}@${{ env.VM_IP }}:/tmp/
+        echo "✅ Tarball transferred"
+    
+    - name: Extract repository on TenSeven VM
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
         key: ${{ secrets.TENSEVEN_KEY }}
         script: |
-          echo "Preparing blakeports repository..."
+          echo "Extracting repository..."
           
-          # Clone or update repository
-          if [ -d ~/blakeports-ci/.git ]; then
-            echo "Repository exists, updating..."
-            cd ~/blakeports-ci
-            git fetch origin
-            git reset --hard origin/main
-            git clean -fdx
-          else
-            echo "Cloning repository..."
-            git clone https://github.com/trodemaster/blakeports.git ~/blakeports-ci
-            cd ~/blakeports-ci
-          fi
+          # Remove old directory if exists
+          rm -rf ~/blakeports-ci
           
-          echo "Current commit: $(git rev-parse --short HEAD)"
+          # Create directory and extract
+          mkdir -p ~/blakeports-ci
+          cd ~/blakeports-ci
+          tar xzf /tmp/blakeports.tar.gz --strip-components=1
+          
+          # Cleanup tarball
+          rm /tmp/blakeports.tar.gz
+          
+          echo "Repository extracted to: $(pwd)"
+          echo "Contents: $(ls -la | head -10)"
           echo "✅ Repository ready"
     
     - name: Setup MacPorts and BlakePorts Environment
