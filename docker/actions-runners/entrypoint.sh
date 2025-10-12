@@ -50,8 +50,9 @@ if [ -z "$GITHUB_REPO" ]; then
     exit 1
 fi
 
-if [ -z "$GITHUB_TOKEN" ]; then
-    print_error "GITHUB_TOKEN environment variable is required (Personal Access Token)"
+if [ -z "$RUNNER_TOKEN" ]; then
+    print_error "RUNNER_TOKEN environment variable is required"
+    print_error "Generate token on host using: gh api repos/\$GITHUB_OWNER/\$GITHUB_REPO/actions/runners/registration-token --method POST --jq '.token'"
     exit 1
 fi
 
@@ -59,23 +60,8 @@ fi
 RUNNER_NAME="${RUNNER_NAME:-docker-runner-$(hostname)}"
 RUNNER_WORKDIR="${RUNNER_WORKDIR:-_work}"
 
-# Generate GitHub runner registration token
-print_info "Generating GitHub runner registration token..."
+print_info "Using pre-generated registration token"
 print_info "Repository: $GITHUB_OWNER/$GITHUB_REPO"
-
-RUNNER_TOKEN=$(curl -s -X POST \
-    -H "Authorization: token ${GITHUB_TOKEN}" \
-    -H "Accept: application/vnd.github.v3+json" \
-    https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runners/registration-token | jq -r '.token')
-
-if [ -z "$RUNNER_TOKEN" ] || [ "$RUNNER_TOKEN" = "null" ]; then
-    print_error "Failed to generate runner registration token"
-    print_error "Check that your GITHUB_TOKEN has the correct permissions"
-    print_error "Required: 'repo' scope for private repos or 'public_repo' for public repos"
-    exit 1
-fi
-
-print_success "Registration token generated successfully"
 
 # Generate runner labels based on system
 print_info "Detecting system information..."
