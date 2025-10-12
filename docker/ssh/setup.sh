@@ -44,18 +44,18 @@ if [ ! -f "keys/authorized_keys" ]; then
     echo "⚠️  No authorized_keys found"
     echo ""
     echo "To authenticate to the proxy, you need to:"
-    echo "1. Generate a key: ssh-keygen -t ed25519 -f ~/.ssh/ssh-proxy"
-    echo "2. Add it here: cat ~/.ssh/ssh-proxy.pub > keys/authorized_keys"
+    echo "1. Generate a key: ssh-keygen -t ed25519 -f ~/.ssh/macports"
+    echo "2. Add it here: cat ~/.ssh/macports.pub > keys/authorized_keys"
     echo ""
     read -p "Would you like to do this now? [y/N] " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if [ ! -f "$HOME/.ssh/ssh-proxy" ]; then
+        if [ ! -f "$HOME/.ssh/macports" ]; then
             echo "Generating SSH key..."
-            ssh-keygen -t ed25519 -f "$HOME/.ssh/ssh-proxy" -C "ssh-proxy-$(whoami)"
+            ssh-keygen -t ed25519 -f "$HOME/.ssh/macports" -C "macports-proxy-$(whoami)"
         fi
         echo "Adding public key to authorized_keys..."
-        cat "$HOME/.ssh/ssh-proxy.pub" > keys/authorized_keys
+        cat "$HOME/.ssh/macports.pub" > keys/authorized_keys
         chmod 644 keys/authorized_keys
         echo "✅ Key added to authorized_keys"
     fi
@@ -86,7 +86,7 @@ cat << 'EOF'
      Hostname localhost
      Port 2222
      User sshproxy
-     IdentityFile ~/.ssh/ssh-proxy
+     IdentityFile ~/.ssh/macports
    
    Host tenseven
      Hostname tenseven.local

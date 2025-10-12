@@ -22,7 +22,7 @@ Host ssh-proxy
   Hostname localhost
   Port 2222
   User sshproxy
-  IdentityFile ~/.ssh/ssh-proxy
+  IdentityFile ~/.ssh/macports
 
 Host tenseven
   Hostname tenseven.local
