@@ -183,14 +183,16 @@ netatalk: update to 4.3.2
 Closes: https://trac.macports.org/ticket/69609
 Closes: https://trac.macports.org/ticket/36674  
 Closes: https://trac.macports.org/ticket/36673
-Please also close: https://trac.macports.org/ticket/23313 as the solution is in the new docs
+See: https://trac.macports.org/ticket/23313
 ```
+
+Note: Use "Closes:" for tickets automatically fixed by this commit. Use "References:", "See:", or "Re:" for related tickets that need manual review or closure.
 
 **Commit Message Guidelines:**
 - **Never mention**: "update checksums" (always required, redundant)
 - **Focus on**: meaningful changes that affect users
 - **Keep concise**: avoid unnecessary technical details
-- **Use proper ticket keywords**: "Closes:" for tickets that are fixed, "Please also close:" for tickets that should be closed for other reasons
+- **Use proper ticket keywords**: Use "Closes:", "fixes:", "closes:", etc. to automatically close tickets that this commit fixes; use "References:", "See:", "Re:", etc. to reference related tickets without closing them
 - **Reference full URLs**: Always use complete Trac ticket URLs, not just ticket numbers
 
 ### 3.2 Commit Command
