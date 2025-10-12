@@ -1,7 +1,8 @@
 # Environment configuration
 .env
 
-# SSH keys and sensitive data
+# SSH keys directory and sensitive data
+ssh_keys/
 *.pem
 *.key
 id_rsa*

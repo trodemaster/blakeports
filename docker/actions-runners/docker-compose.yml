@@ -25,12 +25,6 @@ services:
     volumes:
       # Persist runner work directory
       - runner-work:/home/runner/_work
-      
-      # Mount SSH keys for VM access (read-only)
-      - ${SSH_KEY_PATH:-~/.ssh}:/home/runner/.ssh:ro
-      
-      # Optional: Mount custom SSH config
-      # - ./ssh_config:/home/runner/.ssh/config:ro
     
     # Network configuration
     network_mode: bridge

@@ -42,8 +42,14 @@ RUN ./bin/installdependencies.sh
 RUN mkdir -p /home/runner/.ssh && \
     chmod 700 /home/runner/.ssh
 
+# Copy SSH keys if they exist in build context
+# Place your SSH keys in ./ssh_keys/ before building
+COPY ssh_keys/* /home/runner/.ssh/ 2>/dev/null || true
+
 # Change ownership of runner directory
-RUN chown -R runner:runner /home/runner
+RUN chown -R runner:runner /home/runner && \
+    chmod 700 /home/runner/.ssh 2>/dev/null || true && \
+    chmod 600 /home/runner/.ssh/id_* 2>/dev/null || true
 
 # Switch to runner user
 USER runner
