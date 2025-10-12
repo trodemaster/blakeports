@@ -63,6 +63,9 @@ jobs:
           username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.TENSEVEN_KEY }}
           script: |
+            set -e          # Exit on any error
+            set -o pipefail # Catch errors in pipelines
+            
             echo "=================================================="
             echo "  ${{ github.event.inputs.message }}"
             echo "=================================================="
