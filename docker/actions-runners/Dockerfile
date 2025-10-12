@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     sudo \
     tzdata \
+    libicu74 \
     && rm -rf /var/lib/apt/lists/*
 
 # Verify OpenSSH version (should be 9.x)
