@@ -4,13 +4,37 @@ on:
   workflow_dispatch:
     inputs:
       vm_ip:
-        description: 'IP address of the TenSeven VM (must be running)'
-        required: true
+        description: 'IP address of the TenSeven VM (optional, uses TENSEVEN_IP var if not provided)'
+        required: false
+        type: string
+      vm_username:
+        description: 'SSH username (optional, uses TENSEVEN_USERNAME var if not provided)'
+        required: false
         type: string
       message:
         description: 'Custom message to display on VM'
         required: false
         default: 'Hello from GitHub Actions Docker Runner!'
+  workflow_call:
+    inputs:
+      vm_ip:
+        description: 'IP address of the TenSeven VM'
+        required: false
+        type: string
+      vm_username:
+        description: 'SSH username for the VM'
+        required: false
+        type: string
+      message:
+        description: 'Custom message to display on VM'
+        required: false
+        type: string
+        default: 'Hello from GitHub Actions Docker Runner!'
+
+env:
+  # Use input if provided, otherwise fall back to repository variable
+  VM_IP: ${{ inputs.vm_ip || vars.TENSEVEN_IP }}
+  VM_USERNAME: ${{ inputs.vm_username || vars.TENSEVEN_USERNAME }}
 
 jobs:
   # SSH into the running VM and say hello
@@ -20,11 +44,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      - name: Verify VM configuration
+        run: |
+          if [ -z "$VM_IP" ]; then
+            echo "Error: VM_IP not set. Provide vm_ip input or set TENSEVEN_IP repository variable."
+            exit 1
+          fi
+          if [ -z "$VM_USERNAME" ]; then
+            echo "Error: VM_USERNAME not set. Provide vm_username input or set TENSEVEN_USERNAME repository variable."
+            exit 1
+          fi
+          echo "Will connect to: $VM_USERNAME@$VM_IP"
+      
       - name: Say Hello to TenSeven VM
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ inputs.vm_ip }}
-          username: ${{ secrets.TENSEVEN_USERNAME }}
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.TENSEVEN_KEY }}
           script: |
             echo "=================================================="
