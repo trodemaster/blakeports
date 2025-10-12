@@ -67,15 +67,30 @@ jobs:
           echo ""
           uname -a
     
-    - name: Transfer repository to Lion VM
-      uses: appleboy/scp-action@v0.1.7
+    - name: Prepare repository on Lion VM
+      uses: appleboy/ssh-action@v1
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
         key: ${{ secrets.LION_KEY }}
-        source: "."
-        target: "~/blakeports-ci"
-        rm: true
+        script: |
+          echo "Preparing blakeports repository..."
+          
+          # Clone or update repository
+          if [ -d ~/blakeports-ci/.git ]; then
+            echo "Repository exists, updating..."
+            cd ~/blakeports-ci
+            git fetch origin
+            git reset --hard origin/main
+            git clean -fdx
+          else
+            echo "Cloning repository..."
+            git clone https://github.com/trodemaster/blakeports.git ~/blakeports-ci
+            cd ~/blakeports-ci
+          fi
+          
+          echo "Current commit: $(git rev-parse --short HEAD)"
+          echo "✅ Repository ready"
     
     - name: Setup MacPorts and BlakePorts Environment
       uses: appleboy/ssh-action@v1
