@@ -24,6 +24,9 @@ RUN apt-get update && apt-get install -y \
 RUN ssh -V
 
 # Pre-install drone-ssh binary to avoid repeated downloads in workflows
+# TODO: appleboy/ssh-action downloads its own copy into _work/_actions/ directory
+#       instead of checking system PATH first. Consider forking the action or
+#       patching its entrypoint.sh to use system-installed binary.
 ARG DRONE_SSH_VERSION=1.8.1
 RUN curl -L -o /usr/local/bin/drone-ssh \
     https://github.com/appleboy/drone-ssh/releases/download/v${DRONE_SSH_VERSION}/drone-ssh-${DRONE_SSH_VERSION}-linux-amd64 && \
