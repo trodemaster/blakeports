@@ -1,0 +1,34 @@
+# SSH Client Configuration for Legacy Systems
+# This configures the SSH client inside the proxy container
+# to support legacy algorithms when connecting to old systems
+
+# Enable legacy algorithms globally
+# These will be used when the proxy connects to older SSH servers
+Host *
+    # Enable legacy host key algorithms
+    HostKeyAlgorithms +ssh-rsa,ssh-dss
+    
+    # Enable legacy public key algorithms
+    PubkeyAcceptedAlgorithms +ssh-rsa
+    
+    # Enable legacy key exchange algorithms if needed
+    # KexAlgorithms +diffie-hellman-group1-sha1,diffie-hellman-group14-sha1
+    
+    # Enable legacy ciphers if needed (uncomment if required)
+    # Ciphers +aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc
+    
+    # Keep connections alive
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+    
+    # Connection settings
+    ConnectTimeout 10
+    StrictHostKeyChecking accept-new
+    UserKnownHostsFile /home/sshproxy/.ssh/known_hosts
+    
+    # Disable problematic features for legacy systems
+    # GSSAPIAuthentication no
+    
+    # Forward agent through the proxy
+    ForwardAgent yes
+

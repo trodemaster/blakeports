@@ -1,0 +1,8 @@
+# Ignore SSH keys directory (sensitive)
+keys/*
+!keys/.gitkeep
+
+# Ignore runtime data
+*.log
+known_hosts
+

@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  ssh-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ssh-proxy-legacy
+    hostname: ssh-proxy
+    restart: unless-stopped
+    
+    ports:
+      # Expose SSH proxy on host port 2222
+      - "2222:2222"
+    
+    volumes:
+      # Mount SSH keys for the proxy user
+      # Add your private keys here for connecting to legacy systems
+      - ./keys:/home/sshproxy/.ssh:ro
+      
+      # Persistent known_hosts
+      - ssh-proxy-data:/home/sshproxy/.ssh/known_hosts
+      
+      # Optional: Custom SSH configs
+      # - ./custom-ssh-config:/etc/ssh/ssh_config.d/custom.conf:ro
+    
+    networks:
+      - ssh-proxy-net
+    
+    environment:
+      - TZ=America/Los_Angeles
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          memory: 128M
+    
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2222"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  ssh-proxy-data:
+    driver: local
+
+networks:
+  ssh-proxy-net:
+    driver: bridge
+
