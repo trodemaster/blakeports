@@ -1,0 +1,22 @@
+# Environment configuration
+.env
+
+# SSH keys and sensitive data
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+
+# Docker volumes
+_work/
+
+# Runner state files
+.runner
+.credentials
+.path
+
+# Logs
+*.log
+
