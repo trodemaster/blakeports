@@ -10,6 +10,19 @@ This directory contains a Docker-based GitHub Actions self-hosted runner with Op
 - **SSH Capabilities**: Can connect to target VMs for remote command execution
 - **Docker Containerized**: Easy deployment and management
 - **Auto-Registration**: Automatically registers with GitHub on startup
+- **Multi-VM Support**: Single runner can connect to multiple legacy macOS VMs (10.6-10.10)
+- **Scalable Architecture**: Easy to add new VMs with SSH keys and configuration
+
+## Use Cases
+
+This Docker runner is designed for:
+
+- **Legacy macOS VMs** (Snow Leopard 10.6 through Yosemite 10.10)
+- Systems that cannot run GitHub Actions natively
+- Remote command execution via SSH on legacy systems
+- Testing and building on older macOS versions
+
+**Note**: For newer macOS versions (El Capitan+), use native GitHub Actions runners or alternative approaches.
 
 ## Prerequisites
 
@@ -25,8 +38,10 @@ This directory contains a Docker-based GitHub Actions self-hosted runner with Op
      - OR `public_repo` (for public repositories only)
    - Copy the token (you'll need it for configuration)
 
-3. **SSH Keys**: Ensure you have SSH keys for accessing target VMs
-   - Keys should be in `~/.ssh/` or specify a custom path
+3. **SSH Keys**: Place SSH keys for target VMs in `ssh_keys/` directory
+   - One key per VM (e.g., `oldmac`, `snowleopard`, `mountainlion`)
+   - Keys are copied into container at build time
+   - See [SCALING.md](./SCALING.md) for multi-VM setup
 
 ## Quick Start
 
@@ -164,9 +179,33 @@ By default, the runner mounts `~/.ssh` as read-only. To use custom SSH keys:
    ```
 3. **Option 3**: Pass keys via GitHub Secrets (recommended for security)
 
-## Running Multiple Runners
+## Scaling to Multiple VMs
 
-To run multiple runners simultaneously:
+**A single Docker runner can connect to multiple legacy macOS VMs simultaneously.**
+
+### Quick Setup for New VM
+
+1. **Add SSH key** to `ssh_keys/` directory
+2. **Rebuild container**: `docker compose build && docker compose up -d`
+3. **Set GitHub variables**: `gh variable set NEWVM_IP --body "IP_ADDRESS"`
+4. **Set GitHub secret**: `cat ssh_keys/newvm | gh secret set NEWVM_KEY`
+5. **Create workflow** from template: `.github/workflows/hello-legacyvm.template.yml`
+
+For detailed multi-VM setup instructions, see [SCALING.md](./SCALING.md).
+
+### Supported Legacy macOS Versions
+
+| Version | Status | SSH Key | Workflow |
+|---------|--------|---------|----------|
+| Lion (10.7) | ✅ Working | `oldmac` | `hello-tenseven.yml` |
+| Snow Leopard (10.6) | ⏳ Planned | `snowleopard` | - |
+| Mountain Lion (10.8) | ⏳ Planned | `mountainlion` | - |
+| Mavericks (10.9) | ⏳ Planned | `mavericks` | - |
+| Yosemite (10.10) | ⏳ Planned | `yosemite` | - |
+
+## Running Multiple Runners (Advanced)
+
+To run multiple runner containers simultaneously:
 
 1. Create separate `.env` files:
    ```bash
@@ -188,6 +227,8 @@ To run multiple runners simultaneously:
    docker-compose --env-file .env.runner1 up -d
    docker-compose --env-file .env.runner2 up -d
    ```
+
+**Note**: For most use cases, a single runner is sufficient for multiple VMs.
 
 ## Troubleshooting
 

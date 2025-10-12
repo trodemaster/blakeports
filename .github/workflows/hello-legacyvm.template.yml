@@ -1,0 +1,118 @@
+# Template Workflow for Legacy macOS VMs
+# Copy this file and customize for each legacy macOS version
+# 
+# Instructions:
+# 1. Copy this file to: .github/workflows/hello-{version}.yml
+#    Example: hello-mountainlion.yml, hello-snowleopard.yml
+#
+# 2. Replace {VERSION} with uppercase version name (e.g., MOUNTAINLION, SNOWLEOPARD)
+# 3. Replace {version} with lowercase version name (e.g., mountainlion, snowleopard)
+# 4. Replace {Version Name} with human-readable name (e.g., Mountain Lion, Snow Leopard)
+# 5. Remove these instruction comments
+
+name: Hello {Version Name} VM
+
+on:
+  workflow_dispatch:
+    inputs:
+      vm_ip:
+        description: 'Override {Version Name} VM IP (optional, uses {VERSION}_IP var if not provided)'
+        required: false
+        type: string
+      vm_username:
+        description: 'SSH username (optional, uses {VERSION}_USERNAME var if not provided)'
+        required: false
+        type: string
+      message:
+        description: 'Custom message to display on VM'
+        required: false
+        default: 'Hello from GitHub Actions Docker Runner!'
+  workflow_call:
+    inputs:
+      vm_ip:
+        description: 'IP address of the {Version Name} VM'
+        required: false
+        type: string
+      vm_username:
+        description: 'SSH username for the VM'
+        required: false
+        type: string
+      message:
+        description: 'Custom message to display on VM'
+        required: false
+        type: string
+        default: 'Hello from GitHub Actions Docker Runner!'
+
+env:
+  # Use input if provided, otherwise fall back to repository variable
+  VM_IP: ${{ inputs.vm_ip || vars.{VERSION}_IP }}
+  VM_USERNAME: ${{ inputs.vm_username || vars.{VERSION}_USERNAME }}
+
+jobs:
+  # SSH into the running VM and say hello
+  hello-vm:
+    runs-on: [self-hosted, docker, ssh-capable]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Verify VM configuration
+        run: |
+          if [ -z "$VM_IP" ]; then
+            echo "Error: VM_IP not set. Provide vm_ip input or set {VERSION}_IP repository variable."
+            exit 1
+          fi
+          if [ -z "$VM_USERNAME" ]; then
+            echo "Error: VM_USERNAME not set. Provide vm_username input or set {VERSION}_USERNAME repository variable."
+            exit 1
+          fi
+          echo "Will connect to: $VM_USERNAME@$VM_IP"
+      
+      - name: Say Hello to {Version Name} VM
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
+          key: ${{ secrets.{VERSION}_KEY }}
+          script: |
+            echo "=================================================="
+            echo "  ${{ github.event.inputs.message }}"
+            echo "=================================================="
+            echo ""
+            echo "System Information:"
+            echo "------------------"
+            uname -a
+            echo ""
+            echo "Hostname:"
+            echo "---------"
+            hostname
+            echo ""
+            echo "macOS Version:"
+            echo "--------------"
+            sw_vers
+            echo ""
+            echo "Uptime:"
+            echo "-------"
+            uptime
+            echo ""
+            echo "Current User:"
+            echo "-------------"
+            whoami
+            echo ""
+            echo "Current Date/Time:"
+            echo "------------------"
+            date
+            echo ""
+            echo "Disk Space:"
+            echo "-----------"
+            df -h / | tail -1
+            echo ""
+            echo "Memory Usage:"
+            echo "-------------"
+            vm_stat | head -5
+            echo ""
+            echo "=================================================="
+            echo "  Hello World from Mac OS X {Version Name}!"
+            echo "  Connected via Docker Runner with OpenSSH 9.x"
+            echo "=================================================="
+
