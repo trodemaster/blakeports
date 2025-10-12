@@ -23,6 +23,13 @@ RUN apt-get update && apt-get install -y \
 # Verify OpenSSH version (should be 9.x)
 RUN ssh -V
 
+# Pre-install drone-ssh binary to avoid repeated downloads in workflows
+ARG DRONE_SSH_VERSION=1.8.1
+RUN curl -L -o /usr/local/bin/drone-ssh \
+    https://github.com/appleboy/drone-ssh/releases/download/v${DRONE_SSH_VERSION}/drone-ssh-${DRONE_SSH_VERSION}-linux-amd64 && \
+    chmod +x /usr/local/bin/drone-ssh && \
+    drone-ssh --version
+
 # Create runner user with sudo access
 RUN useradd -m -s /bin/bash runner && \
     echo "runner ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
