@@ -12,29 +12,29 @@ on:
   workflow_dispatch:
     inputs:
       vm_ip:
-        description: 'Override Lion VM IP (optional, uses LION_IP var if not provided)'
+        description: 'Override TenSeven VM IP (optional, uses TENSEVEN_IP var if not provided)'
         required: false
         type: string
       macos_version:
-        description: 'macOS version to test (lion, snowleopard, mountainlion)'
+        description: 'macOS version to test (tenseven, snowleopard, mountainlion)'
         required: false
         type: choice
-        default: 'lion'
+        default: 'tenseven'
         options:
-          - lion
+          - tenseven
           - snowleopard
           - mountainlion
           - mavericks
           - yosemite
 
 env:
-  # Default to Lion VM for now (only one configured)
-  VM_IP: ${{ inputs.vm_ip || vars.LION_IP }}
-  VM_USERNAME: ${{ vars.LION_USERNAME }}
+  # Default to TenSeven VM for now (only one configured)
+  VM_IP: ${{ inputs.vm_ip || vars.TENSEVEN_IP }}
+  VM_USERNAME: ${{ vars.TENSEVEN_USERNAME }}
 
 jobs:
-  build-bstring-lion:
-    name: Build bstring on Mac OS X 10.7 Lion
+  build-bstring-tenseven:
+    name: Build bstring on Mac OS X 10.7 (TenSeven)
     runs-on: [self-hosted, docker, ssh-capable]
     
     steps:
@@ -44,35 +44,35 @@ jobs:
     - name: Verify VM configuration
       run: |
         if [ -z "$VM_IP" ]; then
-          echo "Error: VM_IP not set. Provide vm_ip input or set LION_IP repository variable."
+          echo "Error: VM_IP not set. Provide vm_ip input or set TENSEVEN_IP repository variable."
           exit 1
         fi
         if [ -z "$VM_USERNAME" ]; then
-          echo "Error: VM_USERNAME not set. Set LION_USERNAME repository variable."
+          echo "Error: VM_USERNAME not set. Set TENSEVEN_USERNAME repository variable."
           exit 1
         fi
         echo "Will connect to: $VM_USERNAME@$VM_IP"
     
-    - name: Show macOS version on Lion VM
+    - name: Show macOS version on TenSeven VM
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.LION_KEY }}
+        key: ${{ secrets.TENSEVEN_KEY }}
         script: |
           echo "=================================================="
-          echo "  Building bstring on Mac OS X Lion"
+          echo "  Building bstring on Mac OS X 10.7 (TenSeven)"
           echo "=================================================="
           sw_vers
           echo ""
           uname -a
     
-    - name: Prepare repository on Lion VM
+    - name: Prepare repository on TenSeven VM
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.LION_KEY }}
+        key: ${{ secrets.TENSEVEN_KEY }}
         script: |
           echo "Preparing blakeports repository..."
           
@@ -97,7 +97,7 @@ jobs:
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.LION_KEY }}
+        key: ${{ secrets.TENSEVEN_KEY }}
         command_timeout: 30m
         script: |
           cd ~/blakeports-ci
@@ -112,7 +112,7 @@ jobs:
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.LION_KEY }}
+        key: ${{ secrets.TENSEVEN_KEY }}
         script: |
           cd ~/blakeports-ci
           source ./setupenv.bash
@@ -127,7 +127,7 @@ jobs:
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.LION_KEY }}
+        key: ${{ secrets.TENSEVEN_KEY }}
         script: |
           cd ~/blakeports-ci
           source ./setupenv.bash
@@ -143,7 +143,7 @@ jobs:
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.LION_KEY }}
+        key: ${{ secrets.TENSEVEN_KEY }}
         command_timeout: 30m
         script: |
           cd ~/blakeports-ci
@@ -158,7 +158,7 @@ jobs:
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.LION_KEY }}
+        key: ${{ secrets.TENSEVEN_KEY }}
         command_timeout: 30m
         script: |
           cd ~/blakeports-ci
@@ -174,7 +174,7 @@ jobs:
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.LION_KEY }}
+        key: ${{ secrets.TENSEVEN_KEY }}
         script: |
           cd ~/blakeports-ci
           source ./setupenv.bash
@@ -189,7 +189,7 @@ jobs:
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.LION_KEY }}
+        key: ${{ secrets.TENSEVEN_KEY }}
         command_timeout: 30m
         script: |
           cd ~/blakeports-ci
@@ -206,7 +206,7 @@ jobs:
       with:
         host: ${{ env.VM_IP }}
         username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.LION_KEY }}
+        key: ${{ secrets.TENSEVEN_KEY }}
         script: |
           echo "Cleaning up CI directory..."
           rm -rf ~/blakeports-ci
