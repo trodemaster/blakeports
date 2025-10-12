@@ -3,35 +3,23 @@ Personal MacPorts repository with custom ports and automated CI/CD workflows.
 
 ## Docker Infrastructure
 
-The `docker/` directory contains containerized tools for development and testing:
+The `docker/` directory is reserved for future containerized tools and GitHub Actions runners.
 
-### SSH Legacy Proxy
+### Connecting to Legacy Systems
 
-A Docker container that bridges modern OpenSSH 10+ clients with legacy SSH servers that only support deprecated algorithms (ssh-rsa, ssh-dss). Essential for connecting to older macOS systems (10.6-10.8) used in testing.
+For connecting to older macOS systems (10.6-10.8) and legacy servers that require deprecated SSH algorithms, use the **openssh9-client** port:
 
-**Quick Start:**
 ```bash
-cd docker/ssh
-./setup.sh           # Interactive setup
-docker compose up -d # Start proxy
+# Install from MacPorts
+sudo port install openssh9-client
+
+# Connect to legacy systems
+ssh9 hostname
 ```
 
-Then add to `~/.ssh/config`:
-```ssh-config
-Host ssh-proxy
-  Hostname localhost
-  Port 2222
-  User sshproxy
-  IdentityFile ~/.ssh/macports
+The `openssh9-client` port provides OpenSSH 9.9 which supports `ssh-rsa` for legacy compatibility while keeping your main system on OpenSSH 10+.
 
-Host tenseven
-  Hostname tenseven.local
-  User blake
-  ProxyJump ssh-proxy
-  IdentityFile ~/.ssh/oldmac
-```
-
-See [docker/ssh/README.md](docker/ssh/README.md) for complete documentation.
+See [net/openssh9-client/Portfile](net/openssh9-client/Portfile) for port details.
 
 ## Scripts
 

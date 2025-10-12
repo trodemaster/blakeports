@@ -6,79 +6,43 @@ This directory contains Docker containers used for development, testing, and inf
 
 ```
 docker/
-├── ssh/                    # SSH proxy for legacy systems
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   ├── sshd_config
-│   ├── ssh_config
-│   └── README.md
-│
 └── actions-runners/        # GitHub Actions runners (future)
     └── .gitkeep
 ```
 
-## Containers
-
-### SSH Legacy Proxy (`ssh/`)
-
-A bridge container running OpenSSH 9.x that enables modern OpenSSH 10+ clients to connect to legacy SSH servers that only support deprecated algorithms (ssh-rsa, ssh-dss).
-
-**Use cases:**
-- Connecting to Mac OS X 10.6-10.8 systems
-- Accessing legacy Linux/Unix servers
-- Testing old macOS VMs in CI/CD
-
-See [ssh/README.md](ssh/README.md) for detailed documentation.
+## Planned Containers
 
 ### GitHub Actions Runners (`actions-runners/`)
 
-Future location for custom GitHub Actions runner containers.
+Future location for custom GitHub Actions runner containers for specialized build environments.
 
-## Common Operations
+## Legacy Systems Access
 
-### Build All Containers
-
-```bash
-# Build SSH proxy
-cd docker/ssh
-docker compose build
-```
-
-### Start Services
+For connecting to legacy SSH servers (Mac OS X 10.6-10.8, older Linux systems) that only support deprecated algorithms like `ssh-rsa`, use the **openssh9-client** MacPorts port instead:
 
 ```bash
-# Start SSH proxy
-cd docker/ssh
-docker compose up -d
+# Install openssh9-client from MacPorts
+sudo port install openssh9-client
+
+# Connect to legacy systems
+ssh9 hostname
 ```
 
-### View Logs
+Configuration is managed in `/opt/local/etc/ssh9/ssh_config`.
 
-```bash
-# SSH proxy logs
-cd docker/ssh
-docker compose logs -f
-```
+## Future Plans
 
-### Stop Services
-
-```bash
-# Stop SSH proxy
-cd docker/ssh
-docker compose down
-```
+Future containers may include:
+- Custom GitHub Actions runners for specific macOS versions
+- Specialized build environments for cross-compilation
+- Testing containers for port validation
 
 ## Security Notes
 
-1. **Sensitive Data**: Never commit SSH private keys or secrets to the repository
+1. **Sensitive Data**: Never commit secrets or credentials to the repository
 2. **Network Isolation**: Containers should be on isolated networks when possible
 3. **Regular Updates**: Keep base images updated for security patches
 4. **Minimal Privileges**: Containers run with minimal required permissions
-
-## Requirements
-
-- Docker Engine 20.10+
-- Docker Compose 2.0+
 
 ## License
 

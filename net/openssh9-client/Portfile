@@ -1,0 +1,160 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+
+PortGroup           compiler_blacklist_versions 1.0
+
+name                openssh9-client
+version             9.9p2
+revision            0
+categories          net
+maintainers         {@artkiver gmail.com:artkiver} openmaintainer
+license             BSD
+
+description         OpenSSH 9.x client tools
+
+long_description    OpenSSH is a FREE version of the SSH protocol suite of \
+                    network connectivity tools that increasing numbers of people on the \
+                    Internet are coming to rely on. This port provides OpenSSH 9.x \
+                    client-only tools (ssh9, sftp9, scp9, etc.) that can coexist with \
+                    other versions of OpenSSH. All binaries are suffixed with '9' and \
+                    use separate configuration in ${prefix}/etc/ssh9/.
+
+homepage            https://www.openbsd.org/openssh/
+
+checksums           rmd160  3a15a3386fb6be9e9269c9f3f3ac39d53904fa3a \
+                    sha256  91aadb603e08cc285eddf965e1199d02585fa94d994d6cae5b41e1721e215673 \
+                    size    1944499
+
+master_sites        openbsd:OpenSSH/portable \
+                    ftp://ftp.cise.ufl.edu/pub/mirrors/openssh/portable/ \
+                    http://openbsd.mirrors.pair.com/OpenSSH/portable
+
+dist_subdir         openssh9
+distname            openssh-${version}
+
+depends_lib         path:lib/libssl.dylib:openssl \
+                    port:libedit \
+                    port:ncurses \
+                    port:zlib
+
+platform darwin 10 {
+    # /usr/bin/ranlib: object: libopenbsd-compat.a(base64.o) malformed object (unknown load command 2)
+    depends_build-append port:cctools
+}
+
+patch.pre_args-replace  -p0 -p1
+patchfiles          macports-config.patch
+
+# We are patching configure.ac
+use_autoreconf          yes
+
+# strnvis(3) isn't actually "broken".  OpenBSD decided to be special and flip
+# the order of arguments to strnvis and considers everyone else to be broken.
+configure.cppflags-append -DBROKEN_STRNVIS=1
+
+configure.ldflags-append  -Wl,-search_paths_first
+configure.args      --with-ssl-dir=${prefix} \
+                    --sysconfdir=${prefix}/etc/ssh9 \
+                    --mandir=${prefix}/share/man \
+                    --with-zlib=${prefix} \
+                    --without-kerberos5 \
+                    --with-libedit \
+                    --with-pie \
+                    --without-xauth \
+                    --without-ldns
+
+use_parallel_build  yes
+
+destroot.target     install-nokeys
+
+test.run            yes
+test.target         tests
+
+post-destroot {
+    # Rename all binaries to add "9" suffix
+    foreach bin {ssh scp ssh-add ssh-agent ssh-keygen ssh-keyscan sftp} {
+        file rename ${destroot}${prefix}/bin/${bin} ${destroot}${prefix}/bin/${bin}9
+    }
+    
+    # Remove ALL man pages (skip man page management for simplicity)
+    delete ${destroot}${prefix}/share/man/man1/ssh.1
+    delete ${destroot}${prefix}/share/man/man1/scp.1
+    delete ${destroot}${prefix}/share/man/man1/ssh-add.1
+    delete ${destroot}${prefix}/share/man/man1/ssh-agent.1
+    delete ${destroot}${prefix}/share/man/man1/ssh-keygen.1
+    delete ${destroot}${prefix}/share/man/man1/ssh-keyscan.1
+    delete ${destroot}${prefix}/share/man/man1/sftp.1
+    delete ${destroot}${prefix}/share/man/man5/ssh_config.5
+    delete ${destroot}${prefix}/share/man/man5/moduli.5
+    delete ${destroot}${prefix}/share/man/man5/sshd_config.5
+    delete ${destroot}${prefix}/share/man/man8/sshd.8
+    delete ${destroot}${prefix}/share/man/man8/sftp-server.8
+    delete ${destroot}${prefix}/share/man/man8/ssh-keysign.8
+    delete ${destroot}${prefix}/share/man/man8/ssh-pkcs11-helper.8
+    delete ${destroot}${prefix}/share/man/man8/ssh-sk-helper.8
+    
+    # Remove server binaries (we only want client tools)
+    delete ${destroot}${prefix}/sbin/sshd
+    delete ${destroot}${prefix}/libexec/sshd-session
+    delete ${destroot}${prefix}/libexec/sftp-server
+    delete ${destroot}${prefix}/libexec/ssh-keysign
+    delete ${destroot}${prefix}/libexec/ssh-pkcs11-helper
+    delete ${destroot}${prefix}/libexec/ssh-sk-helper
+    
+    # Remove server config files
+    delete ${destroot}${prefix}/etc/ssh9/sshd_config
+    delete ${destroot}${prefix}/etc/ssh9/moduli
+    
+    # Rename client config to .example
+    file rename "${destroot}${prefix}/etc/ssh9/ssh_config" \
+                "${destroot}${prefix}/etc/ssh9/ssh_config.example"
+}
+
+post-activate {
+    # Copy client config if it doesn't exist
+    if {![file exists "${prefix}/etc/ssh9/ssh_config"]} {
+        copy "${prefix}/etc/ssh9/ssh_config.example" \
+             "${prefix}/etc/ssh9/ssh_config"
+    }
+}
+
+pre-test {
+    ui_msg "Tests require a cooperating server named 'somehost'."
+    ui_msg "Failure to connect to it results in a hang."
+}
+
+variant xauth description {Build with support for xauth} {
+    configure.args-replace  --without-xauth \
+                            --with-xauth=${prefix}/bin/xauth
+    depends_run-append      port:xauth
+}
+
+variant kerberos5 description "Add Kerberos5 support" {
+    depends_lib-append      port:kerberos5
+    configure.args-delete   --without-kerberos5
+    configure.args-append   --with-kerberos5=${prefix}
+}
+
+variant ldns description "Use ldns for DNSSEC support" {
+    configure.args-replace  --without-ldns \
+                            --with-ldns
+    depends_lib-append      port:ldns
+}
+
+variant fido2 description "Enable fido2 support" {
+    configure.args-delete  --without-security-key-builtin
+    configure.args-append  --with-security-key-builtin
+    depends_lib-append      port:libfido2
+}
+
+variant legacy_dsa description "Enable legacy DSA support (until 2025)" {
+    configure.args-append  --enable-dsa-keys
+    notes-append "DSA support is scheduled to be removed in early 2025."
+    notes-append "DSA-based keys will need to be replaced by then."
+    notes-append "See: https://www.openbsd.org/openssh/releasenotes.html"
+}
+
+livecheck.type      regex
+livecheck.url       https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/
+livecheck.regex     openssh-(\[5-9\]+.\[0-9\]+p\[0-9\]+)[quotemeta ${extract.suffix}]
