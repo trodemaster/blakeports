@@ -16,10 +16,8 @@ services:
     volumes:
       # Mount SSH keys for the proxy user (read-only)
       # Add your private keys here for connecting to legacy systems
+      # known_hosts is handled by UserKnownHostsFile /dev/null in ssh_config
       - ./keys:/home/sshproxy/.ssh:ro
-      
-      # Map known_hosts to /dev/null (we don't track host keys)
-      - /dev/null:/home/sshproxy/.ssh/known_hosts:ro
       
       # Optional: Custom SSH configs
       # - ./custom-ssh-config:/etc/ssh/ssh_config.d/custom.conf:ro
