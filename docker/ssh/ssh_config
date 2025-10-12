@@ -23,8 +23,8 @@ Host *
     
     # Connection settings
     ConnectTimeout 10
-    StrictHostKeyChecking accept-new
-    UserKnownHostsFile /home/sshproxy/.ssh/known_hosts
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
     
     # Disable problematic features for legacy systems
     # GSSAPIAuthentication no
