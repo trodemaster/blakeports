@@ -1,6 +1,38 @@
 # blakeports
 Personal MacPorts repository with custom ports and automated CI/CD workflows.
 
+## Docker Infrastructure
+
+The `docker/` directory contains containerized tools for development and testing:
+
+### SSH Legacy Proxy
+
+A Docker container that bridges modern OpenSSH 10+ clients with legacy SSH servers that only support deprecated algorithms (ssh-rsa, ssh-dss). Essential for connecting to older macOS systems (10.6-10.8) used in testing.
+
+**Quick Start:**
+```bash
+cd docker/ssh
+./setup.sh           # Interactive setup
+docker compose up -d # Start proxy
+```
+
+Then add to `~/.ssh/config`:
+```ssh-config
+Host ssh-proxy
+  Hostname localhost
+  Port 2222
+  User sshproxy
+  IdentityFile ~/.ssh/ssh-proxy
+
+Host tenseven
+  Hostname tenseven.local
+  User blake
+  ProxyJump ssh-proxy
+  IdentityFile ~/.ssh/oldmac
+```
+
+See [docker/ssh/README.md](docker/ssh/README.md) for complete documentation.
+
 ## Scripts
 
 - `scripts/installmacports` - Installs MacPorts and configures BlakePorts as the default source
