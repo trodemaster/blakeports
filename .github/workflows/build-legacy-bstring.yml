@@ -79,6 +79,8 @@ jobs:
         scp -i /home/runner/.ssh/oldmac \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
+            -o HostKeyAlgorithms=+ssh-rsa \
+            -o PubkeyAcceptedKeyTypes=+ssh-rsa \
             /tmp/blakeports.tar.gz \
             ${{ env.VM_USERNAME }}@${{ env.VM_IP }}:/tmp/
         echo "✅ Tarball transferred"
