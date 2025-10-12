@@ -3,114 +3,27 @@ name: Hello TenSeven VM
 on:
   workflow_dispatch:
     inputs:
+      vm_ip:
+        description: 'IP address of the TenSeven VM (must be running)'
+        required: true
+        type: string
       message:
         description: 'Custom message to display on VM'
         required: false
-        default: 'Hello from GitHub Actions!'
+        default: 'Hello from GitHub Actions Docker Runner!'
 
 jobs:
-  # Job 1: Start the 10.7 VM
-  start-vm:
-    runs-on: [self-hosted, ubuntu, noble]
-    outputs:
-      vm_ip: ${{ steps.set-vm-ip.outputs.vm_ip }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Start TenSeven VM on Hypervisor
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.HYPERVISOR_HOST }}
-          username: ${{ secrets.HYPERVISOR_USERNAME }}
-          key: ${{ secrets.HYPERVISOR_KEY }}
-          script: |
-            export VMW_SOURCE_VM_PATH="/Volumes/JonesFarm/actions-runners/Mac OS X 10.7.vmwarevm/Mac OS X 10.7.vmx"
-            export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner/tenseven-runner.vmx"
-            export VMW_VM_NAME="tenseven-runner"
-            VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
-            
-            echo "Source VM Path: $VMW_SOURCE_VM_PATH"
-            echo "VM Path: $VMW_VM_PATH"
-            echo "VM Name: $VMW_VM_NAME"
-            
-            # Check if VM is already running
-            echo "Checking if VM is already running..."
-            if "$VMRUN" -T fusion list | grep -q "$VMW_VM_PATH"; then
-                echo "✅ VM is already running: $VMW_VM_PATH"
-                echo "✅ Exiting gracefully - no action needed"
-                exit 0
-            fi
-            
-            # Create destination directory if it doesn't exist
-            DEST_DIR="$(dirname "$VMW_VM_PATH")"
-            echo "Checking destination directory: $DEST_DIR"
-            if [ ! -d "$DEST_DIR" ]; then
-                echo "Directory doesn't exist, creating it..."
-                mkdir -p "$DEST_DIR"
-            else
-                echo "Directory already exists"
-            fi
-            
-            # Create linked clone from source VM
-            echo "Creating linked clone..."
-            "$VMRUN" -T fusion clone "$VMW_SOURCE_VM_PATH" "$VMW_VM_PATH" linked -cloneName="$VMW_VM_NAME"
-            
-            # Start the cloned VM in headless mode
-            echo "Starting cloned VM in headless mode..."
-            "$VMRUN" -T fusion start "$VMW_VM_PATH" nogui
-            
-            # Verify VM is running
-            echo "Running VMs after start:"
-            "$VMRUN" -T fusion list
-      
-      - name: Get VM IP Address
-        id: get-vm-ip
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.HYPERVISOR_HOST }}
-          username: ${{ secrets.HYPERVISOR_USERNAME }}
-          key: ${{ secrets.HYPERVISOR_KEY }}
-          capture_stdout: 'true'
-          script: |
-            export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner/tenseven-runner.vmx"
-            VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
-            
-            # Get VM IP address (vmrun -wait handles the waiting automatically)
-            VM_IP="$("$VMRUN" -T fusion getGuestIPAddress "$VMW_VM_PATH" -wait)"
-            
-            if [ -z "$VM_IP" ]; then
-                exit 1
-            fi
-            
-            # Output only the IP address - no extra text
-            echo "$VM_IP"
-      
-      - name: Set VM IP Output
-        id: set-vm-ip
-        run: |
-          # Extract just the IP address (last line of output)
-          VM_IP=$(echo "${{ steps.get-vm-ip.outputs.stdout }}" | tail -1 | tr -d '\r\n')
-          echo "vm_ip=$VM_IP" >> $GITHUB_OUTPUT
-          echo "✅ VM IP Address captured: $VM_IP"
-  
-  # Job 2: SSH into the VM and run hello world commands
+  # SSH into the running VM and say hello
   hello-vm:
-    needs: start-vm
     runs-on: [self-hosted, docker, ssh-capable]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Wait for VM to be fully ready
-        run: |
-          echo "Waiting 30 seconds for VM to be fully operational..."
-          sleep 30
-      
       - name: Say Hello to TenSeven VM
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ needs.start-vm.outputs.vm_ip }}
+          host: ${{ inputs.vm_ip }}
           username: ${{ secrets.TENSEVEN_USERNAME }}
           key: ${{ secrets.TENSEVEN_KEY }}
           script: |
@@ -152,63 +65,6 @@ jobs:
             echo ""
             echo "=================================================="
             echo "  Hello World from Mac OS X 10.7 Lion!"
+            echo "  Connected via Docker Runner with OpenSSH 9.x"
             echo "=================================================="
-  
-  # Job 3: Cleanup - Stop and delete the VM
-  cleanup-vm:
-    needs: [start-vm, hello-vm]
-    runs-on: [self-hosted, ubuntu, noble]
-    if: always()
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Cleanup TenSeven VM
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.HYPERVISOR_HOST }}
-          username: ${{ secrets.HYPERVISOR_USERNAME }}
-          key: ${{ secrets.HYPERVISOR_KEY }}
-          script: |
-            export VMW_VM_PATH="/Volumes/JonesFarm/actions-runners/tenseven-runner/tenseven-runner.vmx"
-            VMRUN="/Applications/VMware Fusion.app/Contents/Public/vmrun"
-            
-            echo "Checking if VM is running..."
-            if "$VMRUN" -T fusion list | grep -q "$VMW_VM_PATH"; then
-                echo "✅ VM is running, stopping it..."
-                "$VMRUN" -T fusion stop "$VMW_VM_PATH" hard
-                echo "✅ VM stopped successfully"
-            else
-                echo "ℹ️ VM is not running, skipping stop"
-            fi
-            
-            # Wait for VM to fully stop
-            echo "Waiting for VM to fully stop..."
-            WAIT_TIME=0
-            MAX_WAIT=60
-            SLEEP_INTERVAL=5
-            
-            while [ $WAIT_TIME -lt $MAX_WAIT ]; do
-                if ! "$VMRUN" -T fusion list | grep -q "$VMW_VM_PATH"; then
-                    echo "✅ VM has stopped successfully after ${WAIT_TIME}s"
-                    break
-                else
-                    echo "⏳ VM still running, waiting... (${WAIT_TIME}s/${MAX_WAIT}s)"
-                    sleep $SLEEP_INTERVAL
-                    WAIT_TIME=$((WAIT_TIME + SLEEP_INTERVAL))
-                fi
-            done
-            
-            # Remove VM directory
-            VM_DIR="/Volumes/JonesFarm/actions-runners/tenseven-runner"
-            echo "Removing VM directory: $VM_DIR"
-            if [ -d "$VM_DIR" ]; then
-                echo "✅ Directory exists, removing it..."
-                rm -rf "$VM_DIR"
-                echo "✅ VM directory and contents removed successfully"
-            else
-                echo "ℹ️ Directory does not exist, nothing to remove"
-            fi
-            
-            echo "✅ Cleanup completed successfully"
 
