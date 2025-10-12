@@ -14,12 +14,12 @@ services:
       - "2222:2222"
     
     volumes:
-      # Mount SSH keys for the proxy user
+      # Mount SSH keys for the proxy user (read-only)
       # Add your private keys here for connecting to legacy systems
       - ./keys:/home/sshproxy/.ssh:ro
       
-      # Persistent known_hosts
-      - ssh-proxy-data:/home/sshproxy/.ssh/known_hosts
+      # Map known_hosts to /dev/null (we don't track host keys)
+      - /dev/null:/home/sshproxy/.ssh/known_hosts:ro
       
       # Optional: Custom SSH configs
       # - ./custom-ssh-config:/etc/ssh/ssh_config.d/custom.conf:ro
@@ -49,10 +49,6 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
-
-volumes:
-  ssh-proxy-data:
-    driver: local
 
 networks:
   ssh-proxy-net:
