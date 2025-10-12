@@ -32,8 +32,8 @@ COPY sshd_config /etc/ssh/sshd_config
 # Copy SSH client configuration (for outbound connections to legacy systems)
 COPY ssh_config /etc/ssh/ssh_config.d/legacy.conf
 
-# Create a proxy user (optional - for authenticated access to the proxy)
-RUN useradd -m -s /bin/bash -G ssh sshproxy && \
+# Create a proxy user (for authenticated access to the proxy)
+RUN useradd -m -s /bin/bash sshproxy && \
     mkdir -p /home/sshproxy/.ssh && \
     chmod 700 /home/sshproxy/.ssh && \
     chown -R sshproxy:sshproxy /home/sshproxy/.ssh
