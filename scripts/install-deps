@@ -58,10 +58,20 @@ fi
 export MANPATH="${MANPATH:-}"
 
 # Source MacPorts environment from our local copy
-# Get the script directory and source setupenv.bash relative to repo root
+# Try dynamic path detection first (for legacy VMs and flexible setups)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-source "$REPO_ROOT/setupenv.bash"
+
+if [ -f "$REPO_ROOT/setupenv.bash" ]; then
+    # Use dynamic path (works in any location)
+    source "$REPO_ROOT/setupenv.bash"
+elif [ -f "/opt/actions-runner/_work/blakeports/blakeports/setupenv.bash" ]; then
+    # Fall back to hardcoded path (for existing GitHub Actions runners)
+    source /opt/actions-runner/_work/blakeports/blakeports/setupenv.bash
+else
+    echo "Error: Cannot find setupenv.bash"
+    exit 1
+fi
 
 echo "Getting dependencies for $PORTNAME..."
 
