@@ -98,14 +98,24 @@ jobs:
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
           
-          echo "Extracting repository..."
+          echo "Setting up blakeports directory..."
           
-          # Remove old directory if exists
-          rm -rf ~/blakeports-ci
+          # Create parent directory structure if needed
+          mkdir -p /Users/blake/code
           
-          # Create directory and extract
-          mkdir -p ~/blakeports-ci
-          cd ~/blakeports-ci
+          # Remove old blakeports directory contents (but keep the directory)
+          if [ -d /Users/blake/code/blakeports ]; then
+            echo "Cleaning existing /Users/blake/code/blakeports..."
+            rm -rf /Users/blake/code/blakeports/*
+            rm -rf /Users/blake/code/blakeports/.[!.]*
+          else
+            echo "Creating /Users/blake/code/blakeports..."
+            mkdir -p /Users/blake/code/blakeports
+          fi
+          
+          # Extract fresh tarball
+          cd /Users/blake/code/blakeports
+          echo "Extracting tarball to $(pwd)..."
           tar xzf /tmp/blakeports.tar.gz --strip-components=1
           
           # Cleanup tarball
@@ -139,7 +149,7 @@ jobs:
           port version
           
           # Setup BlakePorts environment
-          cd ~/blakeports-ci
+          cd /Users/blake/code/blakeports
           source ./setupenv.bash
           
           # Update port index for BlakePorts
@@ -159,7 +169,7 @@ jobs:
           set -o pipefail # Catch errors in pipelines
           set -x          # Show commands being executed
           
-          cd ~/blakeports-ci
+          cd /Users/blake/code/blakeports
           source ./setupenv.bash
           
           echo "Linting textproc/bstring portfile..."
@@ -177,7 +187,7 @@ jobs:
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
           
-          cd ~/blakeports-ci
+          cd /Users/blake/code/blakeports
           source ./setupenv.bash
           
           echo "Cleaning existing bstring installation..."
@@ -198,7 +208,7 @@ jobs:
           set -o pipefail # Catch errors in pipelines
           set -x          # Show commands being executed
           
-          cd ~/blakeports-ci
+          cd /Users/blake/code/blakeports
           
           echo "Installing bstring dependencies..."
           ./scripts/install-deps bstring
@@ -217,7 +227,7 @@ jobs:
           set -o pipefail # Catch errors in pipelines
           set -x          # Show commands being executed
           
-          cd ~/blakeports-ci
+          cd /Users/blake/code/blakeports
           source ./setupenv.bash
           
           echo "Building bstring port..."
@@ -235,7 +245,7 @@ jobs:
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
           
-          cd ~/blakeports-ci
+          cd /Users/blake/code/blakeports
           source ./setupenv.bash
           
           echo "Verifying bstring installation..."
@@ -254,7 +264,7 @@ jobs:
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
           
-          cd ~/blakeports-ci
+          cd /Users/blake/code/blakeports
           source ./setupenv.bash
           
           echo "Testing bstring with tests variant..."
@@ -270,10 +280,11 @@ jobs:
         username: ${{ env.VM_USERNAME }}
         key: ${{ secrets.TENSEVEN_KEY }}
         script: |
-          set -e          # Exit on any error
-          set -o pipefail # Catch errors in pipelines
+          echo "Cleaning up temporary files..."
           
-          echo "Cleaning up CI directory..."
-          rm -rf ~/blakeports-ci
-          echo "✅ Cleanup complete"
+          # Remove any leftover tarballs
+          rm -f /tmp/blakeports.tar.gz
+          
+          # Note: /Users/blake/code/blakeports is kept for next run
+          echo "✅ Cleanup complete (blakeports directory preserved for next run)"
 
