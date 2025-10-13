@@ -58,7 +58,10 @@ fi
 export MANPATH="${MANPATH:-}"
 
 # Source MacPorts environment from our local copy
-source /opt/actions-runner/_work/blakeports/blakeports/setupenv.bash
+# Get the script directory and source setupenv.bash relative to repo root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$REPO_ROOT/setupenv.bash"
 
 echo "Getting dependencies for $PORTNAME..."
 
