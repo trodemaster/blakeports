@@ -72,7 +72,7 @@ Builds run concurrently across available hardware.
 
 ### Prerequisites
 - GitHub CLI installed and authenticated: `gh auth login`
-- Docker and docker-compose installed
+- Docker and docker compose installed
 
 ### 1. One-Command Setup
 ```bash
@@ -91,7 +91,7 @@ That's it! The script will:
 ./setup-multi-runners.sh
 
 # Then start runners
-docker-compose -f docker-compose-multi.yml up -d
+docker compose -f docker-compose-multi.yml up -d
 ```
 
 ### 2. Verify in GitHub
@@ -179,26 +179,26 @@ jobs:
 
 ### Start All Runners
 ```bash
-docker-compose -f docker-compose-multi.yml up -d
+docker compose -f docker-compose-multi.yml up -d
 ```
 
 ### Stop All Runners
 ```bash
-docker-compose -f docker-compose-multi.yml down
+docker compose -f docker-compose-multi.yml down
 ```
 
 ### View Logs
 ```bash
 # All runners
-docker-compose -f docker-compose-multi.yml logs -f
+docker compose -f docker-compose-multi.yml logs -f
 
 # Specific runner
-docker-compose -f docker-compose-multi.yml logs -f tenfive-runner
+docker compose -f docker-compose-multi.yml logs -f tenfive-runner
 ```
 
 ### Check Status
 ```bash
-docker-compose -f docker-compose-multi.yml ps
+docker compose -f docker-compose-multi.yml ps
 ```
 
 ### Monitor Resources
@@ -247,13 +247,13 @@ runs-on: [self-hosted, snowleopard]
 ### Runners Not Appearing in GitHub
 ```bash
 # Check logs for registration errors
-docker-compose -f docker-compose-multi.yml logs tenfive-runner | grep -i error
+docker compose -f docker-compose-multi.yml logs tenfive-runner | grep -i error
 ```
 
 ### Runner Offline After Restart
 ```bash
 # Restart specific runner
-docker-compose -f docker-compose-multi.yml restart tenfive-runner
+docker compose -f docker-compose-multi.yml restart tenfive-runner
 ```
 
 ### SSH Connection Fails

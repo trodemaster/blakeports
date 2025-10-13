@@ -38,7 +38,7 @@ docker/actions-runners/
    gh auth login
    ```
 
-2. **Docker** - Ensure Docker and docker-compose are installed and running
+2. **Docker** - Ensure Docker and docker compose are installed and running
 
 ### 1. One-Command Setup
 
@@ -71,7 +71,7 @@ If you prefer step-by-step:
 ./setup-multi-runners.sh
 
 # Build and start runners
-docker-compose -f docker-compose-multi.yml up -d
+docker compose -f docker-compose-multi.yml up -d
 ```
 
 ### 3. Important Notes
@@ -90,17 +90,17 @@ docker-compose -f docker-compose-multi.yml up -d
 
 ```bash
 # Start both runners
-docker-compose -f docker-compose-multi.yml up -d
+docker compose -f docker-compose-multi.yml up -d
 
 # Check status
-docker-compose -f docker-compose-multi.yml ps
+docker compose -f docker-compose-multi.yml ps
 
 # View logs for both
-docker-compose -f docker-compose-multi.yml logs -f
+docker compose -f docker-compose-multi.yml logs -f
 
 # View logs for specific runner
-docker-compose -f docker-compose-multi.yml logs -f tenfive-runner
-docker-compose -f docker-compose-multi.yml logs -f tenseven-runner
+docker compose -f docker-compose-multi.yml logs -f tenfive-runner
+docker compose -f docker-compose-multi.yml logs -f tenseven-runner
 ```
 
 ### 3. Verify Runners in GitHub
@@ -138,40 +138,40 @@ Both jobs start **immediately** when triggered, running in parallel on separate 
 
 ### Start All Runners
 ```bash
-docker-compose -f docker-compose-multi.yml up -d
+docker compose -f docker-compose-multi.yml up -d
 ```
 
 ### Stop All Runners
 ```bash
-docker-compose -f docker-compose-multi.yml down
+docker compose -f docker-compose-multi.yml down
 ```
 
 ### Restart Specific Runner
 ```bash
-docker-compose -f docker-compose-multi.yml restart tenfive-runner
-docker-compose -f docker-compose-multi.yml restart tenseven-runner
+docker compose -f docker-compose-multi.yml restart tenfive-runner
+docker compose -f docker-compose-multi.yml restart tenseven-runner
 ```
 
 ### View Logs
 ```bash
 # All runners
-docker-compose -f docker-compose-multi.yml logs -f
+docker compose -f docker-compose-multi.yml logs -f
 
 # Specific runner
-docker-compose -f docker-compose-multi.yml logs -f tenfive-runner
+docker compose -f docker-compose-multi.yml logs -f tenfive-runner
 ```
 
 ### Stop Specific Runner
 ```bash
-docker-compose -f docker-compose-multi.yml stop tenfive-runner
-docker-compose -f docker-compose-multi.yml start tenfive-runner
+docker compose -f docker-compose-multi.yml stop tenfive-runner
+docker compose -f docker-compose-multi.yml start tenfive-runner
 ```
 
 ### Rebuild After Updates
 ```bash
-docker-compose -f docker-compose-multi.yml down
-docker-compose -f docker-compose-multi.yml build --no-cache
-docker-compose -f docker-compose-multi.yml up -d
+docker compose -f docker-compose-multi.yml down
+docker compose -f docker-compose-multi.yml build --no-cache
+docker compose -f docker-compose-multi.yml up -d
 ```
 
 ## Adding More Runners
@@ -237,7 +237,7 @@ volumes:
 ### 3. Start the new runner
 
 ```bash
-docker-compose -f docker-compose-multi.yml up -d snowleopard-runner
+docker compose -f docker-compose-multi.yml up -d snowleopard-runner
 ```
 
 **That's it!** The single `.env` file makes adding runners much simpler - just add two variables and copy the service definition.
@@ -309,11 +309,11 @@ tar czf runner-configs-backup.tar.gz .env.*
 ### Remove and Recreate Runners
 ```bash
 # Stop and remove all runners
-docker-compose -f docker-compose-multi.yml down -v
+docker compose -f docker-compose-multi.yml down -v
 
 # Rebuild and start fresh
-docker-compose -f docker-compose-multi.yml build --no-cache
-docker-compose -f docker-compose-multi.yml up -d
+docker compose -f docker-compose-multi.yml build --no-cache
+docker compose -f docker-compose-multi.yml up -d
 ```
 
 ## Security Notes
@@ -328,13 +328,13 @@ docker-compose -f docker-compose-multi.yml up -d
 ### Runner Not Registering
 Check token and repo name:
 ```bash
-docker-compose -f docker-compose-multi.yml logs tenfive-runner | grep -i error
+docker compose -f docker-compose-multi.yml logs tenfive-runner | grep -i error
 ```
 
 ### Runner Offline
 Restart specific runner:
 ```bash
-docker-compose -f docker-compose-multi.yml restart tenfive-runner
+docker compose -f docker-compose-multi.yml restart tenfive-runner
 ```
 
 ### Out of Disk Space
