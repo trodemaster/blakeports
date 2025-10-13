@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # TenFive Runner - Mac OS X 10.5
+  tenfive-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNNER_VERSION: ${RUNNER_VERSION:-2.321.0}
+    container_name: github-runner-tenfive
+    hostname: github-runner-tenfive
+    restart: unless-stopped
+    
+    # Load environment from .env.tenfive
+    env_file:
+      - .env.tenfive
+    
+    # Volume mounts
+    volumes:
+      - tenfive-work:/home/runner/_work
+    
+    # Network configuration
+    network_mode: bridge
+    
+    # Labels for identification
+    labels:
+      - "com.blakeports.runner=tenfive"
+      - "com.blakeports.macos-version=10.5"
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # TenSeven Runner - Mac OS X 10.7
+  tenseven-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNNER_VERSION: ${RUNNER_VERSION:-2.321.0}
+    container_name: github-runner-tenseven
+    hostname: github-runner-tenseven
+    restart: unless-stopped
+    
+    # Load environment from .env.tenseven
+    env_file:
+      - .env.tenseven
+    
+    # Volume mounts
+    volumes:
+      - tenseven-work:/home/runner/_work
+    
+    # Network configuration
+    network_mode: bridge
+    
+    # Labels for identification
+    labels:
+      - "com.blakeports.runner=tenseven"
+      - "com.blakeports.macos-version=10.7"
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+volumes:
+  tenfive-work:
+    driver: local
+  tenseven-work:
+    driver: local
+
+
