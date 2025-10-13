@@ -173,29 +173,36 @@ jobs:
           
           echo "✅ MacPorts verified and BlakePorts index updated"
     
-    - name: Lint portfile
-      uses: appleboy/ssh-action@v1
-      with:
-        host: ${{ env.VM_IP }}
-        username: ${{ env.VM_USERNAME }}
-        key: ${{ secrets.TENSEVEN_KEY }}
-        script: |
-          set -e          # Exit on any error
-          set -o pipefail # Catch errors in pipelines
-          set -x          # Show commands being executed
-          
-          # Source profile to load MacPorts and other tools into PATH
-          if [ -f ~/.profile ]; then
-            source ~/.profile
-          fi
-          
-          cd /Users/blake/code/blakeports
-          source ./setupenv.bash
-          
-          echo "Linting textproc/bstring portfile..."
-          port lint --nitpick textproc/bstring
-          
-          echo "✅ Lint passed"
+          - name: Lint portfile
+            uses: appleboy/ssh-action@v1
+            with:
+              host: ${{ env.VM_IP }}
+              username: ${{ env.VM_USERNAME }}
+              key: ${{ secrets.TENSEVEN_KEY }}
+              script: |
+                set -e          # Exit on any error
+                set -o pipefail # Catch errors in pipelines
+                set -x          # Show commands being executed
+                
+                # Source profile to load MacPorts and other tools into PATH
+                if [ -f ~/.profile ]; then
+                  source ~/.profile
+                fi
+                
+                cd /Users/blake/code/blakeports
+                source ./setupenv.bash
+                
+                echo "Linting textproc/bstring portfile..."
+                LINT_OUTPUT=$(port lint --nitpick textproc/bstring 2>&1)
+                echo "$LINT_OUTPUT"
+                
+                # Check if lint found any errors
+                if echo "$LINT_OUTPUT" | grep -q "Error:"; then
+                  echo "❌ Lint failed with errors"
+                  exit 1
+                fi
+                
+                echo "✅ Lint passed"
     
     - name: Clean existing bstring installation
       uses: appleboy/ssh-action@v1
