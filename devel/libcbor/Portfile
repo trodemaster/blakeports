@@ -22,7 +22,7 @@ checksums           rmd160  ad9bb702516b6d055650a1e3f90335f33005e97b \
 configure.args-append    -DBUILD_SHARED_LIBS=ON
 
 variant tests description {enable tests} {
-    depends_test-append         port:cmocka
+    depends_build-append        port:cmocka
     configure.args-append       -DWITH_TESTS=ON
     configure.pre_args-replace  -DCMAKE_BUILD_WITH_INSTALL_RPATH:BOOL=ON \
                                 -DCMAKE_BUILD_WITH_INSTALL_RPATH:BOOL=OFF
