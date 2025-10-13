@@ -63,6 +63,11 @@ jobs:
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
           
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
           echo "=================================================="
           echo "  Building bstring on Mac OS X 10.7 (TenSeven)"
           echo "=================================================="
@@ -97,6 +102,11 @@ jobs:
         script: |
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
           
           echo "Setting up blakeports directory..."
           
@@ -136,6 +146,11 @@ jobs:
           set -o pipefail # Catch errors in pipelines
           set -x          # Show commands being executed
           
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
           echo "Verifying MacPorts installation..."
           
           # Check if port command exists
@@ -169,6 +184,11 @@ jobs:
           set -o pipefail # Catch errors in pipelines
           set -x          # Show commands being executed
           
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
           cd /Users/blake/code/blakeports
           source ./setupenv.bash
           
@@ -186,6 +206,11 @@ jobs:
         script: |
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
           
           cd /Users/blake/code/blakeports
           source ./setupenv.bash
@@ -208,6 +233,11 @@ jobs:
           set -o pipefail # Catch errors in pipelines
           set -x          # Show commands being executed
           
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
           cd /Users/blake/code/blakeports
           
           echo "Installing bstring dependencies..."
@@ -227,6 +257,11 @@ jobs:
           set -o pipefail # Catch errors in pipelines
           set -x          # Show commands being executed
           
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
           cd /Users/blake/code/blakeports
           source ./setupenv.bash
           
@@ -244,6 +279,11 @@ jobs:
         script: |
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
           
           cd /Users/blake/code/blakeports
           source ./setupenv.bash
@@ -264,6 +304,11 @@ jobs:
           set -e          # Exit on any error
           set -o pipefail # Catch errors in pipelines
           
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
           cd /Users/blake/code/blakeports
           source ./setupenv.bash
           
@@ -280,6 +325,11 @@ jobs:
         username: ${{ env.VM_USERNAME }}
         key: ${{ secrets.TENSEVEN_KEY }}
         script: |
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
           echo "Cleaning up temporary files..."
           
           # Remove any leftover tarballs
