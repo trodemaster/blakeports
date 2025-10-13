@@ -30,9 +30,9 @@ fi
 echo "✅ Dependencies OK"
 echo ""
 
-# Check for .env files
-if [ ! -f .env.tenfive ] || [ ! -f .env.tenseven ]; then
-    echo "⚠️  Environment files not found."
+# Check for .env file
+if [ ! -f .env ]; then
+    echo "⚠️  Environment file not found."
     echo ""
     echo "Running setup to generate registration tokens..."
     echo ""
@@ -46,7 +46,7 @@ if [ ! -f .env.tenfive ] || [ ! -f .env.tenseven ]; then
     echo ""
 fi
 
-echo "✅ Environment files ready"
+echo "✅ Environment file ready"
 echo ""
 
 # Build and start runners

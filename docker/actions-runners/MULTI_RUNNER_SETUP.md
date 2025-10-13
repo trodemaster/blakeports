@@ -20,8 +20,7 @@ Each runner has custom labels to target specific VMs, ensuring builds run in par
 docker/actions-runners/
 ├── Dockerfile                  # Shared by all runners
 ├── docker-compose-multi.yml    # Multi-runner configuration
-├── .env.tenfive               # TenFive runner config
-├── .env.tenseven              # TenSeven runner config
+├── .env                        # Single config file for all runners
 ├── example.env                 # Template
 └── MULTI_RUNNER_SETUP.md      # This file
 ```
@@ -53,9 +52,15 @@ cd /Users/blake/code/blakeports/docker/actions-runners
 The script will:
 - ✅ Check for gh CLI and Docker
 - ✅ Generate runner registration tokens using GitHub API
-- ✅ Create .env.tenfive and .env.tenseven automatically
+- ✅ Create single `.env` file with all runner configurations
 - ✅ Build Docker images
 - ✅ Start all runners
+
+**Why a single .env file?**
+- Easier to manage - all configurations in one place
+- Add new runners by adding variables, not creating new files
+- Shared settings (repo, token) defined once
+- Simple to version control structure (not the values)
 
 ### 2. Manual Setup (Alternative)
 
@@ -173,38 +178,69 @@ docker-compose -f docker-compose-multi.yml up -d
 
 To add a new VM (e.g., SnowLeopard):
 
-1. **Create env file**:
-   ```bash
-   cat > .env.snowleopard << 'EOF'
-   GITHUB_OWNER=trodemaster
-   GITHUB_REPO=blakeports
-   GITHUB_TOKEN=ghp_YOUR_TOKEN_HERE
-   RUNNER_NAME=docker-runner-snowleopard
-   RUNNER_WORKDIR=_work
-   CUSTOM_LABELS=snowleopard,macos-10-6
-   EOF
-   ```
+### 1. Add to .env file
 
-2. **Add to docker-compose-multi.yml**:
-   ```yaml
-   snowleopard-runner:
-     build:
-       context: .
-       dockerfile: Dockerfile
-     container_name: github-runner-snowleopard
-     env_file: .env.snowleopard
-     volumes:
-       - snowleopard-work:/home/runner/_work
-     restart: unless-stopped
-   
-   volumes:
-     snowleopard-work:
-   ```
+Edit `.env` and add the new runner variables:
 
-3. **Start the new runner**:
-   ```bash
-   docker-compose -f docker-compose-multi.yml up -d snowleopard-runner
-   ```
+```bash
+# SnowLeopard Runner (Mac OS X 10.6)
+SNOWLEOPARD_RUNNER_NAME=docker-runner-snowleopard
+SNOWLEOPARD_LABELS=snowleopard,macos-10-6,legacy-macos
+```
+
+### 2. Add to docker-compose-multi.yml
+
+```yaml
+  # SnowLeopard Runner - Mac OS X 10.6
+  snowleopard-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNNER_VERSION: ${RUNNER_VERSION:-2.321.0}
+    container_name: github-runner-snowleopard
+    hostname: github-runner-snowleopard
+    restart: unless-stopped
+    
+    # Environment variables from single .env file
+    environment:
+      - GITHUB_OWNER=${GITHUB_OWNER}
+      - GITHUB_REPO=${GITHUB_REPO}
+      - RUNNER_TOKEN=${GITHUB_TOKEN}
+      - RUNNER_NAME=${SNOWLEOPARD_RUNNER_NAME}
+      - RUNNER_WORKDIR=${RUNNER_WORKDIR}
+      - CUSTOM_LABELS=${SNOWLEOPARD_LABELS}
+    
+    volumes:
+      - snowleopard-work:/home/runner/_work
+    
+    network_mode: bridge
+    
+    labels:
+      - "com.blakeports.runner=snowleopard"
+      - "com.blakeports.macos-version=10.6"
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+volumes:
+  snowleopard-work:
+    driver: local
+```
+
+### 3. Start the new runner
+
+```bash
+docker-compose -f docker-compose-multi.yml up -d snowleopard-runner
+```
+
+**That's it!** The single `.env` file makes adding runners much simpler - just add two variables and copy the service definition.
 
 ## Resource Considerations
 

@@ -60,36 +60,40 @@ fi
 echo "✅ Registration token generated successfully"
 echo ""
 
-# Create .env.tenfive
-echo "Creating .env.tenfive..."
-cat > .env.tenfive << EOF
-# GitHub Actions Runner Configuration - TenFive (Mac OS X 10.5)
-GITHUB_OWNER=trodemaster
-GITHUB_REPO=blakeports
-GITHUB_TOKEN=${GITHUB_TOKEN}
-RUNNER_NAME=docker-runner-tenfive
-RUNNER_WORKDIR=_work
-CUSTOM_LABELS=tenfive,macos-10-5,legacy-macos
-EOF
+# Create single .env file with all runner configurations
+echo "Creating .env file with all runner configurations..."
+cat > .env << EOF
+# GitHub Actions Multi-Runner Configuration
+# ==========================================
 
-# Create .env.tenseven
-echo "Creating .env.tenseven..."
-cat > .env.tenseven << EOF
-# GitHub Actions Runner Configuration - TenSeven (Mac OS X 10.7)
+# Repository Configuration
 GITHUB_OWNER=trodemaster
 GITHUB_REPO=blakeports
+
+# Runner Registration Token (expires in 1 hour)
 GITHUB_TOKEN=${GITHUB_TOKEN}
-RUNNER_NAME=docker-runner-tenseven
+
+# Common Configuration
 RUNNER_WORKDIR=_work
-CUSTOM_LABELS=tenseven,macos-10-7,legacy-macos
+
+# TenFive Runner (Mac OS X 10.5)
+TENFIVE_RUNNER_NAME=docker-runner-tenfive
+TENFIVE_LABELS=tenfive,macos-10-5,legacy-macos
+
+# TenSeven Runner (Mac OS X 10.7)
+TENSEVEN_RUNNER_NAME=docker-runner-tenseven
+TENSEVEN_LABELS=tenseven,macos-10-7,legacy-macos
+
+# Add more runners here as needed:
+# SNOWLEOPARD_RUNNER_NAME=docker-runner-snowleopard
+# SNOWLEOPARD_LABELS=snowleopard,macos-10-6,legacy-macos
 EOF
 
 echo ""
-echo "✅ Environment files created successfully!"
+echo "✅ Environment file created successfully!"
 echo ""
-echo "Files created:"
-echo "  - .env.tenfive"
-echo "  - .env.tenseven"
+echo "File created:"
+echo "  - .env"
 echo ""
 echo "📝 Note: Registration tokens are valid for 1 hour."
 echo "   If runners fail to register, run this script again to get a fresh token."

@@ -12,9 +12,14 @@ services:
     hostname: github-runner-tenfive
     restart: unless-stopped
     
-    # Load environment from .env.tenfive
-    env_file:
-      - .env.tenfive
+    # Environment variables from single .env file
+    environment:
+      - GITHUB_OWNER=${GITHUB_OWNER}
+      - GITHUB_REPO=${GITHUB_REPO}
+      - RUNNER_TOKEN=${GITHUB_TOKEN}
+      - RUNNER_NAME=${TENFIVE_RUNNER_NAME}
+      - RUNNER_WORKDIR=${RUNNER_WORKDIR}
+      - CUSTOM_LABELS=${TENFIVE_LABELS}
     
     # Volume mounts
     volumes:
@@ -49,9 +54,14 @@ services:
     hostname: github-runner-tenseven
     restart: unless-stopped
     
-    # Load environment from .env.tenseven
-    env_file:
-      - .env.tenseven
+    # Environment variables from single .env file
+    environment:
+      - GITHUB_OWNER=${GITHUB_OWNER}
+      - GITHUB_REPO=${GITHUB_REPO}
+      - RUNNER_TOKEN=${GITHUB_TOKEN}
+      - RUNNER_NAME=${TENSEVEN_RUNNER_NAME}
+      - RUNNER_WORKDIR=${RUNNER_WORKDIR}
+      - CUSTOM_LABELS=${TENSEVEN_LABELS}
     
     # Volume mounts
     volumes:
