@@ -70,25 +70,38 @@ Builds run concurrently across available hardware.
 
 ## Quick Setup (5 minutes)
 
-### 1. Create Environment Files
+### Prerequisites
+- GitHub CLI installed and authenticated: `gh auth login`
+- Docker and docker-compose installed
+
+### 1. One-Command Setup
 ```bash
 cd /Users/blake/code/blakeports/docker/actions-runners
-./setup-multi-runners.sh YOUR_GITHUB_TOKEN
-```
-
-### 2. Start Runners
-```bash
 ./quickstart-multi.sh
 ```
 
-### 3. Verify in GitHub
+That's it! The script will:
+- Generate runner registration tokens using `gh` CLI
+- Create environment files automatically
+- Build and start all runners
+
+### Manual Setup (if needed)
+```bash
+# Generate registration tokens and create env files
+./setup-multi-runners.sh
+
+# Then start runners
+docker-compose -f docker-compose-multi.yml up -d
+```
+
+### 2. Verify in GitHub
 Go to: https://github.com/trodemaster/blakeports/settings/actions/runners
 
 You should see:
 - ✅ `docker-runner-tenfive` (Idle/Active)
 - ✅ `docker-runner-tenseven` (Idle/Active)
 
-### 4. Test the Setup
+### 3. Test the Setup
 ```bash
 gh workflow run build-legacy-bstring.yml -f os_selection=all
 ```
