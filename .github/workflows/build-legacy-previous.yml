@@ -1,0 +1,633 @@
+name: Build previous (Legacy macOS)
+
+on:
+  push:
+    paths:
+      - 'emulators/previous/**'
+    branches: [main]
+  pull_request:
+    paths:
+      - 'emulators/previous/**'
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      os_selection:
+        description: 'Select OS versions to test'
+        required: false
+        type: choice
+        default: 'all'
+        options:
+          - all
+          - tenfive
+          - tenseven
+
+jobs:
+  build-previous-tenfive:
+    name: Build previous on Mac OS X 10.5 (TenFive)
+    runs-on: [self-hosted, tenfive]
+    if: ${{ github.event.inputs.os_selection == 'tenfive' || github.event.inputs.os_selection == 'all' || github.event.inputs.os_selection == '' }}
+    
+    env:
+      VM_IP: ${{ vars.TENFIVE_IP }}
+      VM_USERNAME: ${{ vars.TENFIVE_USERNAME }}
+      VM_NAME: TenFive
+      OS_VERSION: "10.5"
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Verify VM configuration
+      run: |
+        if [ -z "$VM_IP" ]; then
+          echo "Error: TENFIVE_IP variable not set in repository."
+          exit 1
+        fi
+        if [ -z "$VM_USERNAME" ]; then
+          echo "Error: TENFIVE_USERNAME variable not set in repository."
+          exit 1
+        fi
+        echo "Will connect to: $VM_USERNAME@$VM_IP"
+    
+    - name: Show macOS version on TenFive VM
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENFIVE_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          echo "=================================================="
+          echo "  Building previous on Mac OS X 10.5 (TenFive)"
+          echo "=================================================="
+          sw_vers
+          echo ""
+          uname -a
+    
+    - name: Download repository tarball
+      run: |
+        echo "Downloading blakeports repository from GitHub..."
+        curl -L -o /tmp/blakeports.tar.gz https://github.com/trodemaster/blakeports/archive/refs/heads/main.tar.gz
+        echo "✅ Tarball downloaded: $(ls -lh /tmp/blakeports.tar.gz)"
+    
+    - name: Transfer tarball to TenFive VM
+      run: |
+        echo "Transferring tarball to TenFive VM..."
+        scp -i /home/runner/.ssh/oldmac \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o HostKeyAlgorithms=+ssh-rsa \
+            -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+            /tmp/blakeports.tar.gz \
+            ${{ env.VM_USERNAME }}@${{ env.VM_IP }}:/tmp/
+        echo "✅ Tarball transferred"
+    
+    - name: Extract repository on TenFive VM
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENFIVE_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          echo "Setting up blakeports directory..."
+          
+          # Create parent directory structure if needed
+          mkdir -p /Users/blake/code
+          
+          # Remove old blakeports directory contents (but keep the directory)
+          if [ -d /Users/blake/code/blakeports ]; then
+            echo "Cleaning existing /Users/blake/code/blakeports..."
+            rm -rf /Users/blake/code/blakeports/*
+            rm -rf /Users/blake/code/blakeports/.[!.]*
+          else
+            echo "Creating /Users/blake/code/blakeports..."
+            mkdir -p /Users/blake/code/blakeports
+          fi
+          
+          # Extract fresh tarball
+          cd /Users/blake/code/blakeports
+          echo "Extracting tarball to $(pwd)..."
+          tar xzf /tmp/blakeports.tar.gz --strip-components=1
+          
+          # Cleanup tarball
+          rm /tmp/blakeports.tar.gz
+          
+          echo "Repository extracted to: $(pwd)"
+          echo "Contents: $(ls -la | head -10)"
+          echo "✅ Repository ready"
+    
+    - name: Verify MacPorts installation and setup environment
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENFIVE_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          echo "Verifying MacPorts installation..."
+          
+          # Check if port command exists
+          if ! command -v port &> /dev/null; then
+            echo "❌ ERROR: MacPorts not found. Please install MacPorts on this VM."
+            exit 1
+          fi
+          
+          # Show MacPorts version
+          echo "MacPorts version:"
+          port version
+          
+          # Setup BlakePorts environment
+          cd /Users/blake/code/blakeports
+          source ./setupenv.bash
+          
+          # Update port index for BlakePorts
+          echo "Updating port index..."
+          portindex
+          
+          echo "✅ MacPorts verified and BlakePorts index updated"
+    
+    - name: Lint portfile
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENFIVE_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          cd /Users/blake/code/blakeports
+          source ./setupenv.bash
+          
+          echo "Linting emulators/previous portfile..."
+          LINT_OUTPUT=$(port lint --nitpick emulators/previous 2>&1)
+          echo "$LINT_OUTPUT"
+          
+          # Check if lint found any errors
+          if echo "$LINT_OUTPUT" | grep -q "Error:"; then
+            echo "❌ Lint failed with errors"
+            exit 1
+          fi
+          
+          echo "✅ Lint passed"
+    
+    - name: Clean existing previous installation
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENFIVE_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          cd /Users/blake/code/blakeports
+          source ./setupenv.bash
+          
+          echo "Cleaning existing previous installation..."
+          sudo port -f uninstall previous || true
+          sudo port clean --dist previous
+          
+          echo "✅ Clean complete"
+    
+    - name: Install dependencies
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENFIVE_KEY }}
+        command_timeout: 60m
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          cd /Users/blake/code/blakeports
+          
+          echo "Installing previous dependencies..."
+          ./scripts/install-deps previous
+          
+          echo "✅ Dependencies installed"
+    
+    - name: Build previous port
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENFIVE_KEY }}
+        command_timeout: 60m
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          cd /Users/blake/code/blakeports
+          source ./setupenv.bash
+          
+          echo "Building previous port..."
+          sudo port -v install previous
+          
+          echo "✅ Build complete"
+    
+    - name: Verify previous installation
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENFIVE_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          cd /Users/blake/code/blakeports
+          source ./setupenv.bash
+          
+          echo "Verifying previous installation..."
+          port installed previous
+          
+          # Check if Previous.app bundle exists
+          if [ -d "${applications_dir}/Previous.app" ]; then
+            echo "✅ Previous.app bundle found"
+            ls -lh "${applications_dir}/Previous.app"
+          else
+            echo "❌ Previous.app bundle not found"
+            exit 1
+          fi
+          
+          echo "✅ Installation verified"
+    
+    - name: Cleanup
+      if: always()
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENFIVE_KEY }}
+        script: |
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          echo "Cleaning up temporary files..."
+          
+          # Remove any leftover tarballs
+          rm -f /tmp/blakeports.tar.gz
+          
+          # Note: /Users/blake/code/blakeports is kept for next run
+          echo "✅ Cleanup complete (blakeports directory preserved for next run)"
+
+  build-previous-tenseven:
+    name: Build previous on Mac OS X 10.7 (TenSeven)
+    runs-on: [self-hosted, tenseven]
+    if: ${{ github.event.inputs.os_selection == 'tenseven' || github.event.inputs.os_selection == 'all' || github.event.inputs.os_selection == '' }}
+    
+    env:
+      VM_IP: ${{ vars.TENSEVEN_IP }}
+      VM_USERNAME: ${{ vars.TENSEVEN_USERNAME }}
+      VM_NAME: TenSeven
+      OS_VERSION: "10.7"
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Verify VM configuration
+      run: |
+        if [ -z "$VM_IP" ]; then
+          echo "Error: TENSEVEN_IP variable not set in repository."
+          exit 1
+        fi
+        if [ -z "$VM_USERNAME" ]; then
+          echo "Error: TENSEVEN_USERNAME variable not set in repository."
+          exit 1
+        fi
+        echo "Will connect to: $VM_USERNAME@$VM_IP"
+    
+    - name: Show macOS version on TenSeven VM
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENSEVEN_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          echo "=================================================="
+          echo "  Building previous on Mac OS X 10.7 (TenSeven)"
+          echo "=================================================="
+          sw_vers
+          echo ""
+          uname -a
+    
+    - name: Download repository tarball
+      run: |
+        echo "Downloading blakeports repository from GitHub..."
+        curl -L -o /tmp/blakeports.tar.gz https://github.com/trodemaster/blakeports/archive/refs/heads/main.tar.gz
+        echo "✅ Tarball downloaded: $(ls -lh /tmp/blakeports.tar.gz)"
+    
+    - name: Transfer tarball to TenSeven VM
+      run: |
+        echo "Transferring tarball to TenSeven VM..."
+        scp -i /home/runner/.ssh/oldmac \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o HostKeyAlgorithms=+ssh-rsa \
+            -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+            /tmp/blakeports.tar.gz \
+            ${{ env.VM_USERNAME }}@${{ env.VM_IP }}:/tmp/
+        echo "✅ Tarball transferred"
+    
+    - name: Extract repository on TenSeven VM
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENSEVEN_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          echo "Setting up blakeports directory..."
+          
+          # Create parent directory structure if needed
+          mkdir -p /Users/blake/code
+          
+          # Remove old blakeports directory contents (but keep the directory)
+          if [ -d /Users/blake/code/blakeports ]; then
+            echo "Cleaning existing /Users/blake/code/blakeports..."
+            rm -rf /Users/blake/code/blakeports/*
+            rm -rf /Users/blake/code/blakeports/.[!.]*
+          else
+            echo "Creating /Users/blake/code/blakeports..."
+            mkdir -p /Users/blake/code/blakeports
+          fi
+          
+          # Extract fresh tarball
+          cd /Users/blake/code/blakeports
+          echo "Extracting tarball to $(pwd)..."
+          tar xzf /tmp/blakeports.tar.gz --strip-components=1
+          
+          # Cleanup tarball
+          rm /tmp/blakeports.tar.gz
+          
+          echo "Repository extracted to: $(pwd)"
+          echo "Contents: $(ls -la | head -10)"
+          echo "✅ Repository ready"
+    
+    - name: Verify MacPorts installation and setup environment
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENSEVEN_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          echo "Verifying MacPorts installation..."
+          
+          # Check if port command exists
+          if ! command -v port &> /dev/null; then
+            echo "❌ ERROR: MacPorts not found. Please install MacPorts on this VM."
+            exit 1
+          fi
+          
+          # Show MacPorts version
+          echo "MacPorts version:"
+          port version
+          
+          # Setup BlakePorts environment
+          cd /Users/blake/code/blakeports
+          source ./setupenv.bash
+          
+          # Update port index for BlakePorts
+          echo "Updating port index..."
+          portindex
+          
+          echo "✅ MacPorts verified and BlakePorts index updated"
+    
+    - name: Lint portfile
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENSEVEN_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          cd /Users/blake/code/blakeports
+          source ./setupenv.bash
+          
+          echo "Linting emulators/previous portfile..."
+          LINT_OUTPUT=$(port lint --nitpick emulators/previous 2>&1)
+          echo "$LINT_OUTPUT"
+          
+          # Check if lint found any errors
+          if echo "$LINT_OUTPUT" | grep -q "Error:"; then
+            echo "❌ Lint failed with errors"
+            exit 1
+          fi
+          
+          echo "✅ Lint passed"
+    
+    - name: Clean existing previous installation
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENSEVEN_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          cd /Users/blake/code/blakeports
+          source ./setupenv.bash
+          
+          echo "Cleaning existing previous installation..."
+          sudo port -f uninstall previous || true
+          sudo port clean --dist previous
+          
+          echo "✅ Clean complete"
+    
+    - name: Install dependencies
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENSEVEN_KEY }}
+        command_timeout: 60m
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          cd /Users/blake/code/blakeports
+          
+          echo "Installing previous dependencies..."
+          ./scripts/install-deps previous
+          
+          echo "✅ Dependencies installed"
+    
+    - name: Build previous port
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENSEVEN_KEY }}
+        command_timeout: 60m
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          set -x          # Show commands being executed
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          cd /Users/blake/code/blakeports
+          source ./setupenv.bash
+          
+          echo "Building previous port..."
+          sudo port -v install previous
+          
+          echo "✅ Build complete"
+    
+    - name: Verify previous installation
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENSEVEN_KEY }}
+        script: |
+          set -e          # Exit on any error
+          set -o pipefail # Catch errors in pipelines
+          
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          cd /Users/blake/code/blakeports
+          source ./setupenv.bash
+          
+          echo "Verifying previous installation..."
+          port installed previous
+          
+          # Check if Previous.app bundle exists
+          if [ -d "${applications_dir}/Previous.app" ]; then
+            echo "✅ Previous.app bundle found"
+            ls -lh "${applications_dir}/Previous.app"
+          else
+            echo "❌ Previous.app bundle not found"
+            exit 1
+          fi
+          
+          echo "✅ Installation verified"
+    
+    - name: Cleanup
+      if: always()
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.VM_IP }}
+        username: ${{ env.VM_USERNAME }}
+        key: ${{ secrets.TENSEVEN_KEY }}
+        script: |
+          # Source profile to load MacPorts and other tools into PATH
+          if [ -f ~/.profile ]; then
+            source ~/.profile
+          fi
+          
+          echo "Cleaning up temporary files..."
+          
+          # Remove any leftover tarballs
+          rm -f /tmp/blakeports.tar.gz
+          
+          # Note: /Users/blake/code/blakeports is kept for next run
+          echo "✅ Cleanup complete (blakeports directory preserved for next run)"
+
+
