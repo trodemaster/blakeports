@@ -2,7 +2,7 @@ nrsc5 0
 libcbor 684
 previous 1157
 netatalk 1802
-libfido2 2579
-bstring 3226
-netatalk4 3916
-openssh9-client 4479
+openssh9-client 2579
+bstring 3452
+netatalk4 4142
+libfido2 4705
