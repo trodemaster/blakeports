@@ -22,8 +22,10 @@ if ! command_exists docker; then
     exit 1
 fi
 
-if ! command_exists docker-compose; then
-    echo "❌ docker-compose not found. Please install docker-compose first."
+# Check for Docker Compose V2
+if ! docker compose version &> /dev/null; then
+    echo "❌ Docker Compose V2 not found. Please install Docker Compose V2."
+    echo "   See: https://docs.docker.com/compose/install/"
     exit 1
 fi
 
@@ -51,11 +53,11 @@ echo ""
 
 # Build and start runners
 echo "Building Docker images (this may take a few minutes)..."
-docker-compose -f docker-compose-multi.yml build
+docker compose -f docker-compose-multi.yml build
 
 echo ""
 echo "Starting runners..."
-docker-compose -f docker-compose-multi.yml up -d
+docker compose -f docker-compose-multi.yml up -d
 
 echo ""
 echo "Waiting for runners to initialize..."
@@ -65,7 +67,7 @@ echo ""
 echo "=================================================="
 echo "  Runner Status"
 echo "=================================================="
-docker-compose -f docker-compose-multi.yml ps
+docker compose -f docker-compose-multi.yml ps
 
 echo ""
 echo "=================================================="
@@ -73,7 +75,7 @@ echo "  Next Steps"
 echo "=================================================="
 echo ""
 echo "1. Check runner logs:"
-echo "   docker-compose -f docker-compose-multi.yml logs -f"
+echo "   docker compose -f docker-compose-multi.yml logs -f"
 echo ""
 echo "2. Verify runners in GitHub:"
 echo "   https://github.com/trodemaster/blakeports/settings/actions/runners"
@@ -93,11 +95,11 @@ echo "  Management Commands"
 echo "=================================================="
 echo ""
 echo "Stop all runners:"
-echo "  docker-compose -f docker-compose-multi.yml down"
+echo "  docker compose -f docker-compose-multi.yml down"
 echo ""
 echo "Restart a specific runner:"
-echo "  docker-compose -f docker-compose-multi.yml restart tenfive-runner"
-echo "  docker-compose -f docker-compose-multi.yml restart tenseven-runner"
+echo "  docker compose -f docker-compose-multi.yml restart tenfive-runner"
+echo "  docker compose -f docker-compose-multi.yml restart tenseven-runner"
 echo ""
 echo "View resource usage:"
 echo "  docker stats github-runner-tenfive github-runner-tenseven"
