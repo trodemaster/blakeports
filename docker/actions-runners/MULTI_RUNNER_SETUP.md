@@ -28,33 +28,60 @@ docker/actions-runners/
 
 ## Quick Setup
 
-### 1. Create Environment Files
+### Prerequisites
+
+1. **GitHub CLI** - Install and authenticate:
+   ```bash
+   # Install (macOS)
+   brew install gh
+   
+   # Authenticate
+   gh auth login
+   ```
+
+2. **Docker** - Ensure Docker and docker-compose are installed and running
+
+### 1. One-Command Setup
 
 ```bash
 cd /Users/blake/code/blakeports/docker/actions-runners
 
-# Create TenFive runner config
-cat > .env.tenfive << 'EOF'
-GITHUB_OWNER=trodemaster
-GITHUB_REPO=blakeports
-GITHUB_TOKEN=ghp_YOUR_TOKEN_HERE
-RUNNER_NAME=docker-runner-tenfive
-RUNNER_WORKDIR=_work
-CUSTOM_LABELS=tenfive,macos-10-5
-EOF
-
-# Create TenSeven runner config
-cat > .env.tenseven << 'EOF'
-GITHUB_OWNER=trodemaster
-GITHUB_REPO=blakeports
-GITHUB_TOKEN=ghp_YOUR_TOKEN_HERE
-RUNNER_NAME=docker-runner-tenseven
-RUNNER_WORKDIR=_work
-CUSTOM_LABELS=tenseven,macos-10-7
-EOF
+# This does everything: generates tokens, creates configs, starts runners
+./quickstart-multi.sh
 ```
 
-### 2. Start All Runners
+The script will:
+- ✅ Check for gh CLI and Docker
+- ✅ Generate runner registration tokens using GitHub API
+- ✅ Create .env.tenfive and .env.tenseven automatically
+- ✅ Build Docker images
+- ✅ Start all runners
+
+### 2. Manual Setup (Alternative)
+
+If you prefer step-by-step:
+
+```bash
+# Generate tokens and create environment files
+./setup-multi-runners.sh
+
+# Build and start runners
+docker-compose -f docker-compose-multi.yml up -d
+```
+
+### 3. Important Notes
+
+**Registration Token Expiration:**
+- Runner registration tokens expire after 1 hour
+- If runners fail to register, run `./setup-multi-runners.sh` again to get fresh tokens
+- Once runners are registered, they stay connected indefinitely
+
+**Security:**
+- Tokens are stored in .env files (gitignored)
+- Never commit .env files to version control
+- Registration tokens are short-lived and single-use
+
+### 4. Start All Runners (If Already Configured)
 
 ```bash
 # Start both runners

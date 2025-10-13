@@ -34,14 +34,19 @@ echo ""
 if [ ! -f .env.tenfive ] || [ ! -f .env.tenseven ]; then
     echo "⚠️  Environment files not found."
     echo ""
-    echo "Please run setup first:"
-    echo "  ./setup-multi-runners.sh YOUR_GITHUB_TOKEN"
+    echo "Running setup to generate registration tokens..."
     echo ""
-    echo "Get a token from: https://github.com/settings/tokens"
-    exit 1
+    ./setup-multi-runners.sh
+    
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo "❌ Setup failed. Please resolve the issues above."
+        exit 1
+    fi
+    echo ""
 fi
 
-echo "✅ Environment files found"
+echo "✅ Environment files ready"
 echo ""
 
 # Build and start runners

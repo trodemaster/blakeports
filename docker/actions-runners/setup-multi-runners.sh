@@ -12,19 +12,53 @@ echo "  Multi-Runner Setup for BlakePorts"
 echo "=================================================="
 echo ""
 
-# Check if GitHub token is provided
-if [ -z "$1" ]; then
-    echo "Usage: $0 <github_token>"
+# Repository details
+GITHUB_OWNER="trodemaster"
+GITHUB_REPO="blakeports"
+
+# Check if gh CLI is installed
+if ! command -v gh &> /dev/null; then
+    echo "❌ Error: GitHub CLI (gh) not found."
     echo ""
-    echo "Generate a token at: https://github.com/settings/tokens"
-    echo "Required scopes: repo (full control)"
+    echo "Please install gh CLI:"
+    echo "  macOS:  brew install gh"
+    echo "  Linux:  See https://github.com/cli/cli/blob/trunk/docs/install_linux.md"
     echo ""
-    echo "Example:"
-    echo "  $0 ghp_YOUR_TOKEN_HERE"
     exit 1
 fi
 
-GITHUB_TOKEN="$1"
+# Check if user is authenticated with gh
+if ! gh auth status &> /dev/null; then
+    echo "❌ Error: Not authenticated with GitHub CLI."
+    echo ""
+    echo "Please authenticate first:"
+    echo "  gh auth login"
+    echo ""
+    exit 1
+fi
+
+echo "✅ GitHub CLI authenticated"
+echo ""
+
+# Generate registration token using gh CLI
+echo "Generating runner registration token..."
+GITHUB_TOKEN=$(gh api \
+    --method POST \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    /repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runners/registration-token \
+    --jq .token)
+
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo "❌ Error: Failed to generate registration token."
+    echo ""
+    echo "Make sure you have admin access to the repository:"
+    echo "  https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}"
+    exit 1
+fi
+
+echo "✅ Registration token generated successfully"
+echo ""
 
 # Create .env.tenfive
 echo "Creating .env.tenfive..."
@@ -57,10 +91,16 @@ echo "Files created:"
 echo "  - .env.tenfive"
 echo "  - .env.tenseven"
 echo ""
+echo "📝 Note: Registration tokens are valid for 1 hour."
+echo "   If runners fail to register, run this script again to get a fresh token."
+echo ""
 echo "Next steps:"
 echo "  1. Review the files if needed"
 echo "  2. Start runners: docker-compose -f docker-compose-multi.yml up -d"
 echo "  3. Check status: docker-compose -f docker-compose-multi.yml ps"
 echo "  4. View logs: docker-compose -f docker-compose-multi.yml logs -f"
+echo ""
+echo "Or use the quickstart script:"
+echo "  ./quickstart-multi.sh"
 echo ""
 
