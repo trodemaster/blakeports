@@ -20,9 +20,7 @@ if {${subport} eq ${name}} {
     github.tarball_from releases
     distname            netatalk-${version}
     use_xz              yes
-    
-    platforms           {darwin >= 15}
-    
+        
     compiler.c_standard 2011
     checksums           rmd160  46af4f1c71fafc9e1cfca470d3e90f97d91b8117 \
                         sha256  2977b4fd113182f0cc183337ba23d5701fb2be4e0dfcec7ee575b4d73a738d3a \
@@ -73,7 +71,6 @@ subport netatalk4 {
     
     version             4.3.2
     revision            0
-    platforms           {darwin >= 15}
     
     categories          net
     license             GPL-2+
