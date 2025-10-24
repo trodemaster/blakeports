@@ -62,13 +62,25 @@ if {${subport} eq ${name}} {
     
     notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/."
     
-    legacysupport.newest_darwin_requires_legacy 15
+    # Disable legacy support for newer macOS versions that don't need it
+    legacysupport.newest_darwin_requires_legacy 20
+    
+    # SSL workaround for older macOS versions with GitHub download issues
+    platform darwin {
+        if {${os.major} <= 11} {
+            depends_build-append port:curl
+            
+            fetch {
+                system "curl -L -o ${distpath}/${distname}.tar.xz '${github.master_sites}/${distname}.tar.xz'"
+            }
+        }
+    }
 }
 
 # Netatalk 4.x stub port
 subport netatalk4 {
     PortGroup           stub 1.0
-    
+
     version             4.3.2
     revision            0
     
