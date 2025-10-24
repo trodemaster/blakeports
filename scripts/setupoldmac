@@ -1,0 +1,409 @@
+#!/bin/bash
+# setupoldmac.sh - Configure old versions of macOS for MacPorts development
+# This script connects to legacy macOS systems and sets up the necessary
+# SSH keys, sudo configuration, and development environment.
+
+set -e  # Exit on any error
+set -o pipefail  # Catch errors in pipelines
+
+# SSH command for legacy systems (compatible with old OpenSSH versions)
+OLDSSH_CMD="ssh9 -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
+OLDSCP_CMD="scp9 -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to check if required commands are available
+check_requirements() {
+    if ! command -v ssh9 &> /dev/null; then
+        print_error "ssh9 command not found. Please install MacPorts OpenSSH:"
+        print_error "sudo port install openssh9"
+        exit 1
+    fi
+    
+    if ! command -v scp9 &> /dev/null; then
+        print_error "scp9 command not found. Please install MacPorts OpenSSH:"
+        print_error "sudo port install openssh9"
+        exit 1
+    fi
+    
+    print_success "Required SSH commands are available"
+}
+
+# Function to display usage
+usage() {
+    echo "Usage: $0 <hostname> [username]"
+    echo ""
+    echo "Configure old macOS systems for MacPorts development"
+    echo ""
+    echo "Arguments:"
+    echo "  hostname    Target hostname or IP address"
+    echo "  username    SSH username (default: blake)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 tenten.local"
+    echo "  $0 192.168.1.100 blake"
+    echo ""
+    echo "Prerequisites:"
+    echo "  - ssh9 and scp9 commands must be available (MacPorts OpenSSH)"
+    echo "  - Target system must have password authentication enabled"
+    echo "  - SSH key will be set up automatically during first run"
+}
+
+# Function to setup SSH keys on remote system
+setup_ssh_keys() {
+    local hostname="$1"
+    local username="$2"
+    
+    print_status "Setting up SSH keys on $username@$hostname"
+    
+    # Get the public key content
+    local pubkey_file="/Users/blake/.ssh/oldmac.pub"
+    if [[ ! -f "$pubkey_file" ]]; then
+        print_error "SSH public key not found at $pubkey_file"
+        print_error "Please ensure the oldmac key exists"
+        exit 1
+    fi
+    
+    local pubkey_content=$(cat "$pubkey_file")
+    print_status "Public key content: $pubkey_content"
+    
+    # Create SSH directory and add key to authorized_keys
+    print_status "Adding SSH key to remote system..."
+    
+    # Check if SSH key authentication already works
+    if $OLDSSH_CMD "$username@$hostname" "echo 'SSH key test'" 2>/dev/null; then
+        print_success "SSH key authentication already working"
+        return 0
+    fi
+    
+    print_warning "You will be prompted for the password to set up SSH key authentication"
+    
+    # Use ssh with password authentication to set up the key
+    ssh -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2 "$username@$hostname" "
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        
+        # Check if key already exists in authorized_keys
+        if ! grep -q '$pubkey_content' ~/.ssh/authorized_keys 2>/dev/null; then
+            echo '$pubkey_content' >> ~/.ssh/authorized_keys
+            chmod 600 ~/.ssh/authorized_keys
+            echo 'SSH key added successfully'
+        else
+            echo 'SSH key already exists in authorized_keys'
+        fi
+    "
+    
+    print_success "SSH key setup completed"
+}
+
+# Function to setup sudo access for admin users
+setup_sudo() {
+    local hostname="$1"
+    local username="$2"
+    
+    print_status "Setting up sudo access for admin users on $username@$hostname"
+    
+    $OLDSSH_CMD -t "$username@$hostname" "
+        # Check if user is in admin group
+        if groups \$USER | grep -q admin; then
+            echo 'User is in admin group'
+        else
+            echo 'User is not in admin group - adding to admin group'
+            sudo dseditgroup -o edit -a \$USER -t user admin
+            echo 'User added to admin group'
+        fi
+        
+        # Check if NOPASSWD line already exists
+        if sudo grep -q '%admin ALL=(ALL) NOPASSWD: ALL' /etc/sudoers; then
+            echo 'NOPASSWD configuration already exists'
+        else
+            echo 'Adding NOPASSWD configuration to sudoers file'
+            
+            # Backup original sudoers file
+            sudo cp /etc/sudoers /etc/sudoers.backup
+            
+            # Add the NOPASSWD line to sudoers file
+            # Use sed to add the line before the last line (which should be the #includedir line)
+            sudo sed -i '' '/^#includedir/i\\
+%admin ALL=(ALL) NOPASSWD: ALL
+' /etc/sudoers
+            
+            # Verify sudoers file syntax
+            if sudo visudo -c; then
+                echo 'Sudo configuration updated for admin users'
+            else
+                echo 'ERROR: Sudoers file syntax is invalid - restoring backup'
+                sudo cp /etc/sudoers.backup /etc/sudoers
+                exit 1
+            fi
+        fi
+    "
+    
+    print_success "Sudo configuration completed"
+}
+
+# Function to download blakeports repository
+download_blakeports() {
+    print_status "Downloading blakeports repository..."
+    
+    local download_url="https://github.com/trodemaster/blakeports/archive/refs/heads/main.zip"
+    local zip_file="$TMPDIR/blakeports-main.zip"
+    
+    if [[ -z "$TMPDIR" ]]; then
+        print_error "TMPDIR environment variable not set"
+        exit 1
+    fi
+    
+    print_status "Downloading from: $download_url"
+    print_status "Saving to: $zip_file"
+    
+    # Always download fresh copy (this is the part that should be repeated)
+    if curl -L -o "$zip_file" "$download_url"; then
+        print_success "Repository downloaded successfully"
+    else
+        print_error "Failed to download repository"
+        exit 1
+    fi
+}
+
+# Function to setup blakeports repository on remote system
+setup_blakeports_repo() {
+    local hostname="$1"
+    local username="$2"
+    
+    print_status "Setting up blakeports repository on $username@$hostname"
+    
+    # Transfer the zip file to remote system
+    print_status "Transferring repository to remote system..."
+    $OLDSCP_CMD "$TMPDIR/blakeports-main.zip" "$username@$hostname:/tmp/"
+    
+    # Extract and setup on remote system
+    $OLDSSH_CMD -t "$username@$hostname" "
+        # Ensure ~/code directory exists
+        mkdir -p ~/code
+        
+        # Remove existing blakeports directory if it exists
+        if [[ -d ~/code/blakeports ]]; then
+            echo 'Removing existing blakeports directory'
+            rm -rf ~/code/blakeports
+        fi
+        
+        # Extract the zip file
+        echo 'Extracting blakeports repository...'
+        cd /tmp
+        unzip -q blakeports-main.zip
+        
+        # Move contents to ~/code/blakeports
+        echo 'Setting up blakeports directory structure...'
+        mv blakeports-main ~/code/blakeports
+        
+        # Clean up
+        rm -f /tmp/blakeports-main.zip
+        
+        echo 'Blakeports repository setup completed'
+        echo 'Repository location: ~/code/blakeports'
+    "
+    
+    print_success "Blakeports repository setup completed"
+}
+
+# Function to configure MacPorts sources
+configure_macports_sources() {
+    local hostname="$1"
+    local username="$2"
+    
+    print_status "Configuring MacPorts sources on $username@$hostname"
+    
+    $OLDSSH_CMD -t "$username@$hostname" "
+        # Create MacPorts config directory if it doesn't exist
+        sudo mkdir -p /opt/local/etc/macports
+        
+        # Always update sources.conf (this ensures it's current)
+        echo 'Configuring MacPorts sources...'
+        sudo tee /opt/local/etc/macports/sources.conf > /dev/null << 'EOF'
+file:///Users/blake/code/blakeports [default]
+rsync://rsync.macports.org/macports/release/tarballs/ports.tar.gz
+EOF
+        
+        echo 'MacPorts sources configured'
+    "
+    
+    print_success "MacPorts sources configuration completed"
+}
+
+# Function to setup MacPorts environment
+setup_macports() {
+    local hostname="$1"
+    local username="$2"
+    
+    print_status "Setting up MacPorts environment on $username@$hostname"
+    
+    $OLDSSH_CMD "$username@$hostname" "
+        # Setup profile for MacPorts
+        if [[ ! -f ~/.profile ]]; then
+            echo '# MacPorts' >> ~/.profile
+            echo 'export PATH=\"/opt/local/bin:/opt/local/sbin:\$PATH\"' >> ~/.profile
+            echo 'export MANPATH=\"/opt/local/share/man:\$MANPATH\"' >> ~/.profile
+            echo 'export INFOPATH=\"/opt/local/share/info:\$INFOPATH\"' >> ~/.profile
+        else
+            # Check if MacPorts paths are already in profile
+            if ! grep -q 'opt/local' ~/.profile; then
+                echo '' >> ~/.profile
+                echo '# MacPorts' >> ~/.profile
+                echo 'export PATH=\"/opt/local/bin:/opt/local/sbin:\$PATH\"' >> ~/.profile
+                echo 'export MANPATH=\"/opt/local/share/man:\$MANPATH\"' >> ~/.profile
+                echo 'export INFOPATH=\"/opt/local/share/info:\$INFOPATH\"' >> ~/.profile
+            fi
+        fi
+        
+        # Source the profile
+        source ~/.profile
+        
+        echo 'MacPorts environment configured'
+    "
+    
+    print_success "MacPorts environment setup completed"
+}
+
+# Function to test the connection
+test_connection() {
+    local hostname="$1"
+    local username="$2"
+    
+    print_status "Testing connection to $username@$hostname"
+    
+    if $OLDSSH_CMD "$username@$hostname" "echo 'Connection test successful'"; then
+        print_success "Connection test passed"
+    else
+        print_error "Connection test failed"
+        exit 1
+    fi
+}
+
+# Function to display system information
+show_system_info() {
+    local hostname="$1"
+    local username="$2"
+    
+    print_status "System information for $username@$hostname:"
+    
+    $OLDSSH_CMD "$username@$hostname" "
+        echo '=== System Information ==='
+        sw_vers
+        echo ''
+        uname -a
+        echo ''
+        echo '=== MacPorts Information ==='
+        if command -v port &> /dev/null; then
+            port version
+        else
+            echo 'MacPorts not installed'
+        fi
+        echo ''
+        echo '=== SSH Configuration ==='
+        ls -la ~/.ssh/ 2>/dev/null || echo 'No SSH directory found'
+    "
+}
+
+# Main function
+main() {
+    # Check arguments
+    if [[ $# -lt 1 ]]; then
+        usage
+        exit 1
+    fi
+    
+    local hostname="$1"
+    local username="${2:-blake}"
+    
+    print_status "Starting setup for $username@$hostname"
+    
+    # Check prerequisites
+    check_requirements
+    
+    # Test if SSH key authentication already works
+    print_status "Testing SSH key authentication..."
+    if $OLDSSH_CMD "$username@$hostname" "echo 'SSH key test'" 2>/dev/null; then
+        print_success "SSH key authentication already working - skipping password setup"
+    else
+        # Test initial connection with password authentication
+        print_status "Testing initial connection with password authentication..."
+        print_warning "You will be prompted for the password for the initial connection"
+        
+        if ! ssh -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2 "$username@$hostname" "echo 'Initial connection test'"; then
+            print_error "Cannot connect to $username@$hostname"
+            print_error "Please ensure:"
+            print_error "  - The system is accessible"
+            print_error "  - Password authentication is enabled in /etc/ssh/sshd_config:"
+            print_error "    PasswordAuthentication yes"
+            print_error "    PubkeyAuthentication yes"
+            print_error "  - The user account has a password set"
+            print_error "  - SSH service is running"
+            print_error ""
+            print_error "To enable password authentication on the remote system:"
+            print_error "1. Edit /etc/ssh/sshd_config and set PasswordAuthentication yes"
+            print_error "2. Restart SSH service: sudo launchctl unload /System/Library/LaunchDaemons/ssh.plist"
+            print_error "3. Restart SSH service: sudo launchctl load /System/Library/LaunchDaemons/ssh.plist"
+            exit 1
+        fi
+    fi
+    
+    # Setup SSH keys
+    setup_ssh_keys "$hostname" "$username"
+    
+    # Test SSH key connection
+    print_status "Testing SSH key connection..."
+    if $OLDSSH_CMD "$username@$hostname" "echo 'SSH key connection test'"; then
+        print_success "SSH key authentication working"
+    else
+        print_warning "SSH key authentication may not be working"
+    fi
+    
+    # Setup sudo access for admin users
+    setup_sudo "$hostname" "$username"
+    
+    # Download blakeports repository locally
+    download_blakeports
+    
+    # Setup blakeports repository on remote system
+    setup_blakeports_repo "$hostname" "$username"
+    
+    # Configure MacPorts sources
+    configure_macports_sources "$hostname" "$username"
+    
+    # Setup MacPorts environment
+    setup_macports "$hostname" "$username"
+    
+    # Show system information
+    show_system_info "$hostname" "$username"
+    
+    print_success "Setup completed for $username@$hostname"
+    print_status "You can now use:"
+    print_status "  $OLDSSH_CMD $username@$hostname"
+    print_status "  $OLDSCP_CMD file $username@$hostname:~/code/blakeports/"
+}
+
+# Run main function with all arguments
+main "$@"
