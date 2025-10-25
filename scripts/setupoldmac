@@ -7,8 +7,8 @@ set -e  # Exit on any error
 set -o pipefail  # Catch errors in pipelines
 
 # SSH command for legacy systems (compatible with old OpenSSH versions)
-OLDSSH_CMD="ssh9 -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
-OLDSCP_CMD="scp9 -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
+OLDSSH_CMD="ssh9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
+OLDSCP_CMD="scp9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
 
 # Colors for output
 RED='\033[0;31m'
@@ -89,33 +89,50 @@ setup_ssh_keys() {
     local pubkey_content=$(cat "$pubkey_file")
     print_status "Public key content: $pubkey_content"
     
-    # Create SSH directory and add key to authorized_keys
-    print_status "Adding SSH key to remote system..."
+    # Test if SSH key authentication already works
+    print_status "Testing SSH key authentication with oldmac key..."
     
-    # Check if SSH key authentication already works
-    if $OLDSSH_CMD "$username@$hostname" "echo 'SSH key test'" 2>/dev/null; then
-        print_success "SSH key authentication already working"
+    # Simple test - if this works without password, keys are set up
+    if $OLDSSH_CMD -o PasswordAuthentication=no -o PreferredAuthentications=publickey "$username@$hostname" "echo 'SSH key test'" 2>/dev/null; then
+        print_success "SSH key authentication already working - skipping key setup"
         return 0
+    else
+        print_warning "SSH key authentication failed - will set up keys"
     fi
     
+    # SSH key authentication not working - set up keys with one command
+    print_warning "SSH key authentication not working - setting up keys"
     print_warning "You will be prompted for the password to set up SSH key authentication"
     
-    # Use ssh with password authentication to set up the key
+    print_status "Setting up SSH directory and authorized_keys file..."
+    
     ssh -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2 "$username@$hostname" "
+        echo 'Creating ~/.ssh directory...'
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
         
-        # Check if key already exists in authorized_keys
-        if ! grep -q '$pubkey_content' ~/.ssh/authorized_keys 2>/dev/null; then
-            echo '$pubkey_content' >> ~/.ssh/authorized_keys
-            chmod 600 ~/.ssh/authorized_keys
-            echo 'SSH key added successfully'
-        else
-            echo 'SSH key already exists in authorized_keys'
-        fi
+        echo 'Creating authorized_keys file...'
+        touch ~/.ssh/authorized_keys
+        chmod 600 ~/.ssh/authorized_keys
+        
+        echo 'Adding SSH key to authorized_keys...'
+        echo '$pubkey_content' >> ~/.ssh/authorized_keys
+        
+        echo 'SSH key setup completed'
+        echo 'Directory contents:'
+        ls -la ~/.ssh/
     "
     
     print_success "SSH key setup completed"
+    
+    # Test SSH key authentication after setup
+    print_status "Testing SSH key authentication after setup..."
+    if $OLDSSH_CMD -o PasswordAuthentication=no "$username@$hostname" "echo 'SSH key test after setup'"; then
+        print_success "SSH key authentication is now working"
+    else
+        print_warning "SSH key authentication may not be working properly"
+        print_warning "You may need to check the remote system manually"
+    fi
 }
 
 # Function to setup sudo access for admin users
@@ -204,9 +221,9 @@ setup_blakeports_repo() {
         # Ensure ~/code directory exists
         mkdir -p ~/code
         
-        # Remove existing blakeports directory if it exists
+        # Always remove existing blakeports directory (force fresh content)
         if [[ -d ~/code/blakeports ]]; then
-            echo 'Removing existing blakeports directory'
+            echo 'Removing existing blakeports directory for fresh content'
             rm -rf ~/code/blakeports
         fi
         
@@ -222,7 +239,7 @@ setup_blakeports_repo() {
         # Clean up
         rm -f /tmp/blakeports-main.zip
         
-        echo 'Blakeports repository setup completed'
+        echo 'Blakeports repository setup completed with fresh content'
         echo 'Repository location: ~/code/blakeports'
     "
     
@@ -343,43 +360,8 @@ main() {
     # Check prerequisites
     check_requirements
     
-    # Test if SSH key authentication already works
-    print_status "Testing SSH key authentication..."
-    if $OLDSSH_CMD "$username@$hostname" "echo 'SSH key test'" 2>/dev/null; then
-        print_success "SSH key authentication already working - skipping password setup"
-    else
-        # Test initial connection with password authentication
-        print_status "Testing initial connection with password authentication..."
-        print_warning "You will be prompted for the password for the initial connection"
-        
-        if ! ssh -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2 "$username@$hostname" "echo 'Initial connection test'"; then
-            print_error "Cannot connect to $username@$hostname"
-            print_error "Please ensure:"
-            print_error "  - The system is accessible"
-            print_error "  - Password authentication is enabled in /etc/ssh/sshd_config:"
-            print_error "    PasswordAuthentication yes"
-            print_error "    PubkeyAuthentication yes"
-            print_error "  - The user account has a password set"
-            print_error "  - SSH service is running"
-            print_error ""
-            print_error "To enable password authentication on the remote system:"
-            print_error "1. Edit /etc/ssh/sshd_config and set PasswordAuthentication yes"
-            print_error "2. Restart SSH service: sudo launchctl unload /System/Library/LaunchDaemons/ssh.plist"
-            print_error "3. Restart SSH service: sudo launchctl load /System/Library/LaunchDaemons/ssh.plist"
-            exit 1
-        fi
-    fi
-    
-    # Setup SSH keys
+    # Setup SSH keys (handles both testing and setup)
     setup_ssh_keys "$hostname" "$username"
-    
-    # Test SSH key connection
-    print_status "Testing SSH key connection..."
-    if $OLDSSH_CMD "$username@$hostname" "echo 'SSH key connection test'"; then
-        print_success "SSH key authentication working"
-    else
-        print_warning "SSH key authentication may not be working"
-    fi
     
     # Setup sudo access for admin users
     setup_sudo "$hostname" "$username"
@@ -401,8 +383,8 @@ main() {
     
     print_success "Setup completed for $username@$hostname"
     print_status "You can now use:"
-    print_status "  $OLDSSH_CMD $username@$hostname"
-    print_status "  $OLDSCP_CMD file $username@$hostname:~/code/blakeports/"
+    print_status "  oldssh $username@$hostname"
+    print_status "  oldscp file $username@$hostname:~/code/blakeports/"
 }
 
 # Run main function with all arguments
