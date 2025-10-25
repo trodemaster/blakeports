@@ -67,7 +67,7 @@ if {${subport} eq ${name}} {
     
     # SSL workaround for older macOS versions with GitHub download issues
     platform darwin {
-        if {${os.major} <= 11} {
+        if {${os.major} <= 12} {
             depends_build-append port:curl
             
             fetch {
