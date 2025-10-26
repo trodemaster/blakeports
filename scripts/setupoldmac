@@ -152,8 +152,8 @@ setup_sudo() {
             echo 'User added to admin group'
         fi
         
-        # Check if NOPASSWD line already exists
-        if sudo grep -q '%admin ALL=(ALL) NOPASSWD: ALL' /etc/sudoers; then
+        # Check if NOPASSWD line already exists (idempotent check)
+        if sudo grep -q '^%admin ALL=(ALL) NOPASSWD: ALL$' /etc/sudoers; then
             echo 'NOPASSWD configuration already exists'
         else
             echo 'Adding NOPASSWD configuration to sudoers file'
@@ -161,11 +161,8 @@ setup_sudo() {
             # Backup original sudoers file
             sudo cp /etc/sudoers /etc/sudoers.backup
             
-            # Add the NOPASSWD line to sudoers file
-            # Use sed to add the line before the last line (which should be the #includedir line)
-            sudo sed -i '' '/^#includedir/i\\
-%admin ALL=(ALL) NOPASSWD: ALL
-' /etc/sudoers
+            # Simply append the NOPASSWD line to the end of sudoers file
+            echo '%admin ALL=(ALL) NOPASSWD: ALL' | sudo tee -a /etc/sudoers > /dev/null
             
             # Verify sudoers file syntax
             if sudo visudo -c; then
@@ -270,6 +267,41 @@ EOF
     print_success "MacPorts sources configuration completed"
 }
 
+# Function to disable screensaver for older macOS versions
+disable_screensaver() {
+    local hostname="$1"
+    local username="$2"
+    
+    print_status "Disabling screensaver on $username@$hostname"
+    
+    $OLDSSH_CMD "$username@$hostname" "
+        # Disable screensaver for older macOS versions (10.10 and earlier)
+        echo 'Disabling user screensaver...'
+        defaults -currentHost write com.apple.screensaver idleTime 0
+        defaults write com.apple.screensaver idleTime 0
+        
+        # Disable login window screensaver
+        echo 'Disabling login window screensaver...'
+        sudo defaults write /Library/Preferences/com.apple.screensaver loginWindowIdleTime 0
+        
+        # Also disable sleep/screensaver for system-wide settings
+        # This prevents the screen from going to sleep during development
+        echo 'Disabling system sleep settings...'
+        sudo pmset -a sleep 0
+        sudo pmset -a displaysleep 0
+        
+        # Additional power management settings for development
+        sudo pmset -a disksleep 0
+        sudo pmset -a womp 0
+        
+        echo 'Screensaver and sleep disabled'
+        echo 'Verifying user screensaver settings:'
+        defaults -currentHost read com.apple.screensaver idleTime
+    "
+    
+    print_success "Screensaver disabled for user and login window"
+}
+
 # Function to setup MacPorts environment
 setup_macports() {
     local hostname="$1"
@@ -360,6 +392,23 @@ main() {
     # Check prerequisites
     check_requirements
     
+    # Test network connectivity to the host
+    print_status "Testing network connectivity to $hostname..."
+    if ping -c 1 "$hostname" >/dev/null 2>&1; then
+        print_success "Host $hostname is reachable"
+    else
+        print_error "Cannot reach host $hostname"
+        print_error "Please ensure:"
+        print_error "  - The hostname is correct"
+        print_error "  - The system is powered on"
+        print_error "  - Network connectivity is available"
+        print_error "  - DNS resolution is working (try IP address instead)"
+        print_error ""
+        print_error "You can test connectivity manually with:"
+        print_error "  ping -c 1 $hostname"
+        exit 1
+    fi
+    
     # Setup SSH keys (handles both testing and setup)
     setup_ssh_keys "$hostname" "$username"
     
@@ -377,6 +426,9 @@ main() {
     
     # Setup MacPorts environment
     setup_macports "$hostname" "$username"
+    
+    # Disable screensaver for older macOS versions
+    disable_screensaver "$hostname" "$username"
     
     # Show system information
     show_system_info "$hostname" "$username"
