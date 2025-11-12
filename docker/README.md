@@ -6,20 +6,27 @@ This directory contains Docker containers used for development, testing, and inf
 
 ```
 docker/
-└── actions-runners/        # GitHub Actions self-hosted runners
-    ├── Dockerfile          # Ubuntu 24.04 with GitHub Actions runner and OpenSSH 9.x
-    ├── entrypoint.sh       # Runner registration and startup script
-    ├── docker-compose.yml  # Container orchestration configuration
-    ├── example.env         # Environment variable template
-    ├── .gitignore          # Ignore sensitive files
-    └── README.md           # Detailed setup and usage documentation
+├── actions-runners/        # Specialized runners for legacy macOS/MacPorts testing
+│   ├── Dockerfile          # Ubuntu 24.04 with GitHub Actions runner and OpenSSH 9.x
+│   ├── entrypoint.sh       # Runner registration and startup script
+│   ├── docker-compose.yml  # Container orchestration configuration
+│   ├── example.env         # Environment variable template
+│   └── README.md           # Detailed setup and usage documentation
+└── github-runners/         # General-purpose GitHub Actions runners
+    ├── Dockerfile          # Ubuntu 24.04 with HashiCorp tools
+    ├── docker-compose.yml  # Multi-runner orchestration
+    ├── runner-setup.sh     # Dynamic runner registration script
+    ├── runner-build-container.sh  # Build automation script
+    ├── runner-cleanup.sh   # Runner management and cleanup
+    ├── env.example         # Environment variables template
+    └── README.md           # Setup and scaling documentation
 ```
 
 ## Available Containers
 
 ### GitHub Actions Self-Hosted Runners (`actions-runners/`)
 
-Docker-based GitHub Actions runners with OpenSSH 9.x support for connecting to legacy VMs.
+Specialized Docker-based GitHub Actions runners with OpenSSH 9.x support for connecting to legacy macOS VMs and MacPorts testing.
 
 **Features:**
 - Ubuntu 24.04 base with OpenSSH 9.x client
@@ -40,6 +47,32 @@ docker-compose up -d
 This runner is designed to execute GitHub Actions workflows that need to SSH into legacy VMs (like Mac OS X 10.7) that can't run GitHub Actions natively. It complements the existing `scripts/ghrunner` tool which manages tart/lima/VMware VM-based runners.
 
 See `actions-runners/README.md` for detailed documentation.
+
+### General-Purpose GitHub Actions Runners (`github-runners/`)
+
+Scalable Docker-based GitHub Actions runners for general CI/CD workloads with HashiCorp tool support.
+
+**Features:**
+- Ubuntu 24.04 base with latest GitHub Actions runner
+- HashiCorp tools (Terraform, Consul, Vault, etc.)
+- Dynamic scaling with unique runner names
+- Automated build and cleanup scripts
+- Docker-in-Docker support for advanced workflows
+- Easy scaling with docker-compose --scale
+
+**Quick Start:**
+```bash
+cd docker/github-runners
+cp env.example .env
+# Edit .env with your GitHub details
+./runner-build-container.sh
+docker-compose up -d --scale github-runner=3
+```
+
+**Use Case:**
+General-purpose runners for CI/CD pipelines that need HashiCorp infrastructure tools or Docker build capabilities.
+
+See `github-runners/README.md` for detailed documentation.
 
 ## Legacy Systems Access
 

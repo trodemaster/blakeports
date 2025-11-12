@@ -1,0 +1,28 @@
+services:
+  github-runner:
+    image: github-runner:latest
+    restart: unless-stopped
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_OWNER=${GITHUB_OWNER}
+      - GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
+      - RUNNER_WORKDIR=/tmp/runner
+      - RUNNER_LABELS=ubuntu,ubuntu-24.04,noble,self-hosted
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - github-runner-network
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse:/dev/fuse
+    tmpfs:
+      - /tmp:exec
+    command: /runner-setup.sh
+
+networks:
+  github-runner-network:
+    driver: bridge
