@@ -20,6 +20,9 @@
 		},
 		{
 			"path": "../macports-guide"
+		},
+		{
+			"path": "../macsl"
 		}
 	],
 	"settings": {}

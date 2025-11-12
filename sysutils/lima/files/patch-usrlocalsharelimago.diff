@@ -1,0 +1,10 @@
+--- pkg/usrlocal/usrlocal.go.orig	2025-11-10 18:45:00
++++ pkg/usrlocal/usrlocal.go	2025-11-10 18:45:10
+@@ -158,7 +158,7 @@
+ 	if err == nil {
+ 		// caller expects err to be comparable to fs.ErrNotExist
+ 		err = fs.ErrNotExist
+ 	}
+-	return "", fmt.Errorf("guest agent binary could not be found for %s-%s: %w (Hint: try installing `lima-additional-guestagents` package)", ostype, arch, err)
++	return "", fmt.Errorf("guest agent binary could not be found for %s-%s: %w (Hint: try installing variant `+additional_guestagents`)", ostype, arch, err)
+ }
