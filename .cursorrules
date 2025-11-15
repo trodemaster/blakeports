@@ -100,10 +100,23 @@ This process ensures:
 
 ### Version Updates
 - Update version number
-- Update checksums (use `port checksum`)
+- **Keep existing checksums**: Do NOT remove or comment out checksums when updating versions
+- Run `port checksum <PORTNAME>` to detect checksum mismatches
+- MacPorts will output the correct checksum line in the error message
+- Update the Portfile with the new checksum values from the error output
+- Run `port checksum <PORTNAME>` again to verify the checksums match
 - Review and update patches if needed
 - Update dependencies if upstream changed requirements
 - Test that existing variants still work
+
+**Checksum Update Workflow:**
+1. Update the version number in the Portfile
+2. Keep the old checksum values (they will mismatch, which is expected)
+3. Run `sudo port checksum <PORTNAME>`
+4. MacPorts will fetch the new distfile and show an error with the correct checksum line
+5. Copy the checksum line from the error output and update the Portfile
+6. Run `sudo port checksum <PORTNAME>` again to verify (should succeed)
+7. **Do NOT** comment out checksums - MacPorts needs them present to provide the new values
 
 ## New Port Submission Workflow
 

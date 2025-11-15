@@ -4,25 +4,16 @@
 			"path": "."
 		},
 		{
-			"path": "../jibb-runners"
-		},
-		{
-			"path": "../packer_macOS_26"
-		},
-		{
 			"path": "../macports-ports"
 		},
 		{
 			"path": "../netatalk"
 		},
 		{
-			"path": "../macos-image-templates"
+			"path": "../../Developer/packer_macOS_26"
 		},
 		{
-			"path": "../macports-guide"
-		},
-		{
-			"path": "../macsl"
+			"path": "../../Developer/macos-image-templates"
 		}
 	],
 	"settings": {}
