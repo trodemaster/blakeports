@@ -6,7 +6,7 @@ PortGroup           meson 1.0
 PortGroup           legacysupport 1.1
 
 name                netatalk
-version             4.3.2
+version             4.4.0
 revision            0
 categories          net
 description         Netatalk is a freely-available Open Source AFP fileserver.
@@ -15,16 +15,17 @@ long_description    Netatalk is a freely-available Open Source AFP fileserver. \
                     servers for Macintosh computers.
 
 if {${subport} eq ${name}} {
-    github.setup        Netatalk netatalk 4-3-2 netatalk-
-    version             [string map {- .} ${github.version}]
-    github.tarball_from releases
-    distname            netatalk-${version}
-    use_xz              yes
-        
+    github.setup        Netatalk netatalk cebce0a9d5db936a3e6d27b057238b03c0b9eff7
+    version             4.4.0
+    github.tarball_from archive
+    # GitHub archive API returns .tar.gz files, not .tar.xz
+    # distname will be netatalk-{commit_sha} from github.setup
+    # extract.rename will handle renaming the extracted directory
+    
     compiler.c_standard 2011
-    checksums           rmd160  46af4f1c71fafc9e1cfca470d3e90f97d91b8117 \
-                        sha256  2977b4fd113182f0cc183337ba23d5701fb2be4e0dfcec7ee575b4d73a738d3a \
-                        size    956356
+    checksums           rmd160  2ea95fae37227a169727534a0447fb04ce6e38b9 \
+                        sha256  70cd4e22a85b70fe9066da36fe083c6c5db3c001cf200e7777e5d27432f1b7e6 \
+                        size    1517993
     
     license             GPL-2+
     maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
@@ -71,7 +72,8 @@ if {${subport} eq ${name}} {
             depends_build-append port:curl
             
             fetch {
-                system "curl -L -o ${distpath}/${distname}.tar.xz '${github.master_sites}/${distname}.tar.xz'"
+                # GitHub archive API returns .tar.gz files
+                system "curl -L -o ${distpath}/${distname}.tar.gz '${github.master_sites}.tar.gz'"
             }
         }
     }
@@ -81,7 +83,7 @@ if {${subport} eq ${name}} {
 subport netatalk4 {
     PortGroup           stub 1.0
 
-    version             4.3.2
+    version             4.4.0
     revision            0
     
     categories          net
