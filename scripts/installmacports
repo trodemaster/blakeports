@@ -101,6 +101,7 @@ if ! grep -q "blakeports" /opt/local/etc/macports/sources.conf; then
 file:///opt/actions-runner/_work/blakeports/blakeports [default]
 https://mirror.fcix.net/macports/release/tarballs/ports.tar
 EOF
+sudo port sync
 fi
 ## configure macports archive sites
 #if ! grep -q "fcix" /opt/local/etc/macports/archive_sites.conf; then
