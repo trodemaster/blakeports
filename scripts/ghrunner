@@ -449,6 +449,50 @@ test_ssh_connection_with_retries() {
     return 1
 }
 
+# Function to get SSH hostname for a base VM name
+get_ssh_hostname() {
+    local base_vm_name=$1
+    
+    # Map base VM names to SSH hostnames (from SSH config)
+    case "$base_vm_name" in
+        "macOS_26")
+            echo "tahoe"
+            ;;
+        "macOS_15")
+            echo "sequoia"
+            ;;
+        *)
+            # Default: use base name as hostname
+            echo "$base_vm_name"
+            ;;
+    esac
+}
+
+# Function to detect primary network interface for bridged networking
+detect_primary_network_interface() {
+    # Try to get the primary network interface
+    # On macOS, this is usually en0 (Ethernet) or en1 (Wi-Fi)
+    local primary_iface
+    
+    # Check for active Ethernet interface first
+    primary_iface=$(route get default 2>/dev/null | grep interface | awk '{print $2}')
+    
+    if [ -z "$primary_iface" ]; then
+        # Fallback: try to find first active non-loopback interface
+        primary_iface=$(ifconfig | grep -E "^[a-z]" | grep -v lo0 | head -1 | cut -d: -f1)
+    fi
+    
+    if [ -z "$primary_iface" ]; then
+        # Last resort: use en0 as default
+        primary_iface="en0"
+        print_warning "Could not detect primary network interface, using default: $primary_iface"
+    else
+        print_info "Detected primary network interface: $primary_iface"
+    fi
+    
+    echo "$primary_iface"
+}
+
 # Function to detect VM architecture and get appropriate runner package
 detect_vm_architecture() {
     local vm_ip=$1
@@ -559,42 +603,103 @@ start_tart_runner() {
             print_warning "Runner VM '$runner_vm_name' is already running"
         else
             print_info "Starting runner VM: $runner_vm_name"
-            # Start VM in background with graphics
-            "$TART_PATH" run "$runner_vm_name" &
+            # Use bridged networking on en0 interface
+            print_info "Using bridged networking on interface: en0"
+            # Start VM in background with graphics and bridged networking
+            "$TART_PATH" run --net-bridged en0 "$runner_vm_name" &
             local vm_pid=$!
             
             # Wait for VM to boot
             print_info "Waiting for VM to boot..."
             sleep 10
             
-            # Wait for IP address
-            print_info "Getting VM IP address..."
+            # Get VM connection info - prefer SSH hostname, fall back to tart ip
+            print_info "Getting VM connection info..."
             local vm_ip
-            local attempts=0
-            while [ $attempts -lt 30 ]; do
-                vm_ip=$("$TART_PATH" ip --wait 5 "$runner_vm_name" 2>/dev/null)
-                if [ $? -eq 0 ] && [ -n "$vm_ip" ] && [ "$vm_ip" != "null" ]; then
+            local ssh_hostname
+            ssh_hostname=$(get_ssh_hostname "$base_vm_name")
+            
+            # Try SSH hostname first with periodic retries for up to 1 minute
+            print_info "Trying SSH hostname: $ssh_hostname (will retry for up to 1 minute while VM boots)..."
+            local ssh_attempts=0
+            local ssh_max_attempts=12  # 12 attempts * 5 seconds = 60 seconds
+            local ssh_success=false
+            
+            while [ $ssh_attempts -lt $ssh_max_attempts ]; do
+                ssh_attempts=$((ssh_attempts + 1))
+                if ssh "${SSH_OPTS[@]}" -o ConnectTimeout=5 admin@"$ssh_hostname" "echo 'SSH test'" &>/dev/null; then
+                    print_success "SSH hostname is reachable: $ssh_hostname (after $((ssh_attempts * 5)) seconds)"
+                    vm_ip="$ssh_hostname"
+                    ssh_success=true
                     break
+                else
+                    if [ $ssh_attempts -lt $ssh_max_attempts ]; then
+                        print_info "SSH hostname not yet reachable (attempt $ssh_attempts/$ssh_max_attempts), retrying in 5 seconds..."
+                        sleep 5
+                    fi
                 fi
-                attempts=$((attempts + 1))
-                sleep 2
             done
             
-            if [ -z "$vm_ip" ] || [ "$vm_ip" = "null" ]; then
-                print_error "Failed to get VM IP address after $((attempts * 2)) seconds"
-                kill $vm_pid 2>/dev/null
-                exit 1
+            # If SSH hostname didn't work after 1 minute, fall back to tart ip
+            if [ "$ssh_success" = false ]; then
+                print_warning "SSH hostname not reachable after 1 minute, trying tart ip..."
+                local attempts=0
+                while [ $attempts -lt 30 ]; do
+                    vm_ip=$("$TART_PATH" ip --wait 5 "$runner_vm_name" 2>/dev/null)
+                    if [ $? -eq 0 ] && [ -n "$vm_ip" ] && [ "$vm_ip" != "null" ]; then
+                        print_success "VM IP (from tart): $vm_ip"
+                        break
+                    fi
+                    attempts=$((attempts + 1))
+                    sleep 2
+                done
+                
+                # If tart ip also failed, use SSH hostname anyway (might work after VM fully boots)
+                if [ -z "$vm_ip" ] || [ "$vm_ip" = "null" ]; then
+                    print_warning "Failed to get VM IP address via tart ip after $((attempts * 2)) seconds"
+                    print_info "Using SSH hostname as final fallback: $ssh_hostname"
+                    vm_ip="$ssh_hostname"
+                fi
             fi
-            
-            print_success "VM IP: $vm_ip"
         fi
         
         # Get VM IP if not already running
         if [ -z "$vm_ip" ]; then
-            vm_ip=$("$TART_PATH" ip "$runner_vm_name" 2>/dev/null)
-            if [ $? -ne 0 ] || [ -z "$vm_ip" ] || [ "$vm_ip" = "null" ]; then
-                print_error "Failed to get VM IP address"
-                exit 1
+            local ssh_hostname
+            ssh_hostname=$(get_ssh_hostname "$base_vm_name")
+            
+            # Try SSH hostname first with periodic retries for up to 1 minute
+            print_info "Trying SSH hostname: $ssh_hostname (will retry for up to 1 minute)..."
+            local ssh_attempts=0
+            local ssh_max_attempts=12  # 12 attempts * 5 seconds = 60 seconds
+            local ssh_success=false
+            
+            while [ $ssh_attempts -lt $ssh_max_attempts ]; do
+                ssh_attempts=$((ssh_attempts + 1))
+                if ssh "${SSH_OPTS[@]}" -o ConnectTimeout=5 admin@"$ssh_hostname" "echo 'SSH test'" &>/dev/null; then
+                    print_success "SSH hostname is reachable: $ssh_hostname (after $((ssh_attempts * 5)) seconds)"
+                    vm_ip="$ssh_hostname"
+                    ssh_success=true
+                    break
+                else
+                    if [ $ssh_attempts -lt $ssh_max_attempts ]; then
+                        print_info "SSH hostname not yet reachable (attempt $ssh_attempts/$ssh_max_attempts), retrying in 5 seconds..."
+                        sleep 5
+                    fi
+                fi
+            done
+            
+            # If SSH hostname didn't work after 1 minute, fall back to tart ip
+            if [ "$ssh_success" = false ]; then
+                print_warning "SSH hostname not reachable after 1 minute, trying tart ip..."
+                vm_ip=$("$TART_PATH" ip "$runner_vm_name" 2>/dev/null)
+                if [ $? -eq 0 ] && [ -n "$vm_ip" ] && [ "$vm_ip" != "null" ]; then
+                    print_success "VM IP (from tart): $vm_ip"
+                else
+                    print_warning "Failed to get VM IP address via tart ip"
+                    print_info "Using SSH hostname as final fallback: $ssh_hostname"
+                    vm_ip="$ssh_hostname"
+                fi
             fi
         fi
         

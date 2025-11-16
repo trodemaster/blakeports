@@ -11,9 +11,6 @@
 		},
 		{
 			"path": "../../Developer/packer_macOS_26"
-		},
-		{
-			"path": "../../Developer/macos-image-templates"
 		}
 	],
 	"settings": {}
