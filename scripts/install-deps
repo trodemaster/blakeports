@@ -75,13 +75,48 @@ fi
 
 echo "Getting dependencies for $PORTNAME..."
 
+# Function to sync port index and retry
+sync_and_retry_deps() {
+    local portname=$1
+    local runtime_only=$2
+    
+    echo "Port not found, syncing port index..."
+    sudo port sync
+    
+    echo "Retrying to get dependencies for $portname..."
+    if [ "$runtime_only" = true ]; then
+        port deps --no-build "$portname" 2>&1
+    else
+        port deps "$portname" 2>&1
+    fi
+}
+
 # Choose which dependencies to get
+DEPS_OUTPUT=""
 if [ "$RUNTIME_ONLY" = true ]; then
     echo "Mode: Runtime dependencies only"
-    DEPS_OUTPUT=$(port deps --no-build "$PORTNAME" 2>/dev/null)
+    DEPS_OUTPUT=$(port deps --no-build "$PORTNAME" 2>&1) || {
+        DEPS_EXIT_CODE=$?
+        # Check if error is "port not found"
+        if echo "$DEPS_OUTPUT" | grep -qi "not found\|port.*not found\|unknown port"; then
+            DEPS_OUTPUT=$(sync_and_retry_deps "$PORTNAME" true)
+        else
+            echo "Error getting dependencies: $DEPS_OUTPUT" >&2
+            exit $DEPS_EXIT_CODE
+        fi
+    }
 else
     echo "Mode: All dependencies (build + runtime)"
-    DEPS_OUTPUT=$(port deps "$PORTNAME" 2>/dev/null)
+    DEPS_OUTPUT=$(port deps "$PORTNAME" 2>&1) || {
+        DEPS_EXIT_CODE=$?
+        # Check if error is "port not found"
+        if echo "$DEPS_OUTPUT" | grep -qi "not found\|port.*not found\|unknown port"; then
+            DEPS_OUTPUT=$(sync_and_retry_deps "$PORTNAME" false)
+        else
+            echo "Error getting dependencies: $DEPS_OUTPUT" >&2
+            exit $DEPS_EXIT_CODE
+        fi
+    }
 fi
 
 # Extract all dependencies (build + library)
@@ -101,15 +136,34 @@ for dep in $DEPS; do
     echo "  Installing $dep..."
     
     # Capture output and error status
-    if OUTPUT=$(sudo port install "$dep" 2>&1); then
+    OUTPUT=$(sudo port install "$dep" 2>&1)
+    INSTALL_EXIT_CODE=$?
+    
+    if [ $INSTALL_EXIT_CODE -eq 0 ]; then
         echo "  ✅ $dep installed"
     else
-        EXIT_CODE=$?
-        echo "  ❌ Failed to install $dep (exit code: $EXIT_CODE)"
-        echo "  📋 Error details:"
-        echo "$OUTPUT" | sed 's/^/     /'  # Indent error output
-        echo ""
-        exit $EXIT_CODE
+        # Check if error is "port not found" - if so, sync and retry once
+        if echo "$OUTPUT" | grep -qi "not found\|port.*not found\|unknown port"; then
+            echo "  ⚠️  Port $dep not found, syncing port index and retrying..."
+            sudo port sync
+            echo "  Retrying installation of $dep..."
+            if OUTPUT=$(sudo port install "$dep" 2>&1); then
+                echo "  ✅ $dep installed (after sync)"
+            else
+                EXIT_CODE=$?
+                echo "  ❌ Failed to install $dep after sync (exit code: $EXIT_CODE)"
+                echo "  📋 Error details:"
+                echo "$OUTPUT" | sed 's/^/     /'  # Indent error output
+                echo ""
+                exit $EXIT_CODE
+            fi
+        else
+            echo "  ❌ Failed to install $dep (exit code: $INSTALL_EXIT_CODE)"
+            echo "  📋 Error details:"
+            echo "$OUTPUT" | sed 's/^/     /'  # Indent error output
+            echo ""
+            exit $INSTALL_EXIT_CODE
+        fi
     fi
 done
 
