@@ -44,9 +44,28 @@ jobs:
 
     - name: Clean existing bstring installation
       run: |
+        # Source MacPorts environment from our local copy
         source ./setupenv.bash
-        sudo port -f uninstall bstring
-        sudo port clean --dist bstring
+        
+        # Check if port is installed
+        if port installed bstring 2>/dev/null | grep -q bstring; then
+          echo "Removing existing bstring installation..."
+          
+          # Uninstall all installed versions (including variants)
+          # port installed outputs: "  bstring @1.0.3_0" or "  bstring @1.0.3_0+tests (active)"
+          # Extract and uninstall each version explicitly
+          port installed bstring | grep -E "^  bstring @" | awk '{print $1 " " $2}' | while read -r version_spec; do
+            echo "Uninstalling $version_spec..."
+            sudo port -f uninstall "$version_spec" || true
+          done
+          
+          # Clean distribution files
+          sudo port clean --dist bstring || true
+          
+          echo "✅ Clean complete"
+        else
+          echo "No existing bstring installation found"
+        fi
 
     - name: Install dependencies
       run: |
