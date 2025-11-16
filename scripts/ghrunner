@@ -609,9 +609,9 @@ start_tart_runner() {
             "$TART_PATH" run --net-bridged en0 "$runner_vm_name" &
             local vm_pid=$!
             
-            # Wait for VM to boot
-            print_info "Waiting for VM to boot..."
-            sleep 10
+            # Wait for VM to boot and initialize networking
+            print_info "Waiting for VM to boot and initialize networking (45 seconds)..."
+            sleep 45
             
             # Get VM connection info - prefer SSH hostname, fall back to tart ip
             print_info "Getting VM connection info..."
