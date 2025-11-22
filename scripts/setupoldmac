@@ -247,23 +247,61 @@ setup_blakeports_repo() {
 configure_macports_sources() {
     local hostname="$1"
     local username="$2"
-    
+
     print_status "Configuring MacPorts sources on $username@$hostname"
-    
+
     $OLDSSH_CMD -t "$username@$hostname" "
         # Create MacPorts config directory if it doesn't exist
         sudo mkdir -p /opt/local/etc/macports
-        
-        # Always update sources.conf (this ensures it's current)
-        echo 'Configuring MacPorts sources...'
+
+        # Configure sources.conf with local blakeports and fcix.net mirror
+        echo 'Configuring MacPorts sources.conf...'
         sudo tee /opt/local/etc/macports/sources.conf > /dev/null << 'EOF'
 file:///Users/blake/code/blakeports [default]
-rsync://rsync.macports.org/macports/release/tarballs/ports.tar.gz
+https://mirror.fcix.net/macports/release/tarballs/ports.tar
 EOF
-        
-        echo 'MacPorts sources configured'
+        echo 'MacPorts sources.conf configured'
+
+        # Configure archive_sites.conf
+        echo 'Configuring MacPorts archive_sites.conf...'
+        sudo tee /opt/local/etc/macports/archive_sites.conf > /dev/null << 'EOF'
+# MacPorts configuration file for binary archive sources.
+
+# disable default by uncommenting the following line
+name                	macports_archives
+
+# MacPorts archive site fcix
+name               	fcix
+urls                https://mirror.fcix.net/macports/packages/
+
+# MIT archive site
+name                  mit
+urls                  http://bos.us.packages.macports.org/
+EOF
+        echo 'MacPorts archive_sites.conf configured'
+
+        # Configure macports.conf - append fcix preferences if not already present
+        if ! grep -q 'preferred_hosts.*fcix' /opt/local/etc/macports/macports.conf 2>/dev/null; then
+            echo 'Configuring MacPorts macports.conf...'
+            sudo tee -a /opt/local/etc/macports/macports.conf > /dev/null << 'EOF'
+
+# Custom configuration for fcix.net mirror
+host_blacklist      packages.macports.org distfiles.macports.org rsync.macports.org
+preferred_hosts       mirror.fcix.net
+EOF
+            echo 'MacPorts macports.conf configured'
+        else
+            echo 'MacPorts macports.conf already configured for fcix'
+        fi
+
+        # Sync MacPorts to update port index
+        # Note: -v flag is required due to MacPorts bug with verboseflag variable
+        # Output suppressed as it produces tens of thousands of lines
+        echo 'Syncing MacPorts port index...'
+        sudo port -v sync >/dev/null 2>&1
+        echo 'MacPorts port index synced'
     "
-    
+
     print_success "MacPorts sources configuration completed"
 }
 
