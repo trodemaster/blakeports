@@ -71,7 +71,7 @@ jobs:
       run: |
         # Source MacPorts environment from our local copy
         source ./setupenv.bash
-        
+        sudo port install timeout || true
         # Check version output
-        /Applications/MacPorts/Previous.app/Contents/MacOS/Previous --version 2>&1 | head -5 || echo "Could not get Previous version"
+        timeout 20 /Applications/MacPorts/Previous.app/Contents/MacOS/Previous --version 2>&1 | head -5 || echo "Could not get Previous version"
 
