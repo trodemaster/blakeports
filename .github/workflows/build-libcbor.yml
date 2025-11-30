@@ -14,8 +14,13 @@ on:
         required: false
         default: 'main'
         type: string
-      run_modern:
-        description: '☑️ macOS 15 (Sequoia) & 26 (Tahoe)'
+      run_macos15:
+        description: 'macOS 15 (Sequoia)'
+        required: false
+        default: true
+        type: boolean
+      run_macos26:
+        description: 'macOS 26 (Tahoe)'
         required: false
         default: true
         type: boolean
@@ -24,8 +29,28 @@ on:
         required: false
         default: false
         type: boolean
+      run_tensix:
+        description: 'Mac OS X 10.6 (Snow Leopard)'
+        required: false
+        default: false
+        type: boolean
       run_tenseven:
         description: 'Mac OS X 10.7 (Lion)'
+        required: false
+        default: false
+        type: boolean
+      run_teneight:
+        description: 'Mac OS X 10.8 (Mountain Lion)'
+        required: false
+        default: false
+        type: boolean
+      run_tennine:
+        description: 'Mac OS X 10.9 (Mavericks)'
+        required: false
+        default: false
+        type: boolean
+      run_tenten:
+        description: 'Mac OS X 10.10 (Yosemite)'
         required: false
         default: false
         type: boolean
@@ -46,24 +71,75 @@ jobs:
           MATRIX='{"include":['
           FIRST=true
 
-          # Add modern platforms if explicitly requested OR if no platforms selected (default)
-          if [[ "${{ inputs.run_modern }}" == "true" ]] || [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.run_modern }}" == "false" && "${{ inputs.run_tenfive }}" == "false" && "${{ inputs.run_tenseven }}" == "false" ]]; then
+          # For non-workflow_dispatch events (push/PR), default to modern platforms
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
             MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"devel/libcbor"},'
             MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"devel/libcbor"}'
             FIRST=false
-          fi
+          else
+            # For workflow_dispatch, check individual platform selections
 
-          # Add tenfive if requested
-          if [[ "${{ inputs.run_tenfive }}" == "true" ]]; then
-            [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tenfive","runner":["self-hosted","tenfive"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenFive","os_version":"10.5","timeout":"60"}'
-            FIRST=false
-          fi
+            # macOS 15
+            if [[ "${{ inputs.run_macos15 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"devel/libcbor"}'
+              FIRST=false
+            fi
 
-          # Add tenseven if requested
-          if [[ "${{ inputs.run_tenseven }}" == "true" ]]; then
-            [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tenseven","runner":["self-hosted","tenseven"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenSeven","os_version":"10.7","timeout":"60"}'
+            # macOS 26
+            if [[ "${{ inputs.run_macos26 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"devel/libcbor"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.5
+            if [[ "${{ inputs.run_tenfive }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"tenfive","runner":["self-hosted","tenfive"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenFive","os_version":"10.5","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.6
+            if [[ "${{ inputs.run_tensix }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"tensix","runner":["self-hosted","tensix"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENSIX_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenSix","os_version":"10.6","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.7
+            if [[ "${{ inputs.run_tenseven }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"tenseven","runner":["self-hosted","tenseven"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenSeven","os_version":"10.7","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.8
+            if [[ "${{ inputs.run_teneight }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"teneight","runner":["self-hosted","teneight"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENEIGHT_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenEight","os_version":"10.8","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.9
+            if [[ "${{ inputs.run_tennine }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"tennine","runner":["self-hosted","tennine"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENNINE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenNine","os_version":"10.9","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.10
+            if [[ "${{ inputs.run_tenten }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"tenten","runner":["self-hosted","tenten"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENTEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenTen","os_version":"10.10","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # If no platforms selected, default to modern platforms
+            if [[ "$FIRST" == "true" ]]; then
+              MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"devel/libcbor"},'
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"devel/libcbor"}'
+            fi
           fi
 
           MATRIX+=']}'
