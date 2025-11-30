@@ -846,36 +846,11 @@ vmware_vm_exists() {
     fi
 }
 
-# Function to get VMware VM IP address
-get_vmware_vm_ip() {
-    local vm_name=$1
-    local vm_path=$(get_vmware_vm_path "$vm_name")
-    local max_attempts=30
-    local attempt=0
-
-    print_info "Getting IP address for VMware VM: $vm_name"
-
-    while [ $attempt -lt $max_attempts ]; do
-        attempt=$((attempt + 1))
-
-        # Try to get IP address using vmrun
-        local vm_ip
-        vm_ip=$(ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' getGuestIPAddress '$vm_path' -wait 2>/dev/null" | tr -d '\r\n')
-
-        if [ $? -eq 0 ] && [ -n "$vm_ip" ] && [ "$vm_ip" != "unknown" ]; then
-            print_success "Got VM IP address: $vm_ip (attempt $attempt/$max_attempts)"
-            echo "$vm_ip"
-            return 0
-        fi
-
-        if [ $attempt -lt $max_attempts ]; then
-            print_info "Waiting for VM IP address (attempt $attempt/$max_attempts), retrying in 5 seconds..."
-            sleep 5
-        fi
-    done
-
-    print_error "Failed to get VM IP address after $max_attempts attempts"
-    return 1
+# Function to get VMware VM hostname
+get_vmware_vm_hostname() {
+    local base_vm_name=$1
+    # Legacy VMs use predictable hostnames: {version}-runner.local
+    echo "${base_vm_name}-runner.local"
 }
 
 # Function to start vmware runner
@@ -947,16 +922,13 @@ start_vmware_runner() {
     print_info "Waiting for VM to boot (30 seconds)..."
     sleep 30
 
-    # Get VM IP address
-    local vm_ip
-    vm_ip=$(get_vmware_vm_ip "$runner_vm_name")
-    if [ $? -ne 0 ]; then
-        print_error "Failed to get VM IP address"
-        exit 1
-    fi
+    # Get VM hostname (predictable: {version}-runner.local)
+    local vm_hostname
+    vm_hostname=$(get_vmware_vm_hostname "$base_vm_name")
+    print_info "Using VM hostname: $vm_hostname"
 
     # Wait for SSH to be available with retries
-    if ! test_ssh_connection_with_retries "$vm_ip"; then
+    if ! test_ssh_connection_with_retries "$vm_hostname"; then
         print_error "Failed to establish SSH connection to VM after all retry attempts"
         exit 1
     fi
@@ -969,15 +941,15 @@ start_vmware_runner() {
 
     # Detect VM architecture and get appropriate runner package
     local runner_package
-    runner_package=$(detect_vm_architecture "$vm_ip" "$runner_version")
+    runner_package=$(detect_vm_architecture "$vm_hostname" "$runner_version")
     if [ $? -ne 0 ]; then
         print_error "Failed to determine runner package for VM"
         exit 1
     fi
 
     # Get OS and architecture info for labels
-    local vm_os_type=$(ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "uname -s" 2>/dev/null)
-    local vm_arch=$(ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "uname -m" 2>/dev/null)
+    local vm_os_type=$(ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "uname -s" 2>/dev/null)
+    local vm_arch=$(ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "uname -m" 2>/dev/null)
     local runner_labels=$(generate_runner_labels "vmware" "$vm_os_type" "$vm_arch")
     # Add the base_vm_name as a custom label for matrix targeting
     runner_labels="$runner_labels,$base_vm_name"
@@ -988,18 +960,18 @@ start_vmware_runner() {
 
     # Execute commands in VM to set up runner
     print_info "Downloading GitHub runner..."
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "curl -o /tmp/actions-runner.tar.gz -L '$runner_url'"
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "curl -o /tmp/actions-runner.tar.gz -L '$runner_url'"
     if [ $? -ne 0 ]; then
         print_error "Failed to download GitHub runner"
         exit 1
     fi
 
     print_info "Extracting runner..."
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "sudo mkdir -p /opt/actions-runner && sudo tar -xzf /tmp/actions-runner.tar.gz -C /opt/actions-runner && sudo chown -R $VMWARE_VM_USER:staff /opt/actions-runner && rm /tmp/actions-runner.tar.gz"
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "sudo mkdir -p /opt/actions-runner && sudo tar -xzf /tmp/actions-runner.tar.gz -C /opt/actions-runner && sudo chown -R $VMWARE_VM_USER:staff /opt/actions-runner && rm /tmp/actions-runner.tar.gz"
 
     print_info "Configuring runner..."
     # Configure the runner with the token - use the original name for the runner registration
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "cd /opt/actions-runner && ./config.sh --url 'https://github.com/$GITHUB_OWNER/$GITHUB_REPO' --token '$RUNNER_TOKEN' --name '$base_vm_name' --labels '$runner_labels' --unattended --replace"
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./config.sh --url 'https://github.com/$GITHUB_OWNER/$GITHUB_REPO' --token '$RUNNER_TOKEN' --name '$base_vm_name' --labels '$runner_labels' --unattended --replace"
 
     if [ $? -ne 0 ]; then
         print_error "Failed to configure GitHub runner"
@@ -1008,22 +980,22 @@ start_vmware_runner() {
 
     # Install and start service
     print_info "Installing runner service..."
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "cd /opt/actions-runner && ./svc.sh install"
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh install"
     if [ $? -ne 0 ]; then
         print_error "Failed to install runner service"
         exit 1
     fi
 
     print_info "Starting runner service..."
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "cd /opt/actions-runner && ./svc.sh start"
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh start"
     if [ $? -ne 0 ]; then
         print_error "Failed to start runner service"
         exit 1
     fi
 
-    print_success "GitHub runner '$base_vm_name' is now running on VMware VM '$runner_vm_name' (IP: $vm_ip)"
+    print_success "GitHub runner '$base_vm_name' is now running on VMware VM '$runner_vm_name' (hostname: $vm_hostname)"
     print_info "Runner service status:"
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "cd /opt/actions-runner && ./svc.sh status"
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh status"
 }
 
 # Helper function to start a single runner (for parallel execution)
