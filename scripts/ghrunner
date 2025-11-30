@@ -58,6 +58,21 @@ SSH_OPTS=(
     "-o" "IdentityAgent /Users/blake/Library/Containers/com.maxgoedjen.Secretive.SecretAgent/Data/socket.ssh"
 )
 
+# Legacy SSH configuration for old macOS VMs (10.5-10.10)
+# These VMs require openssh9-client with legacy crypto algorithms
+LEGACY_SSH_CMD="ssh9"
+LEGACY_SSH_KEY="$HOME/.ssh/oldmac"
+LEGACY_SSH_OPTS=(
+    "-i" "$LEGACY_SSH_KEY"
+    "-o" "HostKeyAlgorithms=ssh-rsa"
+    "-o" "PubkeyAcceptedKeyTypes=ssh-rsa"
+    "-o" "KexAlgorithms=diffie-hellman-group1-sha1"
+    "-o" "Ciphers=aes128-cbc"
+    "-o" "MACs=hmac-sha1"
+    "-o" "StrictHostKeyChecking=no"
+    "-o" "Protocol=2"
+)
+
 # Function to print usage
 usage() {
     cat << EOF
@@ -403,30 +418,42 @@ debug_vm_connectivity() {
 # Function to test SSH connection with retries
 test_ssh_connection_with_retries() {
     local vm_ip=$1
+    local use_legacy_ssh=${2:-false}  # Optional parameter for legacy SSH
     local max_attempts=24  # 24 attempts * 5 seconds = 2 minutes
     local attempt=0
-    
-    print_info "Testing SSH connection to admin@$vm_ip (will retry for up to 2 minutes)..."
-    print_info "SSH options: ${SSH_OPTS[*]}"
-    
+
+    # Determine which SSH command and options to use
+    local ssh_cmd="ssh"
+    local ssh_user="admin"
+    local ssh_opts_array=("${SSH_OPTS[@]}")
+
+    if [ "$use_legacy_ssh" = "true" ]; then
+        ssh_cmd="$LEGACY_SSH_CMD"
+        ssh_user="$VMWARE_VM_USER"
+        ssh_opts_array=("${LEGACY_SSH_OPTS[@]}")
+    fi
+
+    print_info "Testing SSH connection to $ssh_user@$vm_ip (will retry for up to 2 minutes)..."
+    print_info "Using SSH command: $ssh_cmd"
+
     # Run connectivity debug first if debug mode is enabled
     if [ "$DEBUG_MODE" = "true" ]; then
         debug_vm_connectivity "$vm_ip"
     fi
-    
+
     while [ $attempt -lt $max_attempts ]; do
         attempt=$((attempt + 1))
-        
+
         # Try SSH connection and capture both stdout and stderr for debugging
         local ssh_output
         local ssh_exit_code
-        
-        print_info "SSH attempt $attempt/$max_attempts: ssh ${SSH_OPTS[*]} -o ConnectTimeout=5 admin@$vm_ip"
-        
+
+        print_info "SSH attempt $attempt/$max_attempts"
+
         # Capture SSH output for debugging
-        ssh_output=$(ssh "${SSH_OPTS[@]}" -o ConnectTimeout=5 admin@"$vm_ip" "echo 'SSH connection successful'" 2>&1)
+        ssh_output=$($ssh_cmd "${ssh_opts_array[@]}" -o ConnectTimeout=5 $ssh_user@"$vm_ip" "echo 'SSH connection successful'" 2>&1)
         ssh_exit_code=$?
-        
+
         if [ $ssh_exit_code -eq 0 ]; then
             print_success "SSH connection established (attempt $attempt/$max_attempts)"
             return 0
@@ -441,20 +468,19 @@ test_ssh_connection_with_retries() {
                 print_error "No SSH error output captured"
             fi
         fi
-        
+
         if [ $attempt -lt $max_attempts ]; then
             print_info "SSH connection attempt $attempt/$max_attempts failed, retrying in 5 seconds..."
             sleep 5
         fi
     done
-    
+
     print_error "SSH connection failed after $max_attempts attempts (2 minutes)"
-    print_error "Command used: ssh ${SSH_OPTS[*]} -o ConnectTimeout=5 admin@$vm_ip \"echo 'SSH connection successful'\""
     print_error "Troubleshooting steps:"
     print_error "  1. Verify VM is fully booted"
     print_error "  2. Check if SSH service is running on the VM"
-    print_error "  3. Verify the admin user exists and has SSH access"
-    print_error "  4. Try connecting manually: ssh admin@$vm_ip"
+    print_error "  3. Verify the $ssh_user user exists and has SSH access"
+    print_error "  4. Try connecting manually: $ssh_cmd $ssh_user@$vm_ip"
     print_error "  5. Check if the VM IP is correct: $vm_ip"
     print_error "  6. Verify SSH key authentication is working"
     return 1
@@ -508,25 +534,37 @@ detect_primary_network_interface() {
 detect_vm_architecture() {
     local vm_ip=$1
     local runner_version=$2
-    
+    local use_legacy_ssh=${3:-false}  # Optional parameter for legacy SSH
+
+    # Determine which SSH command and options to use
+    local ssh_cmd="ssh"
+    local ssh_user="admin"
+    local ssh_opts_array=("${SSH_OPTS[@]}")
+
+    if [ "$use_legacy_ssh" = "true" ]; then
+        ssh_cmd="$LEGACY_SSH_CMD"
+        ssh_user="$VMWARE_VM_USER"
+        ssh_opts_array=("${LEGACY_SSH_OPTS[@]}")
+    fi
+
     print_info "Detecting VM architecture..." >&2
-    
+
     # Get system architecture
     local arch
-    arch=$(ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "uname -m" 2>/dev/null)
+    arch=$($ssh_cmd "${ssh_opts_array[@]}" $ssh_user@"$vm_ip" "uname -m" 2>/dev/null)
     if [ $? -ne 0 ]; then
         print_error "Failed to detect VM architecture" >&2
         return 1
     fi
-    
+
     # Get OS type
     local os_type
-    os_type=$(ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "uname -s" 2>/dev/null)
+    os_type=$($ssh_cmd "${ssh_opts_array[@]}" $ssh_user@"$vm_ip" "uname -s" 2>/dev/null)
     if [ $? -ne 0 ]; then
         print_error "Failed to detect VM OS type" >&2
         return 1
     fi
-    
+
     print_info "Detected OS: $os_type, Architecture: $arch" >&2
     
     # Determine runner package based on OS and architecture
@@ -928,8 +966,8 @@ start_vmware_runner() {
     vm_hostname=$(get_vmware_vm_hostname "$base_vm_name")
     print_info "Using VM hostname: $vm_hostname"
 
-    # Wait for SSH to be available with retries
-    if ! test_ssh_connection_with_retries "$vm_hostname"; then
+    # Wait for SSH to be available with retries (using legacy SSH)
+    if ! test_ssh_connection_with_retries "$vm_hostname" true; then
         print_error "Failed to establish SSH connection to VM after all retry attempts"
         exit 1
     fi
@@ -940,17 +978,17 @@ start_vmware_runner() {
     # Get latest stable runner version
     local runner_version=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/v//')
 
-    # Detect VM architecture and get appropriate runner package
+    # Detect VM architecture and get appropriate runner package (using legacy SSH)
     local runner_package
-    runner_package=$(detect_vm_architecture "$vm_hostname" "$runner_version")
+    runner_package=$(detect_vm_architecture "$vm_hostname" "$runner_version" true)
     if [ $? -ne 0 ]; then
         print_error "Failed to determine runner package for VM"
         exit 1
     fi
 
     # Get OS and architecture info for labels
-    local vm_os_type=$(ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "uname -s" 2>/dev/null)
-    local vm_arch=$(ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "uname -m" 2>/dev/null)
+    local vm_os_type=$($LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "uname -s" 2>/dev/null)
+    local vm_arch=$($LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "uname -m" 2>/dev/null)
     local runner_labels=$(generate_runner_labels "vmware" "$vm_os_type" "$vm_arch")
     # Add the base_vm_name as a custom label for matrix targeting
     runner_labels="$runner_labels,$base_vm_name"
@@ -961,18 +999,18 @@ start_vmware_runner() {
 
     # Execute commands in VM to set up runner
     print_info "Downloading GitHub runner..."
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "curl -o /tmp/actions-runner.tar.gz -L '$runner_url'"
+    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "curl -o /tmp/actions-runner.tar.gz -L '$runner_url'"
     if [ $? -ne 0 ]; then
         print_error "Failed to download GitHub runner"
         exit 1
     fi
 
     print_info "Extracting runner..."
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "sudo mkdir -p /opt/actions-runner && sudo tar -xzf /tmp/actions-runner.tar.gz -C /opt/actions-runner && sudo chown -R $VMWARE_VM_USER:staff /opt/actions-runner && rm /tmp/actions-runner.tar.gz"
+    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "sudo mkdir -p /opt/actions-runner && sudo tar -xzf /tmp/actions-runner.tar.gz -C /opt/actions-runner && sudo chown -R $VMWARE_VM_USER:staff /opt/actions-runner && rm /tmp/actions-runner.tar.gz"
 
     print_info "Configuring runner..."
     # Configure the runner with the token - use the original name for the runner registration
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./config.sh --url 'https://github.com/$GITHUB_OWNER/$GITHUB_REPO' --token '$RUNNER_TOKEN' --name '$base_vm_name' --labels '$runner_labels' --unattended --replace"
+    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./config.sh --url 'https://github.com/$GITHUB_OWNER/$GITHUB_REPO' --token '$RUNNER_TOKEN' --name '$base_vm_name' --labels '$runner_labels' --unattended --replace"
 
     if [ $? -ne 0 ]; then
         print_error "Failed to configure GitHub runner"
@@ -981,14 +1019,14 @@ start_vmware_runner() {
 
     # Install and start service
     print_info "Installing runner service..."
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh install"
+    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh install"
     if [ $? -ne 0 ]; then
         print_error "Failed to install runner service"
         exit 1
     fi
 
     print_info "Starting runner service..."
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh start"
+    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh start"
     if [ $? -ne 0 ]; then
         print_error "Failed to start runner service"
         exit 1
@@ -996,7 +1034,7 @@ start_vmware_runner() {
 
     print_success "GitHub runner '$base_vm_name' is now running on VMware VM '$runner_vm_name' (hostname: $vm_hostname)"
     print_info "Runner service status:"
-    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh status"
+    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh status"
 }
 
 # Helper function to start a single runner (for parallel execution)
@@ -1677,29 +1715,38 @@ remove_runner() {
         # Test SSH connection with retries
         print_info "Testing SSH connection to $ssh_target..."
         local test_ip="$vm_ip"
+        local use_legacy=false
         if [ "$runner_type" = "vmware" ]; then
             test_ip="$vm_hostname"
+            use_legacy=true
         fi
 
-        if ! test_ssh_connection_with_retries "$test_ip" 2>/dev/null; then
+        if ! test_ssh_connection_with_retries "$test_ip" "$use_legacy" 2>/dev/null; then
             print_error "SSH connection failed to $ssh_target"
             print_warning "Cannot automatically remove runner. Will proceed to shutdown and delete VM."
         else
             print_success "SSH connection established"
 
-            # Check if runner directory exists
-            if ssh "${SSH_OPTS[@]}" "$ssh_target" "test -d /opt/actions-runner" 2>/dev/null; then
+            # Check if runner directory exists (use appropriate SSH command)
+            local ssh_cmd="ssh"
+            local ssh_opts_ref="SSH_OPTS[@]"
+            if [ "$runner_type" = "vmware" ]; then
+                ssh_cmd="$LEGACY_SSH_CMD"
+                ssh_opts_ref="LEGACY_SSH_OPTS[@]"
+            fi
+
+            if $ssh_cmd "${!ssh_opts_ref}" "$ssh_target" "test -d /opt/actions-runner" 2>/dev/null; then
                 # Stop the runner service if it's running
                 print_info "Stopping runner service..."
-                ssh "${SSH_OPTS[@]}" "$ssh_target" "cd /opt/actions-runner && ./svc.sh stop" 2>/dev/null || print_warning "Service may not be running"
+                $ssh_cmd "${!ssh_opts_ref}" "$ssh_target" "cd /opt/actions-runner && ./svc.sh stop" 2>/dev/null || print_warning "Service may not be running"
 
                 # Uninstall the service
                 print_info "Uninstalling runner service..."
-                ssh "${SSH_OPTS[@]}" "$ssh_target" "cd /opt/actions-runner && ./svc.sh uninstall" 2>/dev/null || print_warning "Service may not be installed"
+                $ssh_cmd "${!ssh_opts_ref}" "$ssh_target" "cd /opt/actions-runner && ./svc.sh uninstall" 2>/dev/null || print_warning "Service may not be installed"
 
                 # Remove the runner from GitHub
                 print_info "Removing runner from GitHub..."
-                if ssh "${SSH_OPTS[@]}" "$ssh_target" "cd /opt/actions-runner && ./config.sh remove --token '$RUNNER_TOKEN'" 2>/dev/null; then
+                if $ssh_cmd "${!ssh_opts_ref}" "$ssh_target" "cd /opt/actions-runner && ./config.sh remove --token '$RUNNER_TOKEN'" 2>/dev/null; then
                     print_success "Runner removed from GitHub successfully"
                 else
                     print_warning "Failed to remove runner from GitHub automatically"
@@ -1708,7 +1755,7 @@ remove_runner() {
 
                 # Clean up the installation directory
                 print_info "Cleaning up installation directory..."
-                ssh "${SSH_OPTS[@]}" "$ssh_target" "sudo rm -rf /opt/actions-runner" 2>/dev/null || print_warning "Failed to clean up installation directory"
+                $ssh_cmd "${!ssh_opts_ref}" "$ssh_target" "sudo rm -rf /opt/actions-runner" 2>/dev/null || print_warning "Failed to clean up installation directory"
             else
                 print_warning "GitHub runner not found on VM. It may have already been removed."
             fi
