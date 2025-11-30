@@ -895,36 +895,13 @@ start_vmware_runner() {
     else
         print_info "Creating linked clone: $runner_vm_name from runner-${base_vm_name}-base"
 
-        # Check if a snapshot exists, if not create one
-        print_info "Checking for base snapshot..."
-        local snapshots
-        snapshots=$(ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' listSnapshots '$base_vm_path'" 2>/dev/null)
-
-        local snapshot_name="base"
-        if ! echo "$snapshots" | grep -q "^$snapshot_name$"; then
-            print_info "Creating base snapshot for clean clones..."
-            ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' snapshot '$base_vm_path' '$snapshot_name'"
-            if [ $? -ne 0 ]; then
-                print_warning "Failed to create snapshot, will try clone without snapshot"
-                snapshot_name=""
-            else
-                print_success "Base snapshot created"
-            fi
-        else
-            print_info "Using existing base snapshot"
-        fi
-
         # Create the directory for the clone
         ssh "$VMWARE_SSH_HOST" "mkdir -p '${VMWARE_BASE_DIR}/${runner_vm_name}.vmwarevm'"
 
         # Clone the VM (linked clone for efficiency)
+        # Linked clones don't require explicit snapshots - vmrun handles it
         print_info "Cloning VM (this may take a moment)..."
-        if [ -n "$snapshot_name" ]; then
-            ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' clone '$base_vm_path' '$runner_vm_path' linked -snapshot='$snapshot_name' -cloneName='$runner_vm_name'"
-        else
-            # Clone without snapshot (uses current state)
-            ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' clone '$base_vm_path' '$runner_vm_path' linked -cloneName='$runner_vm_name'"
-        fi
+        ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' clone '$base_vm_path' '$runner_vm_path' linked -cloneName='$runner_vm_name'"
 
         if [ $? -ne 0 ]; then
             print_error "Failed to clone VM"
