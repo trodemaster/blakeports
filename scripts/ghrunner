@@ -911,6 +911,9 @@ start_vmware_runner() {
         exit 1
     fi
 
+    # Track if VM was already running (to skip boot wait)
+    local vm_already_running=false
+
     # Check if runner VM already exists
     if vmware_vm_exists "$runner_vm_name"; then
         print_info "Runner VM '$runner_vm_name' already exists"
@@ -921,6 +924,7 @@ start_vmware_runner() {
 
         if echo "$running_vms" | grep -q "$runner_vm_path"; then
             print_warning "Runner VM '$runner_vm_name' is already running"
+            vm_already_running=true
         else
             print_info "Starting existing runner VM: $runner_vm_name"
             ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' start '$runner_vm_path' nogui"
@@ -957,9 +961,13 @@ start_vmware_runner() {
         print_success "VM started successfully"
     fi
 
-    # Wait for VM to boot
-    print_info "Waiting for VM to boot (30 seconds)..."
-    sleep 30
+    # Wait for VM to boot (only if we just started it)
+    if [ "$vm_already_running" = false ]; then
+        print_info "Waiting for VM to boot (30 seconds)..."
+        sleep 30
+    else
+        print_info "Skipping boot wait (VM was already running)"
+    fi
 
     # Get VM hostname (predictable: {version}-runner.local)
     local vm_hostname
