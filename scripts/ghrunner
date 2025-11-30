@@ -28,7 +28,13 @@ GITHUB_REPO="${GITHUB_REPO:-blakeports}"
 # JSON format with type, name, ssh_host, and optional labels/description
 DEFAULT_RUNNER_CONFIG='[
   {"type":"tart","name":"macOS_15","ssh_host":""},
-  {"type":"tart","name":"macOS_26","ssh_host":""}
+  {"type":"tart","name":"macOS_26","ssh_host":""},
+  {"type":"vmware","name":"tenfive","ssh_host":""},
+  {"type":"vmware","name":"tensix","ssh_host":""},
+  {"type":"vmware","name":"tenseven","ssh_host":""},
+  {"type":"vmware","name":"teneight","ssh_host":""},
+  {"type":"vmware","name":"tennine","ssh_host":""},
+  {"type":"vmware","name":"tenten","ssh_host":""}
 ]'
 RUNNER_CONFIG="${RUNNER_CONFIG:-$DEFAULT_RUNNER_CONFIG}"
 
@@ -36,6 +42,11 @@ RUNNER_CONFIG="${RUNNER_CONFIG:-$DEFAULT_RUNNER_CONFIG}"
 TART_PATH="/Applications/tart.app/Contents/MacOS/tart"
 VMWARE_VMRUN_PATH="/Applications/VMware Fusion.app/Contents/Public/vmrun"
 LIMACTL_PATH="/opt/local/bin/limactl"
+
+# VMware configuration
+VMWARE_SSH_HOST="darkstar"
+VMWARE_BASE_DIR="/Volumes/JonesFarm/actions-runners"
+VMWARE_VM_USER="admin"  # Default SSH user for VMware VMs
 
 # SSH configuration
 SSH_OPTS=(
@@ -72,9 +83,9 @@ Options:
 
 Examples:
     # Create different types of runners for current repo
-    $0 -tart macos-runner
+    $0 -tart macOS_15
     $0 -lima ubuntu-runner
-    $0 -vmware windows-runner
+    $0 -vmware tenfive        # Creates runner from runner-tenfive-base on darkstar
     
     # Create runner for specific owner/repo
     $0 -tart macos-runner -owner myusername -repo myproject
@@ -811,30 +822,208 @@ start_lima_runner() {
     fi
 }
 
-# Function to start vmware runner - stub
-start_vmware_runner() {
-    local runner_name=$1
-    print_info "Starting vmware runner: $runner_name (stub implementation)"
-    
-    if [ -n "$SSH_HOST" ]; then
-        print_info "Starting vmware runner on remote host: $SSH_HOST"
-        # TODO: Implement remote vmware runner start
-        print_warning "Remote vmware runner start not yet implemented"
+# Function to get VMware VM path on remote host
+get_vmware_vm_path() {
+    local vm_name=$1
+    echo "$VMWARE_BASE_DIR/${vm_name}.vmwarevm/${vm_name}.vmx"
+}
+
+# Function to get VMware base VM path
+get_vmware_base_vm_path() {
+    local base_name=$1
+    echo "$VMWARE_BASE_DIR/runner-${base_name}-base.vmwarevm/runner-${base_name}-base.vmx"
+}
+
+# Function to check if VMware VM exists on remote host
+vmware_vm_exists() {
+    local vm_name=$1
+    local vm_path=$(get_vmware_vm_path "$vm_name")
+
+    if ssh "$VMWARE_SSH_HOST" "test -f '$vm_path'"; then
+        return 0
     else
-        # Check if vmware vmrun is available
-        if [ ! -x "$VMWARE_VMRUN_PATH" ]; then
-            print_error "VMware vmrun not found at: $VMWARE_VMRUN_PATH"
+        return 1
+    fi
+}
+
+# Function to get VMware VM IP address
+get_vmware_vm_ip() {
+    local vm_name=$1
+    local vm_path=$(get_vmware_vm_path "$vm_name")
+    local max_attempts=30
+    local attempt=0
+
+    print_info "Getting IP address for VMware VM: $vm_name"
+
+    while [ $attempt -lt $max_attempts ]; do
+        attempt=$((attempt + 1))
+
+        # Try to get IP address using vmrun
+        local vm_ip
+        vm_ip=$(ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH getGuestIPAddress '$vm_path' -wait 2>/dev/null" | tr -d '\r\n')
+
+        if [ $? -eq 0 ] && [ -n "$vm_ip" ] && [ "$vm_ip" != "unknown" ]; then
+            print_success "Got VM IP address: $vm_ip (attempt $attempt/$max_attempts)"
+            echo "$vm_ip"
+            return 0
+        fi
+
+        if [ $attempt -lt $max_attempts ]; then
+            print_info "Waiting for VM IP address (attempt $attempt/$max_attempts), retrying in 5 seconds..."
+            sleep 5
+        fi
+    done
+
+    print_error "Failed to get VM IP address after $max_attempts attempts"
+    return 1
+}
+
+# Function to start vmware runner
+start_vmware_runner() {
+    local base_vm_name=$1
+    local runner_vm_name="runner-${base_vm_name}"
+    local base_vm_path=$(get_vmware_base_vm_path "$base_vm_name")
+    local runner_vm_path=$(get_vmware_vm_path "$runner_vm_name")
+
+    print_info "Starting VMware runner: $runner_vm_name (from base: runner-${base_vm_name}-base)"
+    print_info "Remote VMware host: $VMWARE_SSH_HOST"
+    print_info "Base VM path: $base_vm_path"
+    print_info "Runner VM path: $runner_vm_path"
+
+    # Check if base VM exists
+    if ! ssh "$VMWARE_SSH_HOST" "test -f '$base_vm_path'"; then
+        print_error "Base VMware VM not found: $base_vm_path"
+        print_info "Available VMs in $VMWARE_BASE_DIR:"
+        ssh "$VMWARE_SSH_HOST" "ls -1 '$VMWARE_BASE_DIR' | grep -E '\.vmwarevm$'"
+        exit 1
+    fi
+
+    # Check if runner VM already exists
+    if vmware_vm_exists "$runner_vm_name"; then
+        print_info "Runner VM '$runner_vm_name' already exists"
+
+        # Check if it's already running
+        local running_vms
+        running_vms=$(ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH list" 2>/dev/null)
+
+        if echo "$running_vms" | grep -q "$runner_vm_path"; then
+            print_warning "Runner VM '$runner_vm_name' is already running"
+        else
+            print_info "Starting existing runner VM: $runner_vm_name"
+            ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH start '$runner_vm_path' nogui"
+            if [ $? -ne 0 ]; then
+                print_error "Failed to start VM"
+                exit 1
+            fi
+            print_success "VM started successfully"
+        fi
+    else
+        print_info "Creating linked clone: $runner_vm_name from runner-${base_vm_name}-base"
+
+        # Create the directory for the clone
+        ssh "$VMWARE_SSH_HOST" "mkdir -p '${VMWARE_BASE_DIR}/${runner_vm_name}.vmwarevm'"
+
+        # Clone the VM (linked clone for efficiency)
+        print_info "Cloning VM (this may take a moment)..."
+        ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH clone '$base_vm_path' '$runner_vm_path' linked -snapshot=base -cloneName='$runner_vm_name'"
+
+        if [ $? -ne 0 ]; then
+            print_error "Failed to clone VM"
             exit 1
         fi
-        
-        # Stub implementation
-        print_warning "VMware runner start is a stub - implement actual logic for $runner_name"
-        print_info "Using vmware vmrun path: $VMWARE_VMRUN_PATH"
-        print_info "This would typically involve:"
-        print_info "  1. Starting VMware VM with specific configuration"
-        print_info "  2. Installing GitHub runner on the VM"
-        print_info "  3. Configuring and starting the runner service"
+        print_success "VM cloned successfully"
+
+        print_info "Starting runner VM: $runner_vm_name"
+        ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH start '$runner_vm_path' nogui"
+
+        if [ $? -ne 0 ]; then
+            print_error "Failed to start VM"
+            exit 1
+        fi
+        print_success "VM started successfully"
     fi
+
+    # Wait for VM to boot
+    print_info "Waiting for VM to boot (30 seconds)..."
+    sleep 30
+
+    # Get VM IP address
+    local vm_ip
+    vm_ip=$(get_vmware_vm_ip "$runner_vm_name")
+    if [ $? -ne 0 ]; then
+        print_error "Failed to get VM IP address"
+        exit 1
+    fi
+
+    # Wait for SSH to be available with retries
+    if ! test_ssh_connection_with_retries "$vm_ip"; then
+        print_error "Failed to establish SSH connection to VM after all retry attempts"
+        exit 1
+    fi
+
+    # Install and configure GitHub runner
+    print_info "Installing GitHub runner on VM..."
+
+    # Get latest stable runner version
+    local runner_version=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/v//')
+
+    # Detect VM architecture and get appropriate runner package
+    local runner_package
+    runner_package=$(detect_vm_architecture "$vm_ip" "$runner_version")
+    if [ $? -ne 0 ]; then
+        print_error "Failed to determine runner package for VM"
+        exit 1
+    fi
+
+    # Get OS and architecture info for labels
+    local vm_os_type=$(ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "uname -s" 2>/dev/null)
+    local vm_arch=$(ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "uname -m" 2>/dev/null)
+    local runner_labels=$(generate_runner_labels "vmware" "$vm_os_type" "$vm_arch")
+    # Add the base_vm_name as a custom label for matrix targeting
+    runner_labels="$runner_labels,$base_vm_name"
+
+    local runner_url="https://github.com/actions/runner/releases/download/v${runner_version}/${runner_package}"
+    print_info "Using runner package: $runner_package"
+    print_info "Runner labels: $runner_labels"
+
+    # Execute commands in VM to set up runner
+    print_info "Downloading GitHub runner..."
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "curl -o /tmp/actions-runner.tar.gz -L '$runner_url'"
+    if [ $? -ne 0 ]; then
+        print_error "Failed to download GitHub runner"
+        exit 1
+    fi
+
+    print_info "Extracting runner..."
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "sudo mkdir -p /opt/actions-runner && sudo tar -xzf /tmp/actions-runner.tar.gz -C /opt/actions-runner && sudo chown -R $VMWARE_VM_USER:staff /opt/actions-runner && rm /tmp/actions-runner.tar.gz"
+
+    print_info "Configuring runner..."
+    # Configure the runner with the token - use the original name for the runner registration
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "cd /opt/actions-runner && ./config.sh --url 'https://github.com/$GITHUB_OWNER/$GITHUB_REPO' --token '$RUNNER_TOKEN' --name '$base_vm_name' --labels '$runner_labels' --unattended --replace"
+
+    if [ $? -ne 0 ]; then
+        print_error "Failed to configure GitHub runner"
+        exit 1
+    fi
+
+    # Install and start service
+    print_info "Installing runner service..."
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "cd /opt/actions-runner && ./svc.sh install"
+    if [ $? -ne 0 ]; then
+        print_error "Failed to install runner service"
+        exit 1
+    fi
+
+    print_info "Starting runner service..."
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "cd /opt/actions-runner && ./svc.sh start"
+    if [ $? -ne 0 ]; then
+        print_error "Failed to start runner service"
+        exit 1
+    fi
+
+    print_success "GitHub runner '$base_vm_name' is now running on VMware VM '$runner_vm_name' (IP: $vm_ip)"
+    print_info "Runner service status:"
+    ssh "${SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_ip" "cd /opt/actions-runner && ./svc.sh status"
 }
 
 # Helper function to start a single runner (for parallel execution)
@@ -1075,12 +1264,90 @@ stop_all_workflows() {
     fi
 }
 
+# Function to remove all VMware runners
+remove_all_vmware_runners() {
+    print_info "Discovering and removing VMware runner VMs on $VMWARE_SSH_HOST..."
+
+    # Get list of all VMs that start with "runner-" but NOT the base templates (which end with "-base")
+    local runner_vms
+    runner_vms=$(ssh "$VMWARE_SSH_HOST" "ls -1 '$VMWARE_BASE_DIR' | grep -E '^runner-' | grep -v '\-base\.vmwarevm$' | grep '\.vmwarevm$' | sed 's/\.vmwarevm$//'")
+
+    if [ -z "$runner_vms" ]; then
+        print_info "No VMware runner VMs found"
+        return 0
+    fi
+
+    print_info "Found runner VMs to process:"
+    echo "$runner_vms" | while read -r vm; do echo "  - $vm"; done
+
+    local runner_count=0
+    local removed_count=0
+
+    # Process each runner VM
+    while IFS= read -r vm_name; do
+        if [ -z "$vm_name" ]; then
+            continue
+        fi
+
+        runner_count=$((runner_count + 1))
+
+        print_info "Processing runner VM $runner_count: $vm_name"
+
+        # Safety check: Never delete template VMs (those with -base suffix)
+        if [[ "$vm_name" == *"-base" ]]; then
+            print_error "SAFETY CHECK FAILED: Attempted to delete template VM '$vm_name'"
+            print_error "Template VMs should never be deleted. Skipping to prevent data loss."
+            continue
+        fi
+
+        local vm_path=$(get_vmware_vm_path "$vm_name")
+
+        # Check if VM is running
+        local running_vms
+        running_vms=$(ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH list" 2>/dev/null)
+
+        if echo "$running_vms" | grep -q "$vm_path"; then
+            print_info "VM '$vm_name' is running - stopping it..."
+            ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH stop '$vm_path' hard" 2>/dev/null || print_warning "Failed to stop VM (may already be stopped)"
+            sleep 2
+        fi
+
+        # Delete the VM
+        print_info "Deleting VMware VM: $vm_name"
+        if ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH deleteVM '$vm_path'" 2>/dev/null; then
+            print_success "Deleted VM: $vm_name"
+            removed_count=$((removed_count + 1))
+        else
+            # Try alternative: just remove the directory
+            print_warning "vmrun deleteVM failed, trying direct directory removal..."
+            if ssh "$VMWARE_SSH_HOST" "rm -rf '${VMWARE_BASE_DIR}/${vm_name}.vmwarevm'"; then
+                print_success "Removed VM directory: $vm_name"
+                removed_count=$((removed_count + 1))
+            else
+                print_error "Failed to delete VM: $vm_name (but continuing with other VMs)"
+            fi
+        fi
+
+        echo "---" # Separator between VMs
+
+    done <<< "$runner_vms"
+
+    print_success "Processed $runner_count VMware runner VMs, removed $removed_count VMs"
+
+    if [ "$removed_count" -gt 0 ]; then
+        print_info "Base VMs remain available for future runner creation"
+    fi
+}
+
 # Function to remove all runners
 remove_all_runners() {
     print_info "Removing all GitHub runners using GitHub API..."
 
     # Remove all tart VMs (local cleanup only)
     remove_all_tart_runners
+
+    # Remove all VMware VMs (remote cleanup)
+    remove_all_vmware_runners
 
     # Remove all runners from GitHub via API
     while :; do
