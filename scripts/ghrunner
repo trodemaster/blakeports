@@ -46,7 +46,7 @@ LIMACTL_PATH="/opt/local/bin/limactl"
 # VMware configuration
 VMWARE_SSH_HOST="darkstar"
 VMWARE_BASE_DIR="/Volumes/JonesFarm/actions-runners"
-VMWARE_VM_USER="admin"  # Default SSH user for VMware VMs
+VMWARE_VM_USER="blake"  # SSH user for VMware VMs
 
 # SSH configuration
 SSH_OPTS=(
