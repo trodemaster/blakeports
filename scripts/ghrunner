@@ -860,7 +860,7 @@ get_vmware_vm_ip() {
 
         # Try to get IP address using vmrun
         local vm_ip
-        vm_ip=$(ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH getGuestIPAddress '$vm_path' -wait 2>/dev/null" | tr -d '\r\n')
+        vm_ip=$(ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' getGuestIPAddress '$vm_path' -wait 2>/dev/null" | tr -d '\r\n')
 
         if [ $? -eq 0 ] && [ -n "$vm_ip" ] && [ "$vm_ip" != "unknown" ]; then
             print_success "Got VM IP address: $vm_ip (attempt $attempt/$max_attempts)"
@@ -904,13 +904,13 @@ start_vmware_runner() {
 
         # Check if it's already running
         local running_vms
-        running_vms=$(ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH list" 2>/dev/null)
+        running_vms=$(ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' list" 2>/dev/null)
 
         if echo "$running_vms" | grep -q "$runner_vm_path"; then
             print_warning "Runner VM '$runner_vm_name' is already running"
         else
             print_info "Starting existing runner VM: $runner_vm_name"
-            ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH start '$runner_vm_path' nogui"
+            ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' start '$runner_vm_path' nogui"
             if [ $? -ne 0 ]; then
                 print_error "Failed to start VM"
                 exit 1
@@ -925,7 +925,7 @@ start_vmware_runner() {
 
         # Clone the VM (linked clone for efficiency)
         print_info "Cloning VM (this may take a moment)..."
-        ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH clone '$base_vm_path' '$runner_vm_path' linked -snapshot=base -cloneName='$runner_vm_name'"
+        ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' clone '$base_vm_path' '$runner_vm_path' linked -snapshot=base -cloneName='$runner_vm_name'"
 
         if [ $? -ne 0 ]; then
             print_error "Failed to clone VM"
@@ -934,7 +934,7 @@ start_vmware_runner() {
         print_success "VM cloned successfully"
 
         print_info "Starting runner VM: $runner_vm_name"
-        ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH start '$runner_vm_path' nogui"
+        ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' start '$runner_vm_path' nogui"
 
         if [ $? -ne 0 ]; then
             print_error "Failed to start VM"
@@ -1304,17 +1304,17 @@ remove_all_vmware_runners() {
 
         # Check if VM is running
         local running_vms
-        running_vms=$(ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH list" 2>/dev/null)
+        running_vms=$(ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' list" 2>/dev/null)
 
         if echo "$running_vms" | grep -q "$vm_path"; then
             print_info "VM '$vm_name' is running - stopping it..."
-            ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH stop '$vm_path' hard" 2>/dev/null || print_warning "Failed to stop VM (may already be stopped)"
+            ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' stop '$vm_path' hard" 2>/dev/null || print_warning "Failed to stop VM (may already be stopped)"
             sleep 2
         fi
 
         # Delete the VM
         print_info "Deleting VMware VM: $vm_name"
-        if ssh "$VMWARE_SSH_HOST" "$VMWARE_VMRUN_PATH deleteVM '$vm_path'" 2>/dev/null; then
+        if ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' deleteVM '$vm_path'" 2>/dev/null; then
             print_success "Deleted VM: $vm_name"
             removed_count=$((removed_count + 1))
         else
