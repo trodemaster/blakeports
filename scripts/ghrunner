@@ -1604,18 +1604,22 @@ stop_workflows_for_runner() {
 remove_runner() {
     local runner_name=$1
     local runner_vm_name="${runner_name}_runner"
+    local vmware_vm_name="runner-${runner_name}"
     print_info "Removing GitHub runner: $runner_name"
-    
+
     # Stop workflows running on this runner first
     stop_workflows_for_runner "$runner_name"
-    
+
     # Try to find the runner by checking different VM types
     local vm_ip=""
+    local vm_hostname=""
     local runner_found=false
-    
+    local runner_type=""
+
     # Check if it's a tart VM (look for the cloned VM with _runner suffix)
     if [ -x "$TART_PATH" ] && "$TART_PATH" list | grep -q "$runner_vm_name"; then
         print_info "Found tart runner VM: $runner_vm_name"
+        runner_type="tart"
         vm_ip=$("$TART_PATH" ip "$runner_vm_name" 2>/dev/null)
         if [ $? -eq 0 ] && [ -n "$vm_ip" ] && [ "$vm_ip" != "null" ]; then
             runner_found=true
@@ -1629,68 +1633,121 @@ remove_runner() {
                 runner_found="stopped"
             fi
         fi
+    # Check if it's a VMware VM
+    elif vmware_vm_exists "$vmware_vm_name"; then
+        print_info "Found VMware runner VM: $vmware_vm_name"
+        runner_type="vmware"
+        vm_hostname=$(get_vmware_vm_hostname "$runner_name")
+
+        # Check if VM is running
+        local vm_path=$(get_vmware_vm_path "$vmware_vm_name")
+        local running_vms
+        running_vms=$(ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' list" 2>/dev/null)
+
+        if echo "$running_vms" | grep -q "$vm_path"; then
+            runner_found=true
+            print_info "VM hostname: $vm_hostname"
+        else
+            print_info "VMware VM exists but is not running, will delete it directly"
+            runner_found="stopped"
+        fi
     fi
-    
+
     # If VM is not found, prompt user for manual cleanup
     if [ "$runner_found" = false ]; then
-        print_warning "Could not automatically locate runner VM '$runner_vm_name'"
+        print_warning "Could not automatically locate runner VM for '$runner_name'"
         print_info "To manually remove the runner from GitHub:"
         print_info "  1. Go to your repository settings"
         print_info "  2. Navigate to Actions > Runners"
         print_info "  3. Find and remove the runner named '$runner_name'"
         return 0
     fi
-    
+
     # If VM is running, clean up the runner first
     if [ "$runner_found" = true ]; then
+        # Determine SSH target based on runner type
+        local ssh_target=""
+        if [ "$runner_type" = "tart" ]; then
+            ssh_target="admin@$vm_ip"
+        elif [ "$runner_type" = "vmware" ]; then
+            ssh_target="$VMWARE_VM_USER@$vm_hostname"
+        fi
+
         # Test SSH connection with retries
-        print_info "Testing SSH connection to admin@$vm_ip..."
-        if ! test_ssh_connection_with_retries "$vm_ip" 2>/dev/null; then
-            print_error "SSH connection failed to $vm_ip"
+        print_info "Testing SSH connection to $ssh_target..."
+        local test_ip="$vm_ip"
+        if [ "$runner_type" = "vmware" ]; then
+            test_ip="$vm_hostname"
+        fi
+
+        if ! test_ssh_connection_with_retries "$test_ip" 2>/dev/null; then
+            print_error "SSH connection failed to $ssh_target"
             print_warning "Cannot automatically remove runner. Will proceed to shutdown and delete VM."
         else
             print_success "SSH connection established"
-            
+
             # Check if runner directory exists
-            if ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "test -d /opt/actions-runner" 2>/dev/null; then
+            if ssh "${SSH_OPTS[@]}" "$ssh_target" "test -d /opt/actions-runner" 2>/dev/null; then
                 # Stop the runner service if it's running
                 print_info "Stopping runner service..."
-                ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "cd /opt/actions-runner && ./svc.sh stop" 2>/dev/null || print_warning "Service may not be running"
-                
+                ssh "${SSH_OPTS[@]}" "$ssh_target" "cd /opt/actions-runner && ./svc.sh stop" 2>/dev/null || print_warning "Service may not be running"
+
                 # Uninstall the service
                 print_info "Uninstalling runner service..."
-                ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "cd /opt/actions-runner && ./svc.sh uninstall" 2>/dev/null || print_warning "Service may not be installed"
-                
+                ssh "${SSH_OPTS[@]}" "$ssh_target" "cd /opt/actions-runner && ./svc.sh uninstall" 2>/dev/null || print_warning "Service may not be installed"
+
                 # Remove the runner from GitHub
                 print_info "Removing runner from GitHub..."
-                if ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "cd /opt/actions-runner && ./config.sh remove --token '$RUNNER_TOKEN'" 2>/dev/null; then
+                if ssh "${SSH_OPTS[@]}" "$ssh_target" "cd /opt/actions-runner && ./config.sh remove --token '$RUNNER_TOKEN'" 2>/dev/null; then
                     print_success "Runner removed from GitHub successfully"
                 else
                     print_warning "Failed to remove runner from GitHub automatically"
                     print_info "The runner may have already been removed or the token may be invalid"
                 fi
-                
+
                 # Clean up the installation directory
                 print_info "Cleaning up installation directory..."
-                ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "sudo rm -rf /opt/actions-runner" 2>/dev/null || print_warning "Failed to clean up installation directory"
+                ssh "${SSH_OPTS[@]}" "$ssh_target" "sudo rm -rf /opt/actions-runner" 2>/dev/null || print_warning "Failed to clean up installation directory"
             else
                 print_warning "GitHub runner not found on VM. It may have already been removed."
             fi
         fi
     fi
-    
-    # Shutdown and delete the cloned VM
-    print_info "Shutting down runner VM: $runner_vm_name"
-    "$TART_PATH" stop "$runner_vm_name" 2>/dev/null || print_warning "VM may already be stopped"
-    
-    print_info "Deleting runner VM: $runner_vm_name"
-    if "$TART_PATH" delete "$runner_vm_name" 2>/dev/null; then
-        print_success "Runner VM '$runner_vm_name' deleted successfully"
-    else
-        print_error "Failed to delete runner VM '$runner_vm_name'"
-        print_info "You may need to delete it manually: tart delete $runner_vm_name"
+
+    # Shutdown and delete the VM based on type
+    if [ "$runner_type" = "tart" ]; then
+        print_info "Shutting down runner VM: $runner_vm_name"
+        "$TART_PATH" stop "$runner_vm_name" 2>/dev/null || print_warning "VM may already be stopped"
+
+        print_info "Deleting runner VM: $runner_vm_name"
+        if "$TART_PATH" delete "$runner_vm_name" 2>/dev/null; then
+            print_success "Runner VM '$runner_vm_name' deleted successfully"
+        else
+            print_error "Failed to delete runner VM '$runner_vm_name'"
+            print_info "You may need to delete it manually: tart delete $runner_vm_name"
+        fi
+    elif [ "$runner_type" = "vmware" ]; then
+        local vm_path=$(get_vmware_vm_path "$vmware_vm_name")
+
+        print_info "Shutting down VMware VM: $vmware_vm_name"
+        ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' stop '$vm_path' hard" 2>/dev/null || print_warning "VM may already be stopped"
+        sleep 2
+
+        print_info "Deleting VMware VM: $vmware_vm_name"
+        if ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' deleteVM '$vm_path'" 2>/dev/null; then
+            print_success "VMware VM '$vmware_vm_name' deleted successfully"
+        else
+            # Try alternative: just remove the directory
+            print_warning "vmrun deleteVM failed, trying direct directory removal..."
+            if ssh "$VMWARE_SSH_HOST" "rm -rf '${VMWARE_BASE_DIR}/${vmware_vm_name}.vmwarevm'"; then
+                print_success "Removed VMware VM directory: $vmware_vm_name"
+            else
+                print_error "Failed to delete VMware VM: $vmware_vm_name"
+                print_info "You may need to delete it manually on $VMWARE_SSH_HOST"
+            fi
+        fi
     fi
-    
+
     print_success "Runner '$runner_name' removal completed"
     print_info "The base VM remains available for future runner creation"
 }
