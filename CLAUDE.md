@@ -63,13 +63,16 @@ blakeports/
 - Base VMs: `macOS_15` (Sequoia) and `macOS_26` (Tahoe Beta)
 
 ### Matrix Build Strategy
-All port builds run in parallel on multiple macOS versions:
+**Modern builds** (automatic on push/PR):
 - **macOS 15 (Sequoia)** - Latest stable
 - **macOS 26 (Tahoe)** - Beta preview
 
+**Legacy builds** (manual workflow dispatch only):
+- **Mac OS X 10.5 (Leopard)** - Legacy platform
+- **Mac OS X 10.7 (Lion)** - Legacy platform
+
 ### Workflow Naming Conventions
-- `build-<portname>.yml` - Standard port build for modern macOS
-- `build-legacy-<portname>.yml` - Builds for older macOS versions (10.6-10.8)
+- `build-<portname>.yml` - Consolidated workflow supporting both modern and legacy builds
 - `vmwvm-*.yml` - VM lifecycle management workflows
 
 ## Development Workflow
@@ -113,15 +116,29 @@ All port builds run in parallel on multiple macOS versions:
 
 ### Triggering CI Builds
 
+**Automatic triggers** (push/PR):
+- Only runs modern builds (macOS 15, macOS 26)
+- Legacy builds never run automatically
+
+**Manual triggers** (workflow_dispatch):
+
 ```bash
-# Trigger individual workflows
+# Trigger modern-only builds (default)
 gh workflow run "Build libcbor"
 gh workflow run "Build netatalk"
+
+# Trigger with legacy platform builds
+gh workflow run "Build libcbor" -f run_legacy=true
+gh workflow run "Build netatalk" -f run_legacy=true -f branch=main
 
 # Monitor builds
 gh run view -w              # Open in browser
 gh run view --log-failed    # View failed logs
 ```
+
+**Workflow inputs**:
+- `branch`: Branch to build from (default: main)
+- `run_legacy`: Run legacy platform builds (10.5, 10.7) - default: false
 
 ## Portfile Conventions
 

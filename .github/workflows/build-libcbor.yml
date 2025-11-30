@@ -2,75 +2,345 @@ name: Build libcbor
 
 on:
   push:
-    paths:
-      - 'devel/libcbor/**'
+    paths: ['devel/libcbor/**']
     branches: [main]
   pull_request:
-    paths:
-      - 'devel/libcbor/**'
+    paths: ['devel/libcbor/**']
     branches: [main]
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: false
+        default: 'main'
+        type: string
+      run_legacy:
+        description: 'Run legacy platform builds (10.5, 10.7)'
+        required: false
+        default: false
+        type: boolean
 
 defaults:
   run:
     shell: bash
 
 jobs:
-  build-libcbor:
-    name: build-libcbor (${{ matrix.runner }})
-    strategy:
-      matrix:
-        runner: [macOS_15, macOS_26]
-      fail-fast: false
-    runs-on: ${{ matrix.runner }}
-    
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-    - name: Show macOS version
-      run: |
-        echo "Running on: ${{ matrix.runner }}"
-        sw_vers
-        
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Setup MacPorts and BlakePorts Environment
-      run: |
-        ./scripts/installmacports
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          # Always include modern platforms
+          MATRIX='{"include":['
+          MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"devel/libcbor"},'
+          MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"devel/libcbor"}'
 
-    - name: Lint portfile
-      run: |
-        source ./setupenv.bash
-        port lint --nitpick devel/libcbor
-         
-    - name: Clean existing libcbor installation
-      run: |
-        # Source MacPorts environment from our local copy
-        source ./setupenv.bash
-        
-        # Uninstall and clean if port already exists
-        if port installed libcbor | grep -q libcbor; then
-          echo "Removing existing libcbor installation..."
-          sudo port -f uninstall libcbor libfido2 openssl3
-          sudo port clean --dist libcbor libfido2 openssl3
-        else
-          echo "No existing libcbor installation found"
-        fi
+          # Add legacy platforms only if manually requested
+          if [[ "${{ inputs.run_legacy }}" == "true" ]]; then
+            MATRIX+=',{"platform":"tenfive","runner":["self-hosted","tenfive"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenFive","os_version":"10.5","timeout":"60"}'
+            MATRIX+=',{"platform":"tenseven","runner":["self-hosted","tenseven"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenSeven","os_version":"10.7","timeout":"60"}'
+          fi
 
-    - name: Install dependencies
-      run: |
-        ./scripts/install-deps libcbor
-        
-    - name: Build libcbor port
-      run: |
-        # Source MacPorts environment from our local copy
-        source ./setupenv.bash
-        
-        sudo port -v install libcbor
-        
-    - name: Verify libcbor installation
-      run: |
-        # Source MacPorts environment from our local copy
-        source ./setupenv.bash
-        
-        port installed libcbor
-        ls -la /opt/local/lib/libcbor* || echo "libcbor libraries not found" 
+          MATRIX+=']}'
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix for trigger: ${{ github.event_name }}"
+          echo "$MATRIX" | jq '.'
+
+  build-libcbor:
+    needs: setup-matrix
+    name: build-libcbor (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      #
+      # MODERN PLATFORM STEPS
+      #
+      - name: Show macOS version
+        if: matrix.type == 'modern'
+        run: |
+          echo "Running on: ${{ matrix.platform }}"
+          echo "Building port: libcbor"
+          echo "Building from branch: ${{ inputs.branch || github.ref_name }}"
+          sw_vers
+
+      - name: Checkout repository
+        if: matrix.type == 'modern'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Setup MacPorts and BlakePorts Environment
+        if: matrix.type == 'modern'
+        run: ./scripts/installmacports
+
+      - name: Lint portfile
+        if: matrix.type == 'modern'
+        run: |
+          source ./setupenv.bash
+          port lint --nitpick ${{ matrix.port }}
+
+      - name: Clean existing installation
+        if: matrix.type == 'modern'
+        run: |
+          source ./setupenv.bash
+          if port installed libcbor | grep -q libcbor; then
+            echo "Removing existing libcbor installation..."
+            sudo port -f uninstall libcbor libfido2 openssl3
+            sudo port clean --dist libcbor libfido2 openssl3
+          else
+            echo "No existing libcbor installation found"
+          fi
+
+      - name: Install dependencies
+        if: matrix.type == 'modern'
+        run: ./scripts/install-deps libcbor
+
+      - name: Build port
+        if: matrix.type == 'modern'
+        run: |
+          source ./setupenv.bash
+          sudo port -v install libcbor
+
+      - name: Verify installation
+        if: matrix.type == 'modern'
+        run: |
+          source ./setupenv.bash
+          port installed libcbor
+          ls -la /opt/local/lib/libcbor* || echo "libcbor libraries not found"
+
+      #
+      # LEGACY PLATFORM STEPS
+      #
+      - name: Checkout repository (for tarball)
+        if: matrix.type == 'legacy'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Verify VM configuration
+        if: matrix.type == 'legacy'
+        run: |
+          if [ -z "${{ matrix.vm_ip }}" ]; then
+            echo "Error: VM IP not set for ${{ matrix.platform }}"
+            exit 1
+          fi
+          if [ -z "${{ matrix.vm_username }}" ]; then
+            echo "Error: VM username not set for ${{ matrix.platform }}"
+            exit 1
+          fi
+          echo "Will connect to: ${{ matrix.vm_username }}@${{ matrix.vm_ip }}"
+
+      - name: Show macOS version (legacy VM)
+        if: matrix.type == 'legacy'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ matrix.vm_ip }}
+          username: ${{ matrix.vm_username }}
+          key: ${{ secrets.OLDMAC_KEY }}
+          script: |
+            set -e
+            set -o pipefail
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            echo "=================================================="
+            echo "  Building libcbor on Mac OS X ${{ matrix.os_version }} (${{ matrix.vm_name }})"
+            echo "=================================================="
+            sw_vers
+            echo ""
+            uname -a
+
+      - name: Download repository tarball
+        if: matrix.type == 'legacy'
+        run: |
+          echo "Downloading blakeports repository..."
+          BRANCH="${{ inputs.branch || 'main' }}"
+          curl -L -o /tmp/blakeports.tar.gz "https://github.com/trodemaster/blakeports/archive/refs/heads/${BRANCH}.tar.gz"
+          echo "✅ Tarball downloaded: $(ls -lh /tmp/blakeports.tar.gz)"
+
+      - name: Transfer tarball to legacy VM
+        if: matrix.type == 'legacy'
+        run: |
+          echo "Transferring tarball to ${{ matrix.vm_name }} VM..."
+          scp -i /home/runner/.ssh/oldmac \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o HostKeyAlgorithms=+ssh-rsa \
+              -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+              /tmp/blakeports.tar.gz \
+              ${{ matrix.vm_username }}@${{ matrix.vm_ip }}:/tmp/
+          echo "✅ Tarball transferred"
+
+      - name: Extract repository on legacy VM
+        if: matrix.type == 'legacy'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ matrix.vm_ip }}
+          username: ${{ matrix.vm_username }}
+          key: ${{ secrets.OLDMAC_KEY }}
+          script: |
+            set -e
+            set -o pipefail
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            echo "Setting up blakeports directory..."
+            mkdir -p /Users/blake/code
+            if [ -d /Users/blake/code/blakeports ]; then
+              echo "Cleaning existing directory..."
+              rm -rf /Users/blake/code/blakeports/*
+              rm -rf /Users/blake/code/blakeports/.[!.]*
+            else
+              mkdir -p /Users/blake/code/blakeports
+            fi
+            cd /Users/blake/code/blakeports
+            echo "Extracting tarball..."
+            tar xzf /tmp/blakeports.tar.gz --strip-components=1
+            rm /tmp/blakeports.tar.gz
+            echo "✅ Repository ready"
+
+      - name: Verify MacPorts and setup environment
+        if: matrix.type == 'legacy'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ matrix.vm_ip }}
+          username: ${{ matrix.vm_username }}
+          key: ${{ secrets.OLDMAC_KEY }}
+          script: |
+            set -e
+            set -o pipefail
+            set -x
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            if ! command -v port &> /dev/null; then
+              echo "❌ ERROR: MacPorts not found"
+              exit 1
+            fi
+            port version
+            cd /Users/blake/code/blakeports
+            source ./setupenv.bash
+            portindex
+            echo "✅ MacPorts verified"
+
+      - name: Lint portfile (legacy)
+        if: matrix.type == 'legacy'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ matrix.vm_ip }}
+          username: ${{ matrix.vm_username }}
+          key: ${{ secrets.OLDMAC_KEY }}
+          script: |
+            set -e
+            set -o pipefail
+            set -x
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            source ./setupenv.bash
+            LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1)
+            echo "$LINT_OUTPUT"
+            if echo "$LINT_OUTPUT" | grep -q "Error:"; then
+              echo "❌ Lint failed"
+              exit 1
+            fi
+            echo "✅ Lint passed"
+
+      - name: Clean existing installation (legacy)
+        if: matrix.type == 'legacy'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ matrix.vm_ip }}
+          username: ${{ matrix.vm_username }}
+          key: ${{ secrets.OLDMAC_KEY }}
+          script: |
+            set -e
+            set -o pipefail
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            source ./setupenv.bash
+            sudo port -f uninstall libcbor libfido2 openssl3 || true
+            sudo port clean --dist libcbor libfido2 openssl3
+            echo "✅ Clean complete"
+
+      - name: Install dependencies (legacy)
+        if: matrix.type == 'legacy'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ matrix.vm_ip }}
+          username: ${{ matrix.vm_username }}
+          key: ${{ secrets.OLDMAC_KEY }}
+          command_timeout: ${{ matrix.timeout }}m
+          script: |
+            set -e
+            set -o pipefail
+            set -x
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            ./scripts/install-deps libcbor
+            echo "✅ Dependencies installed"
+
+      - name: Build port (legacy)
+        if: matrix.type == 'legacy'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ matrix.vm_ip }}
+          username: ${{ matrix.vm_username }}
+          key: ${{ secrets.OLDMAC_KEY }}
+          command_timeout: ${{ matrix.timeout }}m
+          script: |
+            set -e
+            set -o pipefail
+            set -x
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            source ./setupenv.bash
+            sudo port -v install libcbor
+            echo "✅ Build complete"
+
+      - name: Verify installation (legacy)
+        if: matrix.type == 'legacy'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ matrix.vm_ip }}
+          username: ${{ matrix.vm_username }}
+          key: ${{ secrets.OLDMAC_KEY }}
+          script: |
+            set -e
+            set -o pipefail
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            source ./setupenv.bash
+            port installed libcbor
+            ls -la ${prefix}/lib/libcbor* || echo "libcbor libraries not found"
+            echo "✅ Installation verified"
+
+      - name: Cleanup (legacy)
+        if: matrix.type == 'legacy' && always()
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ matrix.vm_ip }}
+          username: ${{ matrix.vm_username }}
+          key: ${{ secrets.OLDMAC_KEY }}
+          script: |
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            rm -f /tmp/blakeports.tar.gz
+            echo "✅ Cleanup complete"
