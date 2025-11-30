@@ -20,11 +20,12 @@ NC='\033[0m' # No Color
 GHRUNNER_SCRIPT="$SCRIPTPATH/ghrunner"
 RUNNERS=("macOS_15" "macOS_26")
 WORKFLOWS=(
-    "Build bstring"
     "Build netatalk"
+    "Build bstring"
     "Build libcbor"
     "Build libfido2" 
     "Build nrsc5"
+    "Build previous"
 )
 
 
