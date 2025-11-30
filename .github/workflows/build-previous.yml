@@ -14,8 +14,18 @@ on:
         required: false
         default: 'main'
         type: string
-      run_legacy:
-        description: 'Run legacy platform builds (10.5, 10.7)'
+      run_modern:
+        description: '☑️ macOS 15 (Sequoia) & 26 (Tahoe)'
+        required: false
+        default: true
+        type: boolean
+      run_tenfive:
+        description: 'Mac OS X 10.5 (Leopard)'
+        required: false
+        default: false
+        type: boolean
+      run_tenseven:
+        description: 'Mac OS X 10.7 (Lion)'
         required: false
         default: false
         type: boolean
@@ -33,15 +43,27 @@ jobs:
       - name: Generate build matrix
         id: set-matrix
         run: |
-          # Always include modern platforms
           MATRIX='{"include":['
-          MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"emulators/previous"},'
-          MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/previous"}'
+          FIRST=true
 
-          # Add legacy platforms only if manually requested
-          if [[ "${{ inputs.run_legacy }}" == "true" ]]; then
-            MATRIX+=',{"platform":"tenfive","runner":["self-hosted","tenfive"],"type":"legacy","port":"emulators/previous","vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenFive","os_version":"10.5","timeout":"60"}'
-            MATRIX+=',{"platform":"tenseven","runner":["self-hosted","tenseven"],"type":"legacy","port":"emulators/previous","vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenSeven","os_version":"10.7","timeout":"60"}'
+          # Add modern platforms if explicitly requested OR if no platforms selected (default)
+          if [[ "${{ inputs.run_modern }}" == "true" ]] || [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.run_modern }}" == "false" && "${{ inputs.run_tenfive }}" == "false" && "${{ inputs.run_tenseven }}" == "false" ]]; then
+            MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"emulators/previous"},'
+            MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/previous"}'
+            FIRST=false
+          fi
+
+          # Add tenfive if requested
+          if [[ "${{ inputs.run_tenfive }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tenfive","runner":["self-hosted","tenfive"],"type":"legacy","port":"emulators/previous","vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenFive","os_version":"10.5","timeout":"60"}'
+            FIRST=false
+          fi
+
+          # Add tenseven if requested
+          if [[ "${{ inputs.run_tenseven }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tenseven","runner":["self-hosted","tenseven"],"type":"legacy","port":"emulators/previous","vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenSeven","os_version":"10.7","timeout":"60"}'
           fi
 
           MATRIX+=']}'
