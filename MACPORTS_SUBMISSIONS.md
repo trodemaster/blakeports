@@ -229,53 +229,61 @@ ssh darkstar port version
 ```
 
 ### 4.2 Create Pull Request
+
+**For Port Updates:**
+```bash
+gh pr create --repo macports/macports-ports --title "portname: update to X.Y.Z" --body "$(cat << 'EOF'
+### Testing Performed
+
+- [x] Port builds successfully locally
+- [x] Port lint passes with 0 errors and 0 warnings
+- [x] Dependencies verified
+- [x] Installation tested
+
+**Tested on**
+
+macOS X.Y.Z Xcode A.B / Build version XXX (arm64)
+EOF
+)"
+```
+
+**For New Ports:**
 ```bash
 gh pr create --repo macports/macports-ports --title "portname: new port, version X.Y.Z" --body "$(cat << 'EOF'
-## New Port Submission
-
-This PR adds a new port for [portname] version [X.Y.Z] to the [category] category.
-
 ### Description
+
 Brief description of what the software does and its key benefits.
 
 ### Key Features
+
 * Feature 1
 * Feature 2
 * Feature 3
 * Feature 4
 
 ### Testing Performed
+
 - [x] Port builds successfully locally
 - [x] Port lint passes with 0 errors and 0 warnings
 - [x] Dependencies verified
 - [x] Installation tested
 
-### PR Content Guidelines
-- **Do NOT mention**: checksums (always updated, redundant)
-- **Do NOT mention**: internal development repos (blakeports, etc.)
-- **Do NOT mention**: --nitpick flag (internal process)
-- **Focus on**: what changed, why it matters to users
-- **Keep professional**: avoid implementation details
-- **Use proper ticket references**: Include full URLs for all referenced tickets
-- **Format URLs as clickable links**: Use markdown format for better readability
-
 **Tested on**
 
-macOS X.Y.Z Xcode A.B / Command Line Tools A.B.C.D.E.F (arm64)
-macOS X.Y.Z Command Line Tools A.B.C.D.E.F (x86_64)
-
-### Port Details
-- **Category**: category
-- **Version**: X.Y.Z
-- **Homepage**: https://...
-- **License**: LICENSE
-- **Dependencies**: dep1, dep2, dep3
-
-### Maintainer
-@yourusername (openmaintainer)
+macOS X.Y.Z Xcode A.B / Build version XXX (arm64)
 EOF
 )"
 ```
+
+### PR Content Guidelines
+- **For Updates**: Keep it minimal - just show testing checklist
+- **For New Ports**: Include description and key features
+- **Do NOT mention**: checksums (always updated, redundant)
+- **Do NOT mention**: internal development repos (blakeports, etc.)
+- **Do NOT mention**: --nitpick flag (internal process)
+- **Do NOT mention**: port categories, versions, or maintainer info (obvious from Portfile)
+- **Focus on**: what matters to users
+- **Keep professional**: avoid implementation details
 
 ## Stage 5: Post-Submission Monitoring
 
@@ -406,17 +414,18 @@ git show --stat HEAD
 
 ## Examples
 
-### Example 1: bstring Port Submission
+### Example 1: bstring Port Update
 
-**Successfully submitted as**: https://github.com/macports/macports-ports/pull/29227
+**Successfully submitted as**: https://github.com/macports/macports-ports/pull/30370
 
-**Branch**: `textproc/bstring-new-port`
+**Branch**: `textproc/bstring-update-1.0.3`
+
+**PR Content**: Simple testing checklist following the simplified update template
 
 **Testing Environment**:
-- macOS 15.6.1 Xcode 16.4 / Command Line Tools 16.4.0.0.1.1747106510 (arm64)
-- macOS 15.6.1 Command Line Tools 16.4.0.0.1.1747106510 (x86_64)
+- macOS 26.1 Xcode 26.1 / Build version 17B55 (arm64)
 
-This example demonstrates the complete workflow from development through successful PR submission.
+This example demonstrates the simplified workflow for port updates - keep PR body minimal with just testing details.
 
 ### Example 2: netatalk Port Consolidation
 
