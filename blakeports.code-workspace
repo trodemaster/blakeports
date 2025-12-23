@@ -11,6 +11,12 @@
 		},
 		{
 			"path": "../../Developer/packer_macOS_26"
+		},
+		{
+			"path": "../throwback_mac"
+		},
+		{
+			"path": "../skhd.zig"
 		}
 	],
 	"settings": {}

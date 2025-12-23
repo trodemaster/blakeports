@@ -30,6 +30,8 @@ print_error() {
 # Cleanup function to deregister runner on exit
 cleanup() {
     print_info "Caught signal, removing runner..."
+    # Try to stop avahi-daemon if running
+    sudo pkill -f "avahi-daemon" 2>/dev/null || true
     if [ -f "/home/runner/.runner" ]; then
         ./config.sh remove --token "${RUNNER_TOKEN}"
     fi
@@ -38,6 +40,17 @@ cleanup() {
 
 # Trap signals for cleanup
 trap cleanup SIGTERM SIGINT SIGQUIT
+
+# Start avahi-daemon for mDNS/Bonjour resolution (optional - may fail in some environments)
+print_info "Starting avahi-daemon for mDNS support..."
+if sudo /usr/sbin/avahi-daemon -D 2>&1 | grep -q "daemonized"; then
+    print_success "avahi-daemon started successfully"
+else
+    print_warning "avahi-daemon not available (mDNS resolution may not work)"
+fi
+
+# Give avahi a moment to initialize
+sleep 1
 
 # Validate required environment variables
 if [ -z "$GITHUB_OWNER" ]; then
@@ -62,6 +75,11 @@ if [ -z "$VM_HOSTNAME" ]; then
     exit 1
 fi
 
+if [ -z "$VM_HOSTNAME_FQDN" ]; then
+    print_error "VM_HOSTNAME_FQDN environment variable is required (e.g., 'tenfive-runner.local')"
+    exit 1
+fi
+
 if [ -z "$VM_USER" ]; then
     print_error "VM_USER environment variable is required"
     exit 1
@@ -72,9 +90,14 @@ if [ -z "$SSH_KEY_NAME" ]; then
     exit 1
 fi
 
-# Set defaults if not provided
-RUNNER_NAME="${RUNNER_NAME:-docker-runner-$(hostname)}"
-RUNNER_WORKDIR="${RUNNER_WORKDIR:-_work}"
+# Determine which hostname/IP to use for SSH connection
+# Prefer IP address if available (set via setup-runners.sh)
+# Fall back to FQDN if IP not available
+SSH_TARGET="${VM_IP:-$VM_HOSTNAME_FQDN}"
+if [ -z "$SSH_TARGET" ]; then
+    print_error "Either VM_IP or VM_HOSTNAME_FQDN environment variable is required"
+    exit 1
+fi
 
 print_info "Using pre-generated registration token"
 print_info "Repository: $GITHUB_OWNER/$GITHUB_REPO"
@@ -95,7 +118,7 @@ print_info "SSH key found: $SSH_KEY_PATH"
 # Create SSH config with legacy algorithms matching ghrunner script
 cat > "$SSH_CONFIG_FILE" << EOF
 Host $VM_HOSTNAME
-    HostName $VM_HOSTNAME
+    HostName $SSH_TARGET
     User $VM_USER
     IdentityFile $SSH_KEY_PATH
     HostKeyAlgorithms ssh-rsa
