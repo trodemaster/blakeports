@@ -1,9 +1,7 @@
-version: '3.8'
-
 # GitHub Actions Self-Hosted Runners for Legacy macOS VMs
 # Each service represents one GitHub Actions runner instance targeting a specific legacy VM
 # Each container must have a unique RUNNER_TOKEN generated via:
-#   gh api repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners/registration-token --method POST --jq '.token'
+#   gh api repos/trodemaster/blakeports/actions/runners/registration-token --method POST --jq '.token'
 
 services:
   # ============================================================================
@@ -14,34 +12,37 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        RUNNER_VERSION: ${RUNNER_VERSION:-2.321.0}
-    container_name: ${RUNNER_NAME_TENFIVE:-tenfive-runner}
-    hostname: ${RUNNER_NAME_TENFIVE:-tenfive-runner}
+        RUNNER_VERSION: 2.321.0
+    container_name: tenfive-runner
+    hostname: tenfive-runner
     restart: unless-stopped
     env_file: .env
 
     environment:
-      # GitHub repository configuration (shared across all runners)
-      - GITHUB_OWNER=${GITHUB_OWNER}
-      - GITHUB_REPO=${GITHUB_REPO}
+      # GitHub repository configuration
+      - GITHUB_OWNER=trodemaster
+      - GITHUB_REPO=blakeports
       
-      # Runner-specific registration token (required: generate per instance)
+      # Runner-specific registration token (required: generate via setup-runners.sh)
       - RUNNER_TOKEN=${RUNNER_TOKEN_TENFIVE}
       
-      # Runner configuration
-      - RUNNER_NAME=${RUNNER_NAME_TENFIVE:-tenfive-runner}
-      - RUNNER_WORKDIR=${RUNNER_WORKDIR:-_work}
-      - CUSTOM_LABELS=${CUSTOM_LABELS_TENFIVE:-ssh-legacy-capable,legacy-macos}
+      # Runner name and SSH proxy configuration
+      - RUNNER_NAME=tenfive-runner
+      - RUNNER_WORKDIR=_work
+      - CUSTOM_LABELS=ssh-legacy-capable,legacy-macos,tenfive,10-5
       
       # SSH proxy configuration for legacy VM
-      - VM_IP=${LEGACY_TENFIVE_HOSTNAME}
       - VM_HOSTNAME=tenfive
-      - VM_USER=${LEGACY_USERNAME:-admin}
+      - VM_HOSTNAME_FQDN=tenfive-runner.local
+      - VM_IP=${TENFIVE_VM_IP}
+      - VM_USER=admin
       - SSH_KEY_NAME=oldmac
 
     volumes:
       # SSH key for legacy VM authentication (read-only)
-      - ./ssh_keys/oldmac:/home/runner/.ssh/oldmac:ro
+      # Absolute path works reliably with Lima VM mounts
+      # The SSH key file MUST exist at this location
+      - /Users/blake/Developer/blakeports/docker/ssh_keys/oldmac:/home/runner/.ssh/oldmac:ro
       # Persistent work directory for runner state
       - runner-work-tenfive:/home/runner/_work
 
@@ -56,182 +57,41 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        RUNNER_VERSION: ${RUNNER_VERSION:-2.321.0}
-    container_name: ${RUNNER_NAME_TENSEVEN:-tenseven-runner}
-    hostname: ${RUNNER_NAME_TENSEVEN:-tenseven-runner}
+        RUNNER_VERSION: 2.321.0
+    container_name: tenseven-runner
+    hostname: tenseven-runner
     restart: unless-stopped
     env_file: .env
 
     environment:
-      # GitHub repository configuration (shared across all runners)
-      - GITHUB_OWNER=${GITHUB_OWNER}
-      - GITHUB_REPO=${GITHUB_REPO}
+      # GitHub repository configuration
+      - GITHUB_OWNER=trodemaster
+      - GITHUB_REPO=blakeports
       
-      # Runner-specific registration token (required: generate per instance)
+      # Runner-specific registration token (required: generate via setup-runners.sh)
       - RUNNER_TOKEN=${RUNNER_TOKEN_TENSEVEN}
       
-      # Runner configuration
-      - RUNNER_NAME=${RUNNER_NAME_TENSEVEN:-tenseven-runner}
-      - RUNNER_WORKDIR=${RUNNER_WORKDIR:-_work}
-      - CUSTOM_LABELS=${CUSTOM_LABELS_TENSEVEN:-ssh-legacy-capable,legacy-macos}
+      # Runner name and SSH proxy configuration
+      - RUNNER_NAME=tenseven-runner
+      - RUNNER_WORKDIR=_work
+      - CUSTOM_LABELS=ssh-legacy-capable,legacy-macos,tenseven,10-7
       
       # SSH proxy configuration for legacy VM
-      - VM_IP=${LEGACY_TENSEVEN_HOSTNAME}
       - VM_HOSTNAME=tenseven
-      - VM_USER=${LEGACY_USERNAME:-admin}
+      - VM_HOSTNAME_FQDN=tenseven-runner.local
+      - VM_IP=${TENSEVEN_VM_IP}
+      - VM_USER=admin
       - SSH_KEY_NAME=oldmac
 
     volumes:
       # SSH key for legacy VM authentication (read-only)
-      - ./ssh_keys/oldmac:/home/runner/.ssh/oldmac:ro
+      # Absolute path works reliably with Lima VM mounts
+      # The SSH key file MUST exist at this location
+      - /Users/blake/Developer/blakeports/docker/ssh_keys/oldmac:/home/runner/.ssh/oldmac:ro
       # Persistent work directory for runner state
       - runner-work-tenseven:/home/runner/_work
 
     network_mode: bridge
-
-
-  # ============================================================================
-  # Mac OS X 10.6 (Snow Leopard) Runner - COMMENTED OUT
-  # Uncomment to activate this runner. Don't forget to:
-  # 1. Add LEGACY_TENSIX_IP to .env
-  # 2. Generate RUNNER_TOKEN_TENSIX and add to .env
-  # ============================================================================
-  # tensix-runner:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #     args:
-  #       RUNNER_VERSION: ${RUNNER_VERSION:-2.321.0}
-  #   container_name: ${RUNNER_NAME_TENSIX:-tensix-runner}
-  #   hostname: ${RUNNER_NAME_TENSIX:-tensix-runner}
-  #   restart: unless-stopped
-  #   env_file: .env
-  #
-  #   environment:
-  #     - GITHUB_OWNER=${GITHUB_OWNER}
-  #     - GITHUB_REPO=${GITHUB_REPO}
-  #     - RUNNER_TOKEN=${RUNNER_TOKEN_TENSIX}
-  #     - RUNNER_NAME=${RUNNER_NAME_TENSIX:-tensix-runner}
-  #     - RUNNER_WORKDIR=${RUNNER_WORKDIR:-_work}
-  #     - CUSTOM_LABELS=${CUSTOM_LABELS_TENSIX:-ssh-legacy-capable,legacy-macos}
-  #     - VM_IP=${LEGACY_TENSIX_HOSTNAME}
-  #     - VM_HOSTNAME=tensix
-  #     - VM_USER=${LEGACY_USERNAME:-admin}
-  #     - SSH_KEY_NAME=oldmac
-  #
-  #   volumes:
-  #     - ./ssh_keys/oldmac:/home/runner/.ssh/oldmac:ro
-  #     - runner-work-tensix:/home/runner/_work
-  #
-  #   network_mode: bridge
-
-
-  # ============================================================================
-  # Mac OS X 10.8 (Mountain Lion) Runner - COMMENTED OUT
-  # Uncomment to activate this runner. Don't forget to:
-  # 1. Add LEGACY_TENEIGHT_IP to .env
-  # 2. Generate RUNNER_TOKEN_TENEIGHT and add to .env
-  # ============================================================================
-  # teneight-runner:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #     args:
-  #       RUNNER_VERSION: ${RUNNER_VERSION:-2.321.0}
-  #   container_name: ${RUNNER_NAME_TENEIGHT:-teneight-runner}
-  #   hostname: ${RUNNER_NAME_TENEIGHT:-teneight-runner}
-  #   restart: unless-stopped
-  #   env_file: .env
-  #
-  #   environment:
-  #     - GITHUB_OWNER=${GITHUB_OWNER}
-  #     - GITHUB_REPO=${GITHUB_REPO}
-  #     - RUNNER_TOKEN=${RUNNER_TOKEN_TENEIGHT}
-  #     - RUNNER_NAME=${RUNNER_NAME_TENEIGHT:-teneight-runner}
-  #     - RUNNER_WORKDIR=${RUNNER_WORKDIR:-_work}
-  #     - CUSTOM_LABELS=${CUSTOM_LABELS_TENEIGHT:-ssh-legacy-capable,legacy-macos}
-  #     - VM_IP=${LEGACY_TENEIGHT_HOSTNAME}
-  #     - VM_HOSTNAME=teneight
-  #     - VM_USER=${LEGACY_USERNAME:-admin}
-  #     - SSH_KEY_NAME=oldmac
-  #
-  #   volumes:
-  #     - ./ssh_keys/oldmac:/home/runner/.ssh/oldmac:ro
-  #     - runner-work-teneight:/home/runner/_work
-  #
-  #   network_mode: bridge
-
-
-  # ============================================================================
-  # Mac OS X 10.9 (Mavericks) Runner - COMMENTED OUT
-  # Uncomment to activate this runner. Don't forget to:
-  # 1. Add LEGACY_TENNINE_IP to .env
-  # 2. Generate RUNNER_TOKEN_TENNINE and add to .env
-  # ============================================================================
-  # tennine-runner:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #     args:
-  #       RUNNER_VERSION: ${RUNNER_VERSION:-2.321.0}
-  #   container_name: ${RUNNER_NAME_TENNINE:-tennine-runner}
-  #   hostname: ${RUNNER_NAME_TENNINE:-tennine-runner}
-  #   restart: unless-stopped
-  #   env_file: .env
-  #
-  #   environment:
-  #     - GITHUB_OWNER=${GITHUB_OWNER}
-  #     - GITHUB_REPO=${GITHUB_REPO}
-  #     - RUNNER_TOKEN=${RUNNER_TOKEN_TENNINE}
-  #     - RUNNER_NAME=${RUNNER_NAME_TENNINE:-tennine-runner}
-  #     - RUNNER_WORKDIR=${RUNNER_WORKDIR:-_work}
-  #     - CUSTOM_LABELS=${CUSTOM_LABELS_TENNINE:-ssh-legacy-capable,legacy-macos}
-  #     - VM_IP=${LEGACY_TENNINE_HOSTNAME}
-  #     - VM_HOSTNAME=tennine
-  #     - VM_USER=${LEGACY_USERNAME:-admin}
-  #     - SSH_KEY_NAME=oldmac
-  #
-  #   volumes:
-  #     - ./ssh_keys/oldmac:/home/runner/.ssh/oldmac:ro
-  #     - runner-work-tennine:/home/runner/_work
-  #
-  #   network_mode: bridge
-
-
-  # ============================================================================
-  # Mac OS X 10.10 (Yosemite) Runner - COMMENTED OUT
-  # Uncomment to activate this runner. Don't forget to:
-  # 1. Add LEGACY_TENTEN_IP to .env
-  # 2. Generate RUNNER_TOKEN_TENTEN and add to .env
-  # ============================================================================
-  # tenten-runner:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #     args:
-  #       RUNNER_VERSION: ${RUNNER_VERSION:-2.321.0}
-  #   container_name: ${RUNNER_NAME_TENTEN:-tenten-runner}
-  #   hostname: ${RUNNER_NAME_TENTEN:-tenten-runner}
-  #   restart: unless-stopped
-  #   env_file: .env
-  #
-  #   environment:
-  #     - GITHUB_OWNER=${GITHUB_OWNER}
-  #     - GITHUB_REPO=${GITHUB_REPO}
-  #     - RUNNER_TOKEN=${RUNNER_TOKEN_TENTEN}
-  #     - RUNNER_NAME=${RUNNER_NAME_TENTEN:-tenten-runner}
-  #     - RUNNER_WORKDIR=${RUNNER_WORKDIR:-_work}
-  #     - CUSTOM_LABELS=${CUSTOM_LABELS_TENTEN:-ssh-legacy-capable,legacy-macos}
-  #     - VM_IP=${LEGACY_TENTEN_HOSTNAME}
-  #     - VM_HOSTNAME=tenten
-  #     - VM_USER=${LEGACY_USERNAME:-admin}
-  #     - SSH_KEY_NAME=oldmac
-  #
-  #   volumes:
-  #     - ./ssh_keys/oldmac:/home/runner/.ssh/oldmac:ro
-  #     - runner-work-tenten:/home/runner/_work
-  #
-  #   network_mode: bridge
 
 
 volumes:
@@ -239,12 +99,3 @@ volumes:
     driver: local
   runner-work-tenseven:
     driver: local
-  # runner-work-tensix:
-  #   driver: local
-  # runner-work-teneight:
-  #   driver: local
-  # runner-work-tennine:
-  #   driver: local
-  # runner-work-tenten:
-  #   driver: local
-
