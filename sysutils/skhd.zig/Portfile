@@ -1,0 +1,68 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           github 1.0
+
+github.setup        jackielii skhd.zig 0.0.17 v
+github.tarball_from releases
+
+revision            0
+
+categories          sysutils
+license             MIT
+maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+
+description         Simple hotkey daemon for macOS (Zig implementation)
+long_description    skhd.zig is a Zig rewrite of skhd, a simple hotkey \
+                    daemon for macOS. It provides system-wide keyboard \
+                    event interception and hotkey mapping with full \
+                    modifier support, process-specific bindings, modal \
+                    systems, and improved error reporting. Fully compatible \
+                    with the original skhd configuration format.
+
+homepage            https://github.com/jackielii/skhd.zig
+
+checksums           rmd160  04811bbcd62cc17c41a178affb1f439a5225f925 \
+                    sha256  2e273612fbdd17c95ba0f8bc005e3f32fa085b24e892a738a912788333b39910 \
+                    size    97047
+
+depends_build-append port:zig
+
+platforms           {darwin >= 22}
+
+configure {
+    # Zig projects don't use configure scripts
+}
+
+build {
+    system "cd ${worksrcpath} && ${prefix}/bin/zig build -Doptimize=ReleaseFast"
+}
+
+destroot {
+    xinstall -d ${destroot}${prefix}/bin
+    xinstall -m 755 ${worksrcpath}/zig-out/bin/skhd ${destroot}${prefix}/bin/skhd
+    
+    # Install documentation
+    xinstall -d -m 0755 ${destroot}${prefix}/share/doc/${name}
+    xinstall -m 644 ${worksrcpath}/README.md \
+                    ${worksrcpath}/LICENSE \
+                    ${destroot}${prefix}/share/doc/${name}
+}
+
+notes "
+    skhd.zig is a Zig rewrite of skhd that is fully compatible with the \
+    original skhd configuration format. Your existing .skhdrc files will \
+    work without modification.
+
+    Configuration files are looked for in the following order:
+    * Path specified with -c flag
+    * ~/.config/skhd/skhdrc
+    * ~/.skhdrc
+
+    To run skhd.zig as a service:
+    * skhd --install-service
+    * skhd --start-service
+
+    For more information, see:
+    * ${prefix}/share/doc/${name}/README.md
+"
