@@ -1,0 +1,17 @@
+--- build.zig.orig	2025-12-22 19:55:44
++++ build.zig	2025-12-22 19:56:42
+@@ -56,9 +56,11 @@
+     // Main executable
+     const exe = b.addExecutable(.{
+         .name = "skhd",
+-        .root_source_file = b.path("src/main.zig"),
+-        .target = target,
+-        .optimize = optimize,
++        .root_module = b.createModule(.{
++            .root_source_file = b.path("src/main.zig"),
++            .target = target,
++            .optimize = optimize,
++        }),
+     });
+ 
+     const options = b.addOptions();

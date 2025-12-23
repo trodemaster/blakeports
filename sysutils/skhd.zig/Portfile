@@ -4,7 +4,7 @@ PortSystem          1.0
 PortGroup           github 1.0
 
 github.setup        jackielii skhd.zig 0.0.17 v
-github.tarball_from releases
+github.tarball_from archive
 
 revision            0
 
@@ -25,6 +25,9 @@ homepage            https://github.com/jackielii/skhd.zig
 checksums           rmd160  04811bbcd62cc17c41a178affb1f439a5225f925 \
                     sha256  2e273612fbdd17c95ba0f8bc005e3f32fa085b24e892a738a912788333b39910 \
                     size    97047
+
+patchfiles          patch-build.zig-0.15.1.diff
+patch.args          -p0
 
 depends_build-append port:zig
 
