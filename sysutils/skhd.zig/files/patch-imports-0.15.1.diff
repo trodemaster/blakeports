@@ -1,0 +1,105 @@
+--- src/benchmark.zig.orig
++++ src/benchmark.zig
+@@ -1,9 +1,9 @@
+ const std = @import("std");
+ const zbench = @import("zbench");
+ const Skhd = @import("skhd.zig");
+ const Hotkey = @import("Hotkey.zig");
+ const HotkeyOriginal = @import("Hotkey.zig");
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+ const ModifierFlag = @import("Keycodes.zig").ModifierFlag;
+
+ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+
+--- src/CarbonEvent.zig.orig
++++ src/CarbonEvent.zig
+@@ -1,4 +1,4 @@
+ const std = @import("std");
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+
+ const CarbonEvent = @This();
+
+--- src/echo.zig.orig
++++ src/echo.zig
+@@ -3,7 +3,7 @@
+ const Keycodes = @import("Keycodes.zig");
+
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+
+ extern fn NSApplicationLoad() void;
+
+--- src/EventTap.zig.orig
++++ src/EventTap.zig
+@@ -1,4 +1,4 @@
+ const std = @import("std");
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+
+ handle: c.CFMachPortRef = null,
+
+--- src/exec.zig.orig
++++ src/exec.zig
+@@ -1,4 +1,4 @@
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+ const std = @import("std");
+
+ /// Fork and exec a command, detaching it from the parent process
+
+--- src/Hotload.zig.orig
++++ src/Hotload.zig
+@@ -1,4 +1,4 @@
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+ const std = @import("std");
+ const Hotkeys = @import("Hotkeys.zig");
+
+--- src/Keycodes.zig.orig
++++ src/Keycodes.zig
+@@ -1,4 +1,4 @@
+ const std = @import("std");
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+ const log = std.log.scoped(.keycodes);
+
+ const layout_dependent_keycodes = [_]u32{
+
+--- src/Parser.zig.orig
++++ src/Parser.zig
+@@ -1,4 +1,4 @@
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+ const std = @import("std");
+
+--- src/service.zig.orig
++++ src/service.zig
+@@ -1,4 +1,4 @@
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+ const std = @import("std");
+
+--- src/skhd.zig.orig
++++ src/skhd.zig
+@@ -1,6 +1,6 @@
+ const std = @import("std");
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+ const forkAndExec = @import("exec.zig").forkAndExec;
+ const Hotkeys = @import("Hotkeys.zig");
+
+--- src/synthesize.zig.orig
++++ src/synthesize.zig
+@@ -1,4 +1,4 @@
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+ const std = @import("std");
+
+--- src/tests.zig.orig
++++ src/tests.zig
+@@ -1,4 +1,4 @@
+-const c = @import("c.zig");
++const c = @import("c.zig").c_impl;
+ const std = @import("std");
