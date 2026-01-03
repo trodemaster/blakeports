@@ -260,11 +260,23 @@ jobs:
             exit 1
           fi
           
+          # Also get the SSH key name
+          SSH_KEY_NAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].ssh_key // \"oldmac\"" "$CONFIG_FILE")
+          SSH_KEY_PATH="/config/ssh_keys/${SSH_KEY_NAME}"
+          
+          # Verify SSH key exists
+          if [ ! -f "$SSH_KEY_PATH" ]; then
+            echo "Error: SSH key not found at $SSH_KEY_PATH"
+            ls -la /config/ssh_keys/ 2>/dev/null || echo "  ssh_keys directory not accessible"
+            exit 1
+          fi
+          
           # Store for use in subsequent steps
           echo "VM_IP=$VM_IP" >> $GITHUB_ENV
           echo "VM_USERNAME=$VM_USERNAME" >> $GITHUB_ENV
+          echo "SSH_KEY_PATH=$SSH_KEY_PATH" >> $GITHUB_ENV
           
-          echo "✅ Configuration verified. Will connect to: $VM_USERNAME@$VM_IP"
+          echo "✅ Configuration verified. Will connect to: $VM_USERNAME@$VM_IP using key: $SSH_KEY_PATH"
 
       - name: Show macOS version (legacy VM)
         if: matrix.type == 'legacy'
@@ -272,7 +284,7 @@ jobs:
         with:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
-          key: ${{ secrets.OLDMAC_KEY }}
+          key_path: ${{ env.SSH_KEY_PATH }}
           script: |
             set -e
             set -o pipefail
@@ -298,7 +310,7 @@ jobs:
         if: matrix.type == 'legacy'
         run: |
           echo "Transferring tarball to ${{ matrix.vm_name }} VM..."
-          scp -i /home/runner/.ssh/oldmac \
+          scp -i ${{ env.SSH_KEY_PATH }} \
               -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
               -o HostKeyAlgorithms=+ssh-rsa \
@@ -313,7 +325,7 @@ jobs:
         with:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
-          key: ${{ secrets.OLDMAC_KEY }}
+          key_path: ${{ env.SSH_KEY_PATH }}
           script: |
             set -e
             set -o pipefail
@@ -341,7 +353,7 @@ jobs:
         with:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
-          key: ${{ secrets.OLDMAC_KEY }}
+          key_path: ${{ env.SSH_KEY_PATH }}
           script: |
             set -e
             set -o pipefail
@@ -365,7 +377,7 @@ jobs:
         with:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
-          key: ${{ secrets.OLDMAC_KEY }}
+          key_path: ${{ env.SSH_KEY_PATH }}
           script: |
             set -e
             set -o pipefail
@@ -389,7 +401,7 @@ jobs:
         with:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
-          key: ${{ secrets.OLDMAC_KEY }}
+          key_path: ${{ env.SSH_KEY_PATH }}
           script: |
             set -e
             set -o pipefail
@@ -408,7 +420,7 @@ jobs:
         with:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
-          key: ${{ secrets.OLDMAC_KEY }}
+          key_path: ${{ env.SSH_KEY_PATH }}
           command_timeout: ${{ matrix.timeout }}m
           script: |
             set -e
@@ -427,7 +439,7 @@ jobs:
         with:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
-          key: ${{ secrets.OLDMAC_KEY }}
+          key_path: ${{ env.SSH_KEY_PATH }}
           command_timeout: ${{ matrix.timeout }}m
           script: |
             set -e
@@ -447,7 +459,7 @@ jobs:
         with:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
-          key: ${{ secrets.OLDMAC_KEY }}
+          key_path: ${{ env.SSH_KEY_PATH }}
           script: |
             set -e
             set -o pipefail
@@ -471,7 +483,7 @@ jobs:
         with:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
-          key: ${{ secrets.OLDMAC_KEY }}
+          key_path: ${{ env.SSH_KEY_PATH }}
           script: |
             if [ -f ~/.profile ]; then
               source ~/.profile
