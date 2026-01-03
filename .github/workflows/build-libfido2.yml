@@ -369,17 +369,17 @@ jobs:
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
             
-            # Always run portindex once to ensure BlakePorts ports are indexed
-            # Check if .index file exists in current ports dir - if not, definitely need to index
-            if [ ! -f .index ]; then
-              echo "First run: indexing BlakePorts..."
+            # Try lint first, if "Unknown dependency" error occurs, run portindex and retry once
+            LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1) || true
+            echo "$LINT_OUTPUT"
+            
+            if echo "$LINT_OUTPUT" | grep -q "Unknown dependency"; then
+              echo "⚠️  Unknown dependency error - running portindex and retrying..."
               portindex
-            else
-              echo "BlakePorts already indexed, skipping portindex"
+              LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1)
+              echo "$LINT_OUTPUT"
             fi
             
-            LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1)
-            echo "$LINT_OUTPUT"
             if echo "$LINT_OUTPUT" | grep -q "Error:"; then
               echo "❌ Lint failed"
               exit 1
