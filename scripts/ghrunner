@@ -215,9 +215,13 @@ check_dependencies() {
         missing_deps+=("gh")
     fi
     
-    # Check for tart CLI (for macOS runners)
-    if [ ! -x "$TART_PATH" ]; then
-        missing_deps+=("tart")
+    # Check for tart CLI (for Apple Silicon macOS runners only)
+    local arch
+    arch=$(uname -m)
+    if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
+        if [ ! -x "$TART_PATH" ]; then
+            missing_deps+=("tart")
+        fi
     fi
     
     # Check for lima CLI (for Linux runners)
@@ -225,9 +229,13 @@ check_dependencies() {
         missing_deps+=("lima")
     fi
     
-    # Check for vmware vmrun (for VMware runners)
-    if [ ! -x "$VMWARE_VMRUN_PATH" ]; then
-        missing_deps+=("vmware")
+    # Check for vmware vmrun (for Intel macOS runners only)
+    local arch
+    arch=$(uname -m)
+    if [ "$arch" = "x86_64" ]; then
+        if [ ! -x "$VMWARE_VMRUN_PATH" ]; then
+            missing_deps+=("vmware")
+        fi
     fi
     
     if [ ${#missing_deps[@]} -ne 0 ]; then
