@@ -1,0 +1,57 @@
+{
+  "runners": {
+    "tenfive": {
+      "token": "",
+      "vm_ip": "",
+      "vm_hostname": "tenfive",
+      "vm_user": "admin",
+      "ssh_key": "oldmac",
+      "labels": "ssh-legacy-capable,legacy-macos,tenfive,10-5"
+    },
+    "tensix": {
+      "token": "",
+      "vm_ip": "",
+      "vm_hostname": "tensix",
+      "vm_user": "admin",
+      "ssh_key": "oldmac",
+      "labels": "ssh-legacy-capable,legacy-macos,tensix,10-6"
+    },
+    "tenseven": {
+      "token": "",
+      "vm_ip": "",
+      "vm_hostname": "tenseven",
+      "vm_user": "admin",
+      "ssh_key": "oldmac",
+      "labels": "ssh-legacy-capable,legacy-macos,tenseven,10-7"
+    },
+    "teneight": {
+      "token": "",
+      "vm_ip": "",
+      "vm_hostname": "teneight",
+      "vm_user": "admin",
+      "ssh_key": "oldmac",
+      "labels": "ssh-legacy-capable,legacy-macos,teneight,10-8"
+    },
+    "tennine": {
+      "token": "",
+      "vm_ip": "",
+      "vm_hostname": "tennine",
+      "vm_user": "admin",
+      "ssh_key": "oldmac",
+      "labels": "ssh-legacy-capable,legacy-macos,tennine,10-9"
+    },
+    "tenten": {
+      "token": "",
+      "vm_ip": "",
+      "vm_hostname": "tenten",
+      "vm_user": "admin",
+      "ssh_key": "oldmac",
+      "labels": "ssh-legacy-capable,legacy-macos,tenten,10-10"
+    }
+  },
+  "github": {
+    "owner": "trodemaster",
+    "repo": "blakeports"
+  }
+}
+

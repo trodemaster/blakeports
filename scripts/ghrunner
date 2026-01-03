@@ -48,6 +48,20 @@ VMWARE_SSH_HOST="darkstar"
 VMWARE_BASE_DIR="/Volumes/JonesFarm/actions-runners"
 VMWARE_VM_USER="blake"  # SSH user for VMware VMs
 
+# Runner group configurations
+LEGACY_RUNNERS=("tenfive" "tensix" "tenseven" "teneight" "tennine" "tenten")
+CURRENT_RUNNERS=("macOS_15" "macOS_26")
+GROUP=""
+STOP_VMS=""
+
+# VMware Fusion REST API Configuration (darkstar)
+# These should be exported by direnv from .envrc
+VMWARE_REST_API_HOST="${VMWARE_REST_API_HOST}"
+VMWARE_REST_API_PORT="${VMWARE_REST_API_PORT:-8697}"       # Default port if not set
+VMWARE_REST_API_USER="${VMWARE_REST_API_USER}"
+VMWARE_REST_API_PASS="${VMWARE_REST_API_PASS}"
+VMWARE_REST_API_INSECURE="${VMWARE_REST_API_INSECURE:-true}"  # Use -k for self-signed certs
+
 # SSH configuration
 SSH_OPTS=(
     "-o" "ControlPath ~/.ssh/controlmasters/%r@%h:%p"
@@ -89,7 +103,15 @@ Options:
     -owner <github_owner>   Override GitHub owner (default: trodemaster)
     -repo <repo_name>       Override repository name (default: blakeports)
     -list                   List currently registered runners for the repository
+    -inspect-legacy-vms     Inspect available VMs on darkstar via REST API
     -start-all              Start all configured runners
+    -start-group <group>    Start a group of runners (current|legacy|all)
+    -stop-group <group>     Stop a group of runners (current|legacy|all)
+    -stop-vms               Also stop VMware VMs when stopping legacy group
+    -vmware-api-host <ip>   Override VMware REST API host
+    -vmware-api-port <port> Override VMware REST API port
+    -vmware-api-user <user> Override VMware REST API username
+    -vmware-api-pass <pass> Override VMware REST API password
     -remove-all             Remove/de-register all GitHub runners
     -remove <runner_name>   Remove/de-register a GitHub runner
     -cancel-workflows       Cancel all running workflows
@@ -108,14 +130,21 @@ Examples:
     # Create runner on remote host
     $0 -tart macos-runner -ssh remote-host
     
-    # List current runners
+    # Manage runner groups
+    $0 -start-group current    # Start tart runners (macOS_15, macOS_26)
+    $0 -start-group legacy     # Start docker runners for legacy VMs
+    $0 -start-group all        # Start all runners (current + legacy)
+    $0 -stop-group legacy -stop-vms  # Stop legacy runners and shut down VMs
+    
+    # Inspect VMs on darkstar
+    $0 -inspect-legacy-vms     # List all VMs and their status
+    $0 -inspect-legacy-vms -vmware-api-host 192.168.1.100  # Custom host
+    
+    # List and remove
     $0 -list
     $0 -list -owner myusername -repo myproject
-    
-    # Manage runners
-    $0 -start-all
-    $0 -remove-all
     $0 -remove macos-runner
+    $0 -remove-all
 
 Environment Variables:
     GITHUB_OWNER            Set default GitHub owner (default: trodemaster)
@@ -834,6 +863,312 @@ start_tart_runner() {
     fi
 }
 
+# Function to call VMware Fusion REST API
+vmware_rest_api_call() {
+    local method=$1
+    local endpoint=$2
+    local data=${3:-}
+    
+    local url="https://${VMWARE_REST_API_HOST}:${VMWARE_REST_API_PORT}/api${endpoint}"
+    
+    local curl_opts=("-s" "-X" "$method")
+    
+    # Add authentication
+    if [ -n "$VMWARE_REST_API_PASS" ]; then
+        curl_opts+=("-u" "${VMWARE_REST_API_USER}:${VMWARE_REST_API_PASS}")
+    else
+        print_error "VMWARE_REST_API_PASS not set. Cannot authenticate to REST API."
+        return 1
+    fi
+    
+    # Accept self-signed certificates
+    if [ "$VMWARE_REST_API_INSECURE" = "true" ]; then
+        curl_opts+=("-k")
+    fi
+    
+    # Add content type and data if provided
+    if [ -n "$data" ]; then
+        curl_opts+=("-H" "Content-Type: application/vnd.vmware.vmw.rest-v1+json" "-d" "$data")
+    fi
+    
+    curl "${curl_opts[@]}" "$url"
+}
+
+# Function to list all VMs on darkstar via REST API
+list_vmware_vms() {
+    print_info "Querying VMware Fusion REST API for available VMs..."
+    print_info "API Endpoint: https://${VMWARE_REST_API_HOST}:${VMWARE_REST_API_PORT}"
+    
+    local response
+    response=$(vmware_rest_api_call "GET" "/vms")
+    
+    if [ $? -ne 0 ]; then
+        print_error "Failed to connect to VMware REST API"
+        print_error "Ensure darkstar has REST API running with proper configuration"
+        return 1
+    fi
+    
+    echo "$response" | jq . 2>/dev/null || echo "$response"
+}
+
+# Function to get VM UUID by name via REST API
+get_vm_uuid_by_name() {
+    local vm_name=$1
+    
+    local vms_json
+    vms_json=$(vmware_rest_api_call "GET" "/vms")
+    
+    # Search for VM by matching the path name
+    echo "$vms_json" | jq -r ".[] | select(.path | contains(\"$vm_name.vmwarevm\")) | .id" | head -1
+}
+
+# Function to get VM power state via REST API
+get_vm_power_rest() {
+    local vm_id=$1
+    
+    vmware_rest_api_call "GET" "/vms/$vm_id/power"
+}
+
+# Function to get VM details via REST API
+get_vm_details_rest() {
+    local vm_id=$1
+    
+    vmware_rest_api_call "GET" "/vms/$vm_id"
+}
+
+# Function to start VM via REST API
+start_vm_rest_api() {
+    local vm_id=$1
+    
+    print_info "Starting VM via REST API: $vm_id"
+    
+    local response
+    response=$(vmware_rest_api_call "PUT" "/vms/$vm_id/power" 'on')
+    
+    if echo "$response" | grep -q "error\|Code"; then
+        print_error "Failed to start VM: $response"
+        return 1
+    fi
+    
+    print_success "VM start command sent"
+    return 0
+}
+
+# Function to stop VM via REST API
+stop_vm_rest_api() {
+    local vm_id=$1
+    
+    print_info "Stopping VM via REST API: $vm_id"
+    
+    local response
+    response=$(vmware_rest_api_call "PUT" "/vms/$vm_id/power" 'off')
+    
+    if echo "$response" | grep -q "error\|Code"; then
+        print_error "Failed to stop VM: $response"
+        return 1
+    fi
+    
+    print_success "VM stop command sent"
+    return 0
+}
+
+# Function to inspect legacy runner VMs on darkstar
+inspect_legacy_vms() {
+    print_info "════════════════════════════════════════════════════════════════════"
+    print_info "  VMware Fusion Legacy VM Inspection (darkstar)"
+    print_info "════════════════════════════════════════════════════════════════════"
+    echo
+    
+    # Check if jq is available
+    if ! command -v jq &> /dev/null; then
+        print_error "jq is required for VM inspection. Please install jq."
+        return 1
+    fi
+    
+    # Get all VMs
+    local vms_json
+    vms_json=$(vmware_rest_api_call "GET" "/vms")
+    
+    if [ $? -ne 0 ] || [ -z "$vms_json" ]; then
+        print_error "Failed to query VMs from darkstar REST API"
+        print_error "Configuration:"
+        print_error "  Host: $VMWARE_REST_API_HOST"
+        print_error "  Port: $VMWARE_REST_API_PORT"
+        print_error "  User: $VMWARE_REST_API_USER"
+        echo
+        print_info "Troubleshooting:"
+        print_info "  1. Verify vmrest is running on darkstar"
+        print_info "  2. Check VMWARE_REST_API_HOST is set to darkstar's IP/hostname"
+        print_info "  3. Verify firewall allows port $VMWARE_REST_API_PORT"
+        print_info "  4. Ensure VMWARE_REST_API_PASS environment variable is set"
+        return 1
+    fi
+    
+    local vm_count
+    vm_count=$(echo "$vms_json" | jq 'length' 2>/dev/null || echo "0")
+    
+    if [ "$vm_count" = "0" ]; then
+        print_warning "No VMs found on darkstar"
+        return 0
+    fi
+    
+    print_success "Found $vm_count VM(s) on darkstar"
+    echo
+    
+    # Section 1: Base Images
+    print_info "──────────────────────────────────────────────────────────────────"
+    print_info "BASE IMAGES (Templates)"
+    print_info "──────────────────────────────────────────────────────────────────"
+    echo
+    
+    local base_images=()
+    while IFS='|' read -r vm_id vm_path; do
+        local vm_name=$(basename "$vm_path" .vmx)
+        # Only collect base images
+        if [[ "$vm_name" =~ -base$ ]]; then
+            base_images+=("$vm_name")
+        fi
+    done < <(echo "$vms_json" | jq -r '.[] | 
+        if type == "object" then "\(.id)|\(.path)" else empty end')
+    
+    if [ ${#base_images[@]} -eq 0 ]; then
+        print_warning "  No base images found"
+    else
+        for img in "${base_images[@]}"; do
+            printf "  ✓ %s\n" "$img"
+        done
+    fi
+    echo
+    
+    # Section 2: Active Runner VMs
+    print_info "──────────────────────────────────────────────────────────────────"
+    print_info "RUNNER VMs (Active Instances)"
+    print_info "──────────────────────────────────────────────────────────────────"
+    echo
+    
+    printf "%-30s %-12s %s\n" "RUNNER NAME" "POWER STATE" "CPU/MEMORY"
+    echo "────────────────────────────────────────────────────────────────────"
+    
+    local runner_vms=()
+    while IFS='|' read -r vm_id vm_path; do
+        local vm_name=$(basename "$vm_path" .vmx)
+        
+        # Only collect runner VMs (not base templates)
+        if [[ "$vm_name" =~ ^runner- ]] && [[ ! "$vm_name" =~ -base$ ]]; then
+            runner_vms+=("$vm_id|$vm_name")
+        fi
+    done < <(echo "$vms_json" | jq -r '.[] | 
+        if type == "object" then "\(.id)|\(.path)" else empty end')
+    
+    if [ ${#runner_vms[@]} -eq 0 ]; then
+        print_warning "  No runner VMs found"
+    else
+        for vm_entry in "${runner_vms[@]}"; do
+            local vm_id=$(echo "$vm_entry" | cut -d'|' -f1)
+            local vm_name=$(echo "$vm_entry" | cut -d'|' -f2)
+            
+            # Get VM details (CPU, memory)
+            local vm_details
+            vm_details=$(get_vm_details_rest "$vm_id" 2>/dev/null)
+            
+            if [ -z "$vm_details" ]; then
+                printf "%-30s %-12s %s\n" "$vm_name" "error" "connection error"
+                continue
+            fi
+            
+            # Get VM power state
+            local power_response
+            power_response=$(get_vm_power_rest "$vm_id" 2>/dev/null)
+            local power=$(echo "$power_response" | jq -r '.power_state // "unknown"' 2>/dev/null)
+            
+            local cpu=$(echo "$vm_details" | jq -r '.cpu.processors // "?"' 2>/dev/null)
+            local memory=$(echo "$vm_details" | jq -r '.memory // "?"' 2>/dev/null)
+            
+            # Color code power status
+            local power_display
+            case "$power" in
+                "poweredOn")
+                    power_display="${GREEN}on${NC}"
+                    ;;
+                "poweredOff")
+                    power_display="${YELLOW}off${NC}"
+                    ;;
+                *)
+                    power_display="${RED}${power}${NC}"
+                    ;;
+            esac
+            
+            printf "%-30s %-12b %d CPU, %d MB\n" "$vm_name" "$power_display" "$cpu" "$memory"
+        done
+    fi
+    echo
+    
+    # Section 3: Docker Containers
+    print_info "──────────────────────────────────────────────────────────────────"
+    print_info "DOCKER CONTAINERS (Connected to Runners)"
+    print_info "──────────────────────────────────────────────────────────────────"
+    echo
+    
+    # Check if docker is available
+    if ! command -v docker &> /dev/null; then
+        print_warning "Docker not available for container inspection"
+        echo
+    else
+        printf "%-30s %-12s %s\n" "CONTAINER NAME" "STATUS" "IMAGE"
+        echo "────────────────────────────────────────────────────────────────────"
+        
+        local container_count=0
+        for runner in "${LEGACY_RUNNERS[@]}"; do
+            local container_name="${runner}-runner"
+            
+            # Check if container exists
+            local container_info
+            container_info=$(docker ps -a --filter "name=^${container_name}$" --format "{{.Names}}|{{.State}}|{{.Image}}" 2>/dev/null)
+            
+            if [ -n "$container_info" ]; then
+                container_count=$((container_count + 1))
+                local container_status=$(echo "$container_info" | cut -d'|' -f2)
+                local container_image=$(echo "$container_info" | cut -d'|' -f3)
+                
+                # Color code container status
+                local status_display
+                case "$container_status" in
+                    "running")
+                        status_display="${GREEN}running${NC}"
+                        ;;
+                    "exited")
+                        status_display="${YELLOW}stopped${NC}"
+                        ;;
+                    "paused")
+                        status_display="${YELLOW}paused${NC}"
+                        ;;
+                    *)
+                        status_display="${RED}${container_status}${NC}"
+                        ;;
+                esac
+                
+                printf "%-30s %-12b %s\n" "$container_name" "$status_display" "$container_image"
+            fi
+        done
+        
+        if [ "$container_count" = "0" ]; then
+            print_warning "  No legacy runner containers found"
+        fi
+        echo
+    fi
+    
+    # Summary
+    print_info "════════════════════════════════════════════════════════════════════"
+    print_info "SUMMARY"
+    print_info "════════════════════════════════════════════════════════════════════"
+    echo
+    print_info "Configured legacy runners in ghrunner:"
+    for runner in "${LEGACY_RUNNERS[@]}"; do
+        print_info "  • runner-$runner"
+    done
+    echo
+}
+
 # Function to start lima runner (Linux) - stub
 start_lima_runner() {
     local runner_name=$1
@@ -858,6 +1193,209 @@ start_lima_runner() {
         print_info "  2. Installing GitHub runner on the VM"
         print_info "  3. Configuring and starting the runner service"
     fi
+}
+
+# Function to start legacy docker runner
+start_legacy_docker_runner() {
+    local runner_name=$1
+    print_info "Starting legacy docker runner: $runner_name"
+    
+    # Check if docker is available
+    if ! command -v docker &> /dev/null; then
+        print_error "Docker not found"
+        exit 1
+    fi
+    
+    # Check if jq is available
+    if ! command -v jq &> /dev/null; then
+        print_error "jq not found - required for JSON config management"
+        exit 1
+    fi
+    
+    # Get VM info for this runner
+    local vm_name="${runner_name}"
+    local vm_hostname="${runner_name}-runner.local"
+    
+    # Start the VMware VM on darkstar if needed
+    if ! start_vmware_vm_if_needed "$vm_name"; then
+        print_error "Failed to start VMware VM for $runner_name"
+        exit 1
+    fi
+    
+    # Verify VM is accessible
+    if ! test_ssh_connection_with_retries "$vm_hostname" true; then
+        print_error "Cannot reach VM at $vm_hostname"
+        exit 1
+    fi
+    
+    # Resolve Bonjour hostname to IP address for Docker container
+    print_info "Resolving Bonjour hostname to IP address..."
+    local vm_ip
+    vm_ip=$(ping -c 1 "$vm_hostname" 2>/dev/null | grep -oE '\([0-9.]+\)' | head -1 | tr -d '()')
+    
+    if [ -z "$vm_ip" ]; then
+        print_warning "Could not resolve $vm_hostname to IP, trying alternative method..."
+        # Try using dig if ping doesn't work
+        vm_ip=$(dig +short "$vm_hostname" @224.0.0.251 2>/dev/null | head -1)
+    fi
+    
+    if [ -z "$vm_ip" ]; then
+        print_error "Failed to resolve $vm_hostname to IP address"
+        exit 1
+    fi
+    
+    print_success "Resolved $vm_hostname to IP: $vm_ip"
+    
+    # Generate runner token
+    print_info "Generating runner token..."
+    local token
+    token=$(gh api repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners/registration-token --method POST --jq '.token')
+    
+    if [ -z "$token" ]; then
+        print_error "Failed to generate runner token"
+        exit 1
+    fi
+    
+    # Update JSON config file
+    local docker_dir="/Users/blake/Developer/blakeports/docker"
+    local config_dir="$docker_dir/config"
+    local config_file="$config_dir/runners.json"
+    
+    # Ensure config directory exists
+    mkdir -p "$config_dir"
+    
+    # Copy SSH keys to config directory (if they exist in blakeports)
+    local ssh_key_src="/Users/blake/Developer/blakeports/docker/ssh_keys/oldmac"
+    if [ -f "$ssh_key_src" ]; then
+        mkdir -p "$config_dir/ssh_keys"
+        cp "$ssh_key_src" "$config_dir/ssh_keys/oldmac"
+        chmod 600 "$config_dir/ssh_keys/oldmac"
+        print_info "SSH key copied to config/ssh_keys/"
+    fi
+    
+    # Initialize config file from example if it doesn't exist
+    if [ ! -f "$config_file" ]; then
+        print_info "Creating config from example..."
+        cp "$docker_dir/config.example.json" "$config_file"
+    fi
+    
+    # Update runner config using jq
+    print_info "Updating runner config: $runner_name"
+    local tmp_file=$(mktemp)
+    jq --arg name "$runner_name" \
+       --arg token "$token" \
+       --arg vm_ip "$vm_ip" \
+       --arg owner "$GITHUB_OWNER" \
+       --arg repo "$GITHUB_REPO" \
+       '.runners[$name].token = $token | 
+        .runners[$name].vm_ip = $vm_ip |
+        .github.owner = $owner |
+        .github.repo = $repo' \
+       "$config_file" > "$tmp_file" && mv "$tmp_file" "$config_file"
+    
+    print_success "Config updated: token and IP for $runner_name"
+    
+    # Restart the container to pick up new config
+    cd "$docker_dir"
+    print_info "Restarting ${runner_name}-runner container..."
+    docker compose up -d --force-recreate "${runner_name}-runner"
+    
+    # Wait a moment for container to start
+    sleep 2
+    
+    # Verify config is accessible in the container
+    print_info "Verifying config is accessible in container..."
+    if docker compose exec "${runner_name}-runner" test -f /config/runners.json; then
+        print_success "✅ Config file is accessible in container"
+    else
+        print_error "❌ Config file NOT accessible in container - mount may have failed"
+        return 1
+    fi
+    
+    print_success "Docker runner $runner_name started with IP: $vm_ip"
+}
+
+# Function to stop legacy docker runner
+stop_legacy_docker_runner() {
+    local runner_name=$1
+    print_info "Stopping legacy docker runner: $runner_name"
+    
+    local docker_dir="/Users/blake/Developer/blakeports/docker"
+    cd "$docker_dir"
+    docker compose stop "${runner_name}-runner" 2>/dev/null || print_warning "Container may not be running"
+    
+    print_success "Docker runner $runner_name stopped"
+}
+
+# Function to start VMware VM on darkstar if not running (using REST API)
+start_vmware_vm_if_needed() {
+    local vm_name=$1
+    local vm_uuid
+    
+    print_info "Checking if VM runner-${vm_name} is running on darkstar"
+    
+    # Get the VM UUID by name
+    vm_uuid=$(get_vm_uuid_by_name "runner-${vm_name}")
+    
+    if [ -z "$vm_uuid" ]; then
+        print_error "Failed to find VM UUID for runner-${vm_name}"
+        return 1
+    fi
+    
+    print_info "Found VM UUID: $vm_uuid"
+    
+    # Get current power state
+    local power_response
+    power_response=$(get_vm_power_rest "$vm_uuid" 2>/dev/null)
+    
+    if [ -z "$power_response" ]; then
+        print_error "Failed to query VM power state from REST API"
+        return 1
+    fi
+    
+    local power_state=$(echo "$power_response" | jq -r '.power_state // "unknown"' 2>/dev/null)
+    
+    if [ "$power_state" = "poweredOn" ]; then
+        print_info "VM runner-${vm_name} is already running"
+        return 0
+    fi
+    
+    # Start the VM via REST API
+    print_info "Starting VM on darkstar: runner-${vm_name}"
+    if ! start_vm_rest_api "$vm_uuid"; then
+        print_error "Failed to start VM via REST API"
+        return 1
+    fi
+    
+    # Wait for VM to boot
+    print_info "Waiting for VM to boot (30 seconds)"
+    sleep 30
+    
+    print_success "VM started successfully"
+    return 0
+}
+
+# Function to stop VMware VM on darkstar (using REST API)
+stop_vmware_vm() {
+    local vm_name=$1
+    local vm_uuid
+    
+    print_info "Stopping VM on darkstar: runner-${vm_name}"
+    
+    # Get the VM UUID by name
+    vm_uuid=$(get_vm_uuid_by_name "runner-${vm_name}")
+    
+    if [ -z "$vm_uuid" ]; then
+        print_error "Failed to find VM UUID for runner-${vm_name}"
+        return 1
+    fi
+    
+    if ! stop_vm_rest_api "$vm_uuid"; then
+        print_warning "VM stop may have failed or already stopped"
+    fi
+    
+    print_success "VM stop command sent"
+    return 0
 }
 
 # Function to get VMware VM path on remote host
@@ -891,158 +1429,98 @@ get_vmware_vm_hostname() {
     echo "${base_vm_name}-runner.local"
 }
 
-# Function to start vmware runner
-start_vmware_runner() {
-    local base_vm_name=$1
-    local runner_vm_name="runner-${base_vm_name}"
-    local base_vm_path=$(get_vmware_base_vm_path "$base_vm_name")
-    local runner_vm_path=$(get_vmware_vm_path "$runner_vm_name")
+# Function to start runner group
+start_runner_group() {
+    local group=$1
+    
+    case $group in
+        "current")
+            print_info "Starting current group (tart runners)"
+            for runner in "${CURRENT_RUNNERS[@]}"; do
+                print_info "Starting tart runner: $runner"
+                generate_runner_token
+                start_tart_runner "$runner"
+            done
+            ;;
+        "legacy")
+            print_info "Starting legacy group (docker+VMware runners)"
+            for runner in "${LEGACY_RUNNERS[@]}"; do
+                print_info "Starting legacy docker runner: $runner"
+                generate_runner_token
+                start_legacy_docker_runner "$runner"
+            done
+            ;;
+        "all")
+            print_info "Starting all runner groups"
+            start_runner_group "current"
+            start_runner_group "legacy"
+            ;;
+        *)
+            print_error "Unknown group: $group"
+            exit 1
+            ;;
+    esac
+    
+    print_success "Group '$group' started"
+}
 
-    print_info "Starting VMware runner: $runner_vm_name (from base: runner-${base_vm_name}-base)"
-    print_info "Remote VMware host: $VMWARE_SSH_HOST"
-    print_info "Base VM path: $base_vm_path"
-    print_info "Runner VM path: $runner_vm_path"
-
-    # Check if base VM exists
-    if ! ssh "$VMWARE_SSH_HOST" "test -f '$base_vm_path'"; then
-        print_error "Base VMware VM not found: $base_vm_path"
-        print_info "Available VMs in $VMWARE_BASE_DIR:"
-        ssh "$VMWARE_SSH_HOST" "ls -1 '$VMWARE_BASE_DIR' | grep -E '\.vmwarevm$'"
-        exit 1
-    fi
-
-    # Track if VM was already running (to skip boot wait)
-    local vm_already_running=false
-
-    # Check if runner VM already exists
-    if vmware_vm_exists "$runner_vm_name"; then
-        print_info "Runner VM '$runner_vm_name' already exists"
-
-        # Check if it's already running
-        local running_vms
-        running_vms=$(ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' list" 2>/dev/null)
-
-        if echo "$running_vms" | grep -q "$runner_vm_path"; then
-            print_warning "Runner VM '$runner_vm_name' is already running"
-            vm_already_running=true
-        else
-            print_info "Starting existing runner VM: $runner_vm_name"
-            ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' start '$runner_vm_path' nogui"
-            if [ $? -ne 0 ]; then
-                print_error "Failed to start VM"
-                exit 1
+# Function to stop runner group
+stop_runner_group() {
+    local group=$1
+    local stop_vms=${2:-false}
+    
+    case $group in
+        "current")
+            print_info "Stopping current group (tart runners)"
+            for runner in "${CURRENT_RUNNERS[@]}"; do
+                local runner_vm_name="${runner}_runner"
+                if [ -x "$TART_PATH" ] && "$TART_PATH" list | grep -q "$runner_vm_name"; then
+                    print_info "Stopping tart VM: $runner_vm_name"
+                    "$TART_PATH" stop "$runner_vm_name" 2>/dev/null || print_warning "VM may already be stopped"
+                fi
+            done
+            ;;
+        "legacy")
+            print_info "Stopping legacy group (docker runners)"
+            local docker_dir="/Users/blake/Developer/blakeports/docker"
+            if [ -d "$docker_dir" ]; then
+                cd "$docker_dir"
+                docker compose down 2>/dev/null || print_warning "Docker compose may not be running"
             fi
-            print_success "VM started successfully"
-        fi
-    else
-        print_info "Creating linked clone: $runner_vm_name from runner-${base_vm_name}-base"
-
-        # Create the directory for the clone
-        ssh "$VMWARE_SSH_HOST" "mkdir -p '${VMWARE_BASE_DIR}/${runner_vm_name}.vmwarevm'"
-
-        # Clone the VM (linked clone for efficiency)
-        # Linked clones don't require explicit snapshots - vmrun handles it
-        print_info "Cloning VM (this may take a moment)..."
-        ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' clone '$base_vm_path' '$runner_vm_path' linked -cloneName='$runner_vm_name'"
-
-        if [ $? -ne 0 ]; then
-            print_error "Failed to clone VM"
+            
+            if [ "$stop_vms" = "true" ]; then
+                print_info "Stopping VMware VMs on darkstar"
+                for runner in "${LEGACY_RUNNERS[@]}"; do
+                    stop_vmware_vm "$runner"
+                done
+            fi
+            ;;
+        "all")
+            print_info "Stopping all runner groups"
+            stop_runner_group "current"
+            stop_runner_group "legacy" "$stop_vms"
+            ;;
+        *)
+            print_error "Unknown group: $group"
             exit 1
-        fi
-        print_success "VM cloned successfully"
+            ;;
+    esac
+    
+    print_success "Group '$group' stopped"
+}
 
-        print_info "Starting runner VM: $runner_vm_name"
-        ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' start '$runner_vm_path' nogui"
-
-        if [ $? -ne 0 ]; then
-            print_error "Failed to start VM"
-            exit 1
-        fi
-        print_success "VM started successfully"
-    fi
-
-    # Wait for VM to boot (only if we just started it)
-    if [ "$vm_already_running" = false ]; then
-        print_info "Waiting for VM to boot (30 seconds)..."
-        sleep 30
-    else
-        print_info "Skipping boot wait (VM was already running)"
-    fi
-
-    # Get VM hostname (predictable: {version}-runner.local)
-    local vm_hostname
-    vm_hostname=$(get_vmware_vm_hostname "$base_vm_name")
-    print_info "Using VM hostname: $vm_hostname"
-
-    # Wait for SSH to be available with retries (using legacy SSH)
-    if ! test_ssh_connection_with_retries "$vm_hostname" true; then
-        print_error "Failed to establish SSH connection to VM after all retry attempts"
-        exit 1
-    fi
-
-    # Install and configure GitHub runner
-    print_info "Installing GitHub runner on VM..."
-
-    # Get latest stable runner version
-    local runner_version=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/v//')
-
-    # Detect VM architecture and get appropriate runner package (using legacy SSH)
-    local runner_package
-    runner_package=$(detect_vm_architecture "$vm_hostname" "$runner_version" true)
-    if [ $? -ne 0 ]; then
-        print_error "Failed to determine runner package for VM"
-        exit 1
-    fi
-
-    # Get OS and architecture info for labels
-    local vm_os_type=$($LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "uname -s" 2>/dev/null)
-    local vm_arch=$($LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "uname -m" 2>/dev/null)
-    local runner_labels=$(generate_runner_labels "vmware" "$vm_os_type" "$vm_arch")
-    # Add the base_vm_name as a custom label for matrix targeting
-    runner_labels="$runner_labels,$base_vm_name"
-
-    local runner_url="https://github.com/actions/runner/releases/download/v${runner_version}/${runner_package}"
-    print_info "Using runner package: $runner_package"
-    print_info "Runner labels: $runner_labels"
-
-    # Execute commands in VM to set up runner
-    print_info "Downloading GitHub runner..."
-    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "curl -o /tmp/actions-runner.tar.gz -L '$runner_url'"
-    if [ $? -ne 0 ]; then
-        print_error "Failed to download GitHub runner"
-        exit 1
-    fi
-
-    print_info "Extracting runner..."
-    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "sudo mkdir -p /opt/actions-runner && sudo tar -xzf /tmp/actions-runner.tar.gz -C /opt/actions-runner && sudo chown -R $VMWARE_VM_USER:staff /opt/actions-runner && rm /tmp/actions-runner.tar.gz"
-
-    print_info "Configuring runner..."
-    # Configure the runner with the token - use the original name for the runner registration
-    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./config.sh --url 'https://github.com/$GITHUB_OWNER/$GITHUB_REPO' --token '$RUNNER_TOKEN' --name '$base_vm_name' --labels '$runner_labels' --unattended --replace"
-
-    if [ $? -ne 0 ]; then
-        print_error "Failed to configure GitHub runner"
-        exit 1
-    fi
-
-    # Install and start service
-    print_info "Installing runner service..."
-    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh install"
-    if [ $? -ne 0 ]; then
-        print_error "Failed to install runner service"
-        exit 1
-    fi
-
-    print_info "Starting runner service..."
-    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh start"
-    if [ $? -ne 0 ]; then
-        print_error "Failed to start runner service"
-        exit 1
-    fi
-
-    print_success "GitHub runner '$base_vm_name' is now running on VMware VM '$runner_vm_name' (hostname: $vm_hostname)"
-    print_info "Runner service status:"
-    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" $VMWARE_VM_USER@"$vm_hostname" "cd /opt/actions-runner && ./svc.sh status"
+# Function to start vmware runner
+# NOTE: This function is deprecated. Use docker-based legacy runners instead.
+# Kept for reference only. Use start_legacy_docker_runner() for new deployments.
+start_vmware_runner() {
+    local runner_name=$1
+    
+    print_info "Starting legacy VMware runner: $runner_name"
+    print_info "Using Docker container with REST API VM management"
+    
+    # Use the legacy docker approach (which now uses REST API)
+    generate_runner_token
+    start_legacy_docker_runner "$runner_name"
 }
 
 # Helper function to start a single runner (for parallel execution)
@@ -1956,6 +2434,40 @@ main() {
                 DEBUG_MODE="true"
                 shift
                 ;;
+            -start-group)
+                ACTION="start-group"
+                GROUP="$2"
+                shift 2
+                ;;
+            -stop-group)
+                ACTION="stop-group"
+                GROUP="$2"
+                shift 2
+                ;;
+            -stop-vms)
+                STOP_VMS="true"
+                shift
+                ;;
+            -inspect-legacy-vms)
+                ACTION="inspect-legacy-vms"
+                shift
+                ;;
+            -vmware-api-host)
+                VMWARE_REST_API_HOST="$2"
+                shift 2
+                ;;
+            -vmware-api-port)
+                VMWARE_REST_API_PORT="$2"
+                shift 2
+                ;;
+            -vmware-api-user)
+                VMWARE_REST_API_USER="$2"
+                shift 2
+                ;;
+            -vmware-api-pass)
+                VMWARE_REST_API_PASS="$2"
+                shift 2
+                ;;
             *)
                 print_error "Unknown option: $1"
                 usage
@@ -1999,6 +2511,25 @@ main() {
             ;;
         "list")
             list_runners
+            ;;
+        "start-group")
+            if [ -z "$GROUP" ]; then
+                print_error "Group name is required for start-group operation"
+                usage
+                exit 1
+            fi
+            start_runner_group "$GROUP"
+            ;;
+        "stop-group")
+            if [ -z "$GROUP" ]; then
+                print_error "Group name is required for stop-group operation"
+                usage
+                exit 1
+            fi
+            stop_runner_group "$GROUP" "$STOP_VMS"
+            ;;
+        "inspect-legacy-vms")
+            inspect_legacy_vms
             ;;
         "")
             # Start specific runner

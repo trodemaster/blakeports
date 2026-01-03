@@ -227,22 +227,51 @@ jobs:
       - name: Verify VM configuration
         if: matrix.type == 'legacy'
         run: |
-          if [ -z "${{ matrix.vm_ip }}" ]; then
-            echo "Error: VM IP not set for ${{ matrix.platform }}"
+          # Read VM configuration from mounted config file
+          # The docker/config directory is mounted at /config inside the container
+          CONFIG_FILE="/config/runners.json"
+          
+          echo "DEBUG: Checking for config file at: $CONFIG_FILE"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Error: Config file not found at $CONFIG_FILE"
+            echo "Available files in /config:"
+            ls -la /config/ 2>/dev/null || echo "  /config directory not accessible"
+            echo "Available files in /"
+            ls -la / | head -20
             exit 1
           fi
-          if [ -z "${{ matrix.vm_username }}" ]; then
-            echo "Error: VM username not set for ${{ matrix.platform }}"
+          
+          echo "DEBUG: Config file found, checking contents..."
+          cat "$CONFIG_FILE" | head -20
+          
+          echo "DEBUG: Extracting VM configuration for platform: ${{ matrix.platform }}"
+          VM_IP=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_ip // empty" "$CONFIG_FILE")
+          VM_USERNAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_user // empty" "$CONFIG_FILE")
+          
+          echo "DEBUG: VM_IP=$VM_IP"
+          echo "DEBUG: VM_USERNAME=$VM_USERNAME"
+          
+          if [ -z "$VM_IP" ]; then
+            echo "Error: VM IP not set for ${{ matrix.platform }} in config"
             exit 1
           fi
-          echo "Will connect to: ${{ matrix.vm_username }}@${{ matrix.vm_ip }}"
+          if [ -z "$VM_USERNAME" ]; then
+            echo "Error: VM username not set for ${{ matrix.platform }} in config"
+            exit 1
+          fi
+          
+          # Store for use in subsequent steps
+          echo "VM_IP=$VM_IP" >> $GITHUB_ENV
+          echo "VM_USERNAME=$VM_USERNAME" >> $GITHUB_ENV
+          
+          echo "✅ Configuration verified. Will connect to: $VM_USERNAME@$VM_IP"
 
       - name: Show macOS version (legacy VM)
         if: matrix.type == 'legacy'
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ matrix.vm_ip }}
-          username: ${{ matrix.vm_username }}
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.OLDMAC_KEY }}
           script: |
             set -e
@@ -275,15 +304,15 @@ jobs:
               -o HostKeyAlgorithms=+ssh-rsa \
               -o PubkeyAcceptedKeyTypes=+ssh-rsa \
               /tmp/blakeports.tar.gz \
-              ${{ matrix.vm_username }}@${{ matrix.vm_ip }}:/tmp/
+              ${{ env.VM_USERNAME }}@${{ env.VM_IP }}:/tmp/
           echo "✅ Tarball transferred"
 
       - name: Extract repository on legacy VM
         if: matrix.type == 'legacy'
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ matrix.vm_ip }}
-          username: ${{ matrix.vm_username }}
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.OLDMAC_KEY }}
           script: |
             set -e
@@ -310,8 +339,8 @@ jobs:
         if: matrix.type == 'legacy'
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ matrix.vm_ip }}
-          username: ${{ matrix.vm_username }}
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.OLDMAC_KEY }}
           script: |
             set -e
@@ -334,8 +363,8 @@ jobs:
         if: matrix.type == 'legacy'
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ matrix.vm_ip }}
-          username: ${{ matrix.vm_username }}
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.OLDMAC_KEY }}
           script: |
             set -e
@@ -358,8 +387,8 @@ jobs:
         if: matrix.type == 'legacy'
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ matrix.vm_ip }}
-          username: ${{ matrix.vm_username }}
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.OLDMAC_KEY }}
           script: |
             set -e
@@ -377,8 +406,8 @@ jobs:
         if: matrix.type == 'legacy'
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ matrix.vm_ip }}
-          username: ${{ matrix.vm_username }}
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.OLDMAC_KEY }}
           command_timeout: ${{ matrix.timeout }}m
           script: |
@@ -396,8 +425,8 @@ jobs:
         if: matrix.type == 'legacy'
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ matrix.vm_ip }}
-          username: ${{ matrix.vm_username }}
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.OLDMAC_KEY }}
           command_timeout: ${{ matrix.timeout }}m
           script: |
@@ -416,8 +445,8 @@ jobs:
         if: matrix.type == 'legacy'
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ matrix.vm_ip }}
-          username: ${{ matrix.vm_username }}
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.OLDMAC_KEY }}
           script: |
             set -e
@@ -440,8 +469,8 @@ jobs:
         if: matrix.type == 'legacy' && always()
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ matrix.vm_ip }}
-          username: ${{ matrix.vm_username }}
+          host: ${{ env.VM_IP }}
+          username: ${{ env.VM_USERNAME }}
           key: ${{ secrets.OLDMAC_KEY }}
           script: |
             if [ -f ~/.profile ]; then
