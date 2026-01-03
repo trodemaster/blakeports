@@ -4,3 +4,4 @@ work
 
 # Docker runner ephemeral config (tokens, IPs, etc.)
 docker/config/
+.envrc
