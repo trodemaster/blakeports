@@ -368,13 +368,13 @@ jobs:
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
             
-            # Try lint first, if "Unknown dependency" error occurs, run portindex and retry once
+            # Try lint first, if "Unknown dependency" error occurs, run port sync and retry once
             LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1) || true
             echo "$LINT_OUTPUT"
             
             if echo "$LINT_OUTPUT" | grep -q "Unknown dependency"; then
-              echo "⚠️  Unknown dependency error - running portindex and retrying..."
-              portindex
+              echo "⚠️  Unknown dependency error - running port sync and retrying..."
+              sudo port sync
               LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1)
               echo "$LINT_OUTPUT"
             fi
