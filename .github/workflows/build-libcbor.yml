@@ -368,14 +368,13 @@ jobs:
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
             
-            # Only reindex if local ports are newer than the system index
-            PORTS_DIR="/Users/blake/code/blakeports"
-            PORTS_INDEX_DIR="/opt/local/var/macports/sources/rsync.macports.org/macports/release/tarballs/ports"
-            if [ -d "$PORTS_INDEX_DIR" ] && find "$PORTS_DIR" -name "Portfile" -newer "$PORTS_INDEX_DIR"/.index 2>/dev/null | grep -q .; then
-              echo "BlakePorts index is stale, updating..."
+            # Always run portindex once to ensure BlakePorts ports are indexed
+            # Check if .index file exists in current ports dir - if not, definitely need to index
+            if [ ! -f .index ]; then
+              echo "First run: indexing BlakePorts..."
               portindex
             else
-              echo "BlakePorts index is current, skipping portindex"
+              echo "BlakePorts already indexed, skipping portindex"
             fi
             
             LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1)
