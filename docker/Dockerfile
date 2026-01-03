@@ -74,10 +74,6 @@ RUN ./bin/installdependencies.sh
 RUN mkdir -p /home/runner/.ssh && \
     chmod 700 /home/runner/.ssh
 
-# Copy SSH keys if they exist in build context
-# Place your SSH keys in ./ssh_keys/ before building
-COPY --chmod=600 ssh_keys/* /home/runner/.ssh/
-
 # Create work directory with proper permissions
 RUN mkdir -p /home/runner/_work && \
     chown -R runner:runner /home/runner && \

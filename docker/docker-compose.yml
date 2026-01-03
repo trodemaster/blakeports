@@ -1,7 +1,6 @@
 # GitHub Actions Self-Hosted Runners for Legacy macOS VMs
 # Each service represents one GitHub Actions runner instance targeting a specific legacy VM
-# Each container must have a unique RUNNER_TOKEN generated via:
-#   gh api repos/trodemaster/blakeports/actions/runners/registration-token --method POST --jq '.token'
+# Runner configuration is stored in config/runners.json (managed by ghrunner script)
 
 services:
   # ============================================================================
@@ -16,35 +15,42 @@ services:
     container_name: tenfive-runner
     hostname: tenfive-runner
     restart: unless-stopped
-    env_file: .env
 
     environment:
-      # GitHub repository configuration
-      - GITHUB_OWNER=trodemaster
-      - GITHUB_REPO=blakeports
-      
-      # Runner-specific registration token (required: generate via setup-runners.sh)
-      - RUNNER_TOKEN=${RUNNER_TOKEN_TENFIVE}
-      
-      # Runner name and SSH proxy configuration
+      - RUNNER_ID=tenfive
       - RUNNER_NAME=tenfive-runner
       - RUNNER_WORKDIR=_work
-      - CUSTOM_LABELS=ssh-legacy-capable,legacy-macos,tenfive,10-5
-      
-      # SSH proxy configuration for legacy VM
-      - VM_HOSTNAME=tenfive
-      - VM_HOSTNAME_FQDN=tenfive-runner.local
-      - VM_IP=${TENFIVE_VM_IP}
-      - VM_USER=admin
-      - SSH_KEY_NAME=oldmac
 
     volumes:
-      # SSH key for legacy VM authentication (read-only)
-      # Absolute path works reliably with Lima VM mounts
-      # The SSH key file MUST exist at this location
-      - /Users/blake/Developer/blakeports/docker/ssh_keys/oldmac:/home/runner/.ssh/oldmac:ro
-      # Persistent work directory for runner state
+      # Runner configuration (tokens, IPs, SSH keys, etc.) - managed by ghrunner
+      - ./config:/config:ro
+      # Persistent work directory
       - runner-work-tenfive:/home/runner/_work
+
+    network_mode: bridge
+
+
+  # ============================================================================
+  # Mac OS X 10.6 (Snow Leopard) Runner
+  # ============================================================================
+  tensix-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNNER_VERSION: 2.321.0
+    container_name: tensix-runner
+    hostname: tensix-runner
+    restart: unless-stopped
+
+    environment:
+      - RUNNER_ID=tensix
+      - RUNNER_NAME=tensix-runner
+      - RUNNER_WORKDIR=_work
+
+    volumes:
+      - ./config:/config:ro
+      - runner-work-tensix:/home/runner/_work
 
     network_mode: bridge
 
@@ -61,35 +67,90 @@ services:
     container_name: tenseven-runner
     hostname: tenseven-runner
     restart: unless-stopped
-    env_file: .env
 
     environment:
-      # GitHub repository configuration
-      - GITHUB_OWNER=trodemaster
-      - GITHUB_REPO=blakeports
-      
-      # Runner-specific registration token (required: generate via setup-runners.sh)
-      - RUNNER_TOKEN=${RUNNER_TOKEN_TENSEVEN}
-      
-      # Runner name and SSH proxy configuration
+      - RUNNER_ID=tenseven
       - RUNNER_NAME=tenseven-runner
       - RUNNER_WORKDIR=_work
-      - CUSTOM_LABELS=ssh-legacy-capable,legacy-macos,tenseven,10-7
-      
-      # SSH proxy configuration for legacy VM
-      - VM_HOSTNAME=tenseven
-      - VM_HOSTNAME_FQDN=tenseven-runner.local
-      - VM_IP=${TENSEVEN_VM_IP}
-      - VM_USER=admin
-      - SSH_KEY_NAME=oldmac
 
     volumes:
-      # SSH key for legacy VM authentication (read-only)
-      # Absolute path works reliably with Lima VM mounts
-      # The SSH key file MUST exist at this location
-      - /Users/blake/Developer/blakeports/docker/ssh_keys/oldmac:/home/runner/.ssh/oldmac:ro
-      # Persistent work directory for runner state
+      - ./config:/config:ro
       - runner-work-tenseven:/home/runner/_work
+
+    network_mode: bridge
+
+
+  # ============================================================================
+  # Mac OS X 10.8 (Mountain Lion) Runner
+  # ============================================================================
+  teneight-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNNER_VERSION: 2.321.0
+    container_name: teneight-runner
+    hostname: teneight-runner
+    restart: unless-stopped
+
+    environment:
+      - RUNNER_ID=teneight
+      - RUNNER_NAME=teneight-runner
+      - RUNNER_WORKDIR=_work
+
+    volumes:
+      - ./config:/config:ro
+      - runner-work-teneight:/home/runner/_work
+
+    network_mode: bridge
+
+
+  # ============================================================================
+  # Mac OS X 10.9 (Mavericks) Runner
+  # ============================================================================
+  tennine-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNNER_VERSION: 2.321.0
+    container_name: tennine-runner
+    hostname: tennine-runner
+    restart: unless-stopped
+
+    environment:
+      - RUNNER_ID=tennine
+      - RUNNER_NAME=tennine-runner
+      - RUNNER_WORKDIR=_work
+
+    volumes:
+      - ./config:/config:ro
+      - runner-work-tennine:/home/runner/_work
+
+    network_mode: bridge
+
+
+  # ============================================================================
+  # Mac OS X 10.10 (Yosemite) Runner
+  # ============================================================================
+  tenten-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNNER_VERSION: 2.321.0
+    container_name: tenten-runner
+    hostname: tenten-runner
+    restart: unless-stopped
+
+    environment:
+      - RUNNER_ID=tenten
+      - RUNNER_NAME=tenten-runner
+      - RUNNER_WORKDIR=_work
+
+    volumes:
+      - ./config:/config:ro
+      - runner-work-tenten:/home/runner/_work
 
     network_mode: bridge
 
@@ -97,5 +158,13 @@ services:
 volumes:
   runner-work-tenfive:
     driver: local
+  runner-work-tensix:
+    driver: local
   runner-work-tenseven:
+    driver: local
+  runner-work-teneight:
+    driver: local
+  runner-work-tennine:
+    driver: local
+  runner-work-tenten:
     driver: local
