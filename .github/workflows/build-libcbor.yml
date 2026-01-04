@@ -172,13 +172,45 @@ jobs:
       #
       # MODERN PLATFORM STEPS
       #
-      - name: Show macOS version
+      - name: Gather system information
         if: matrix.type == 'modern'
+        id: system-info
         run: |
           echo "Running on: ${{ matrix.platform }}"
           echo "Building port: libcbor"
           echo "Building from branch: ${{ inputs.branch || github.ref_name }}"
+          
+          # Collect macOS version
+          MACOS_VERSION=$(sw_vers -productVersion)
+          ARCH=$(uname -m)
+          echo "macos_version=${MACOS_VERSION}" >> $GITHUB_OUTPUT
+          echo "arch=${ARCH}" >> $GITHUB_OUTPUT
+          
+          # Collect Xcode version
+          if command -v xcodebuild &> /dev/null; then
+            XCODE_VERSION=$(xcodebuild -version | head -1 | awk '{print $2}')
+            echo "xcode_version=${XCODE_VERSION}" >> $GITHUB_OUTPUT
+          else
+            echo "xcode_version=N/A" >> $GITHUB_OUTPUT
+          fi
+          
+          # Collect Command Line Tools version
+          if [ -f /Library/Developer/CommandLineTools/version.txt ]; then
+            CLT_VERSION=$(cat /Library/Developer/CommandLineTools/version.txt)
+            echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
+          elif pkgutil --pkg-info=com.apple.pkg.CLTools_Executables &> /dev/null; then
+            CLT_VERSION=$(pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | grep version | awk '{print $2}')
+            echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
+          else
+            echo "clt_version=N/A" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "System Information:"
           sw_vers
+          echo ""
+          echo "Xcode Version: ${XCODE_VERSION:-N/A}"
+          echo "Command Line Tools: ${CLT_VERSION:-N/A}"
+          echo "Architecture: ${ARCH}"
 
       - name: Checkout repository
         if: matrix.type == 'modern'
@@ -270,8 +302,9 @@ jobs:
           
           echo "✅ Configuration verified. Will connect to: $VM_USERNAME@$VM_IP"
 
-      - name: Show macOS version (legacy VM)
+      - name: Gather system information (legacy VM)
         if: matrix.type == 'legacy'
+        id: legacy-system-info
         run: |
           ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
             set -e
@@ -283,6 +316,28 @@ jobs:
             echo "  Building libcbor on Mac OS X ${{ matrix.os_version }} (${{ matrix.vm_name }})"
             echo "=================================================="
             sw_vers
+            echo ""
+            echo "Architecture: $(uname -m)"
+            echo ""
+            
+            # Try to get Xcode version
+            if command -v xcodebuild &> /dev/null; then
+              echo "Xcode Version:"
+              xcodebuild -version | head -1
+            else
+              echo "Xcode: Not installed"
+            fi
+            
+            # Try to get Command Line Tools version
+            if [ -f /Library/Developer/CommandLineTools/version.txt ]; then
+              echo "Command Line Tools:"
+              cat /Library/Developer/CommandLineTools/version.txt
+            elif [ -d /Applications/Xcode.app ]; then
+              echo "Command Line Tools: Bundled with Xcode"
+            else
+              echo "Command Line Tools: Not found"
+            fi
+            
             echo ""
             uname -a
           EOF
