@@ -872,113 +872,6 @@ start_tart_runner() {
 }
 
 # Function to call VMware Fusion REST API
-vmware_rest_api_call() {
-    local method=$1
-    local endpoint=$2
-    local data=${3:-}
-    
-    local url="https://${VMWARE_REST_API_HOST}:${VMWARE_REST_API_PORT}/api${endpoint}"
-    
-    local curl_opts=("-s" "-X" "$method")
-    
-    # Add authentication
-    if [ -n "$VMWARE_REST_API_PASS" ]; then
-        curl_opts+=("-u" "${VMWARE_REST_API_USER}:${VMWARE_REST_API_PASS}")
-    else
-        print_error "VMWARE_REST_API_PASS not set. Cannot authenticate to REST API."
-        return 1
-    fi
-    
-    # Accept self-signed certificates
-    if [ "$VMWARE_REST_API_INSECURE" = "true" ]; then
-        curl_opts+=("-k")
-    fi
-    
-    # Add content type and data if provided
-    if [ -n "$data" ]; then
-        curl_opts+=("-H" "Content-Type: application/vnd.vmware.vmw.rest-v1+json" "-d" "$data")
-    fi
-    
-    curl "${curl_opts[@]}" "$url"
-}
-
-# Function to list all VMs on darkstar via REST API
-list_vmware_vms() {
-    print_info "Querying VMware Fusion REST API for available VMs..."
-    print_info "API Endpoint: https://${VMWARE_REST_API_HOST}:${VMWARE_REST_API_PORT}"
-    
-    local response
-    response=$(vmware_rest_api_call "GET" "/vms")
-    
-    if [ $? -ne 0 ]; then
-        print_error "Failed to connect to VMware REST API"
-        print_error "Ensure darkstar has REST API running with proper configuration"
-        return 1
-    fi
-    
-    echo "$response" | jq . 2>/dev/null || echo "$response"
-}
-
-# Function to get VM UUID by name via REST API
-get_vm_uuid_by_name() {
-    local vm_name=$1
-    
-    local vms_json
-    vms_json=$(vmware_rest_api_call "GET" "/vms")
-    
-    # Search for VM by matching the path name
-    echo "$vms_json" | jq -r ".[] | select(.path | contains(\"$vm_name.vmwarevm\")) | .id" | head -1
-}
-
-# Function to get VM power state via REST API
-get_vm_power_rest() {
-    local vm_id=$1
-    
-    vmware_rest_api_call "GET" "/vms/$vm_id/power"
-}
-
-# Function to get VM details via REST API
-get_vm_details_rest() {
-    local vm_id=$1
-    
-    vmware_rest_api_call "GET" "/vms/$vm_id"
-}
-
-# Function to start VM via REST API
-start_vm_rest_api() {
-    local vm_id=$1
-    
-    print_info "Starting VM via REST API: $vm_id"
-    
-    local response
-    response=$(vmware_rest_api_call "PUT" "/vms/$vm_id/power" 'on')
-    
-    if echo "$response" | grep -q "error\|Code"; then
-        print_error "Failed to start VM: $response"
-        return 1
-    fi
-    
-    print_success "VM start command sent"
-    return 0
-}
-
-# Function to stop VM via REST API
-stop_vm_rest_api() {
-    local vm_id=$1
-    
-    print_info "Stopping VM via REST API: $vm_id"
-    
-    local response
-    response=$(vmware_rest_api_call "PUT" "/vms/$vm_id/power" 'off')
-    
-    if echo "$response" | grep -q "error\|Code"; then
-        print_error "Failed to stop VM: $response"
-        return 1
-    fi
-    
-    print_success "VM stop command sent"
-    return 0
-}
 
 # Function to inspect legacy runner VMs on darkstar
 inspect_legacy_vms() {
@@ -987,40 +880,22 @@ inspect_legacy_vms() {
     print_info "════════════════════════════════════════════════════════════════════"
     echo
     
-    # Check if jq is available
-    if ! command -v jq &> /dev/null; then
-        print_error "jq is required for VM inspection. Please install jq."
+    print_info "Querying VMs via SSH to darkstar..."
+    
+    # Get list of running VMs
+    local vm_list
+    vm_list=$(ssh "${SSH_OPTS[@]}" "$VMWARE_SSH_HOST" "vmrun list" 2>/dev/null)
+    
+    if [ $? -ne 0 ]; then
+        print_error "Failed to connect to darkstar via SSH or vmrun not available"
+        print_error "Please ensure:"
+        print_error "  1. SSH access to darkstar is configured"
+        print_error "  2. vmrun is available on darkstar"
         return 1
     fi
     
-    # Get all VMs
-    local vms_json
-    vms_json=$(vmware_rest_api_call "GET" "/vms")
-    
-    if [ $? -ne 0 ] || [ -z "$vms_json" ]; then
-        print_error "Failed to query VMs from darkstar REST API"
-        print_error "Configuration:"
-        print_error "  Host: $VMWARE_REST_API_HOST"
-        print_error "  Port: $VMWARE_REST_API_PORT"
-        print_error "  User: $VMWARE_REST_API_USER"
-        echo
-        print_info "Troubleshooting:"
-        print_info "  1. Verify vmrest is running on darkstar"
-        print_info "  2. Check VMWARE_REST_API_HOST is set to darkstar's IP/hostname"
-        print_info "  3. Verify firewall allows port $VMWARE_REST_API_PORT"
-        print_info "  4. Ensure VMWARE_REST_API_PASS environment variable is set"
-        return 1
-    fi
-    
-    local vm_count
-    vm_count=$(echo "$vms_json" | jq 'length' 2>/dev/null || echo "0")
-    
-    if [ "$vm_count" = "0" ]; then
-        print_warning "No VMs found on darkstar"
-        return 0
-    fi
-    
-    print_success "Found $vm_count VM(s) on darkstar"
+    echo "$vm_list" | grep -v "^Total" | head -1
+    local running_count=$(echo "$vm_list" | grep "^Total" | awk '{print $4}')
     echo
     
     # Section 1: Base Images
@@ -1029,85 +904,45 @@ inspect_legacy_vms() {
     print_info "──────────────────────────────────────────────────────────────────"
     echo
     
-    local base_images=()
-    while IFS='|' read -r vm_id vm_path; do
-        local vm_name=$(basename "$vm_path" .vmx)
-        # Only collect base images
-        if [[ "$vm_name" =~ -base$ ]]; then
-            base_images+=("$vm_name")
-        fi
-    done < <(echo "$vms_json" | jq -r '.[] | 
-        if type == "object" then "\(.id)|\(.path)" else empty end')
+    local base_vms
+    base_vms=$(ssh "${SSH_OPTS[@]}" "$VMWARE_SSH_HOST" "ls -1 '$VMWARE_BASE_DIR' | grep -E '.*-base\.vmwarevm$'" 2>/dev/null)
     
-    if [ ${#base_images[@]} -eq 0 ]; then
+    if [ -z "$base_vms" ]; then
         print_warning "  No base images found"
     else
-        for img in "${base_images[@]}"; do
-            printf "  ✓ %s\n" "$img"
-        done
+        while IFS= read -r vm; do
+            local vm_name=$(echo "$vm" | sed 's/\.vmwarevm$//')
+            printf "  ✓ %s\n" "$vm_name"
+        done <<< "$base_vms"
     fi
     echo
     
-    # Section 2: Active Runner VMs
+    # Section 2: Runner VMs
     print_info "──────────────────────────────────────────────────────────────────"
     print_info "RUNNER VMs (Active Instances)"
     print_info "──────────────────────────────────────────────────────────────────"
     echo
     
-    printf "%-30s %-12s %s\n" "RUNNER NAME" "POWER STATE" "CPU/MEMORY"
+    printf "%-30s %-12s\n" "RUNNER NAME" "POWER STATE"
     echo "────────────────────────────────────────────────────────────────────"
     
-    local runner_vms=()
-    while IFS='|' read -r vm_id vm_path; do
-        local vm_name=$(basename "$vm_path" .vmx)
-        
-        # Only collect runner VMs (not base templates)
-        if [[ "$vm_name" =~ ^runner- ]] && [[ ! "$vm_name" =~ -base$ ]]; then
-            runner_vms+=("$vm_id|$vm_name")
-        fi
-    done < <(echo "$vms_json" | jq -r '.[] | 
-        if type == "object" then "\(.id)|\(.path)" else empty end')
+    local runner_vms
+    runner_vms=$(ssh "${SSH_OPTS[@]}" "$VMWARE_SSH_HOST" "ls -1 '$VMWARE_BASE_DIR' | grep -E '^runner-.*\.vmwarevm$' | grep -v -- '-base\.vmwarevm$'" 2>/dev/null)
     
-    if [ ${#runner_vms[@]} -eq 0 ]; then
+    if [ -z "$runner_vms" ]; then
         print_warning "  No runner VMs found"
     else
-        for vm_entry in "${runner_vms[@]}"; do
-            local vm_id=$(echo "$vm_entry" | cut -d'|' -f1)
-            local vm_name=$(echo "$vm_entry" | cut -d'|' -f2)
+        while IFS= read -r vm; do
+            local vm_name=$(echo "$vm" | sed 's/\.vmwarevm$//')
+            local vm_path="$VMWARE_BASE_DIR/$vm/${vm_name}.vmx"
             
-            # Get VM details (CPU, memory)
-            local vm_details
-            vm_details=$(get_vm_details_rest "$vm_id" 2>/dev/null)
-            
-            if [ -z "$vm_details" ]; then
-                printf "%-30s %-12s %s\n" "$vm_name" "error" "connection error"
-                continue
+            # Check if VM is running by looking in the running list
+            if echo "$vm_list" | grep -q "$vm_path"; then
+                printf "%-30s ${GREEN}%-12s${NC}\n" "$vm_name" "running"
+            else
+                printf "%-30s ${YELLOW}%-12s${NC}\n" "$vm_name" "stopped"
             fi
-            
-            # Get VM power state
-            local power_response
-            power_response=$(get_vm_power_rest "$vm_id" 2>/dev/null)
-            local power=$(echo "$power_response" | jq -r '.power_state // "unknown"' 2>/dev/null)
-            
-            local cpu=$(echo "$vm_details" | jq -r '.cpu.processors // "?"' 2>/dev/null)
-            local memory=$(echo "$vm_details" | jq -r '.memory // "?"' 2>/dev/null)
-            
-            # Color code power status
-            local power_display
-            case "$power" in
-                "poweredOn")
-                    power_display="${GREEN}on${NC}"
-                    ;;
-                "poweredOff")
-                    power_display="${YELLOW}off${NC}"
-                    ;;
-                *)
-                    power_display="${RED}${power}${NC}"
-                    ;;
-            esac
-            
-            printf "%-30s %-12b %d CPU, %d MB\n" "$vm_name" "$power_display" "$cpu" "$memory"
-        done
+        done <<< "$runner_vms"
     fi
     echo
     
@@ -1175,6 +1010,7 @@ inspect_legacy_vms() {
         print_info "  • runner-$runner"
     done
     echo
+    print_success "Inspection complete. Running VMs: $running_count"
 }
 
 # Function to start lima runner (Linux) - stub
@@ -1340,73 +1176,47 @@ stop_legacy_docker_runner() {
 start_vmware_vm_if_needed() {
     local vm_name=$1
     local instance_vm_name="runner-${vm_name}"
-    local vm_uuid
     
-    print_info "Checking if VM $instance_vm_name exists on darkstar"
+    print_warning "════════════════════════════════════════════════════════════════"
+    print_warning "  MANUAL VM STARTUP REQUIRED"
+    print_warning "════════════════════════════════════════════════════════════════"
+    print_warning ""
+    print_warning "  Please manually start the VM: $instance_vm_name"
+    print_warning ""
+    print_warning "  On darkstar, you can start it via:"
+    print_warning "    1. VMware Fusion GUI"
+    print_warning "    2. vmrun command:"
+    print_warning "       vmrun start \"$VMWARE_BASE_DIR/${instance_vm_name}.vmwarevm/${instance_vm_name}.vmx\""
+    print_warning ""
+    print_warning "  Waiting for you to start the VM..."
+    print_warning "  Press ENTER once the VM is running and accessible via SSH"
+    print_warning ""
+    print_warning "════════════════════════════════════════════════════════════════"
     
-    # Get the VM UUID by name
-    vm_uuid=$(get_vm_uuid_by_name "$instance_vm_name")
+    read -p "Press ENTER to continue once VM is running: "
     
-    if [ -z "$vm_uuid" ]; then
-        print_error "Instance VM $instance_vm_name not found on darkstar"
-        print_error "Linked clone VMs must be manually created before use"
-        print_error "Please create $instance_vm_name as a linked clone of runner-${vm_name}-base"
-        return 1
-    fi
-    
-    print_info "Found instance VM UUID: $vm_uuid"
-    
-    # Get current power state
-    local power_response
-    power_response=$(get_vm_power_rest "$vm_uuid" 2>/dev/null)
-    
-    if [ -z "$power_response" ]; then
-        print_error "Failed to query VM power state from REST API"
-        return 1
-    fi
-    
-    local power_state=$(echo "$power_response" | jq -r '.power_state // "unknown"' 2>/dev/null)
-    
-    if [ "$power_state" = "poweredOn" ]; then
-        print_info "VM $instance_vm_name is already running"
-        return 0
-    fi
-    
-    # Start the VM via REST API
-    print_info "Starting VM on darkstar: $instance_vm_name"
-    if ! start_vm_rest_api "$vm_uuid"; then
-        print_error "Failed to start VM via REST API"
-        return 1
-    fi
-    
-    # Wait for VM to boot
-    print_info "Waiting for VM to boot (30 seconds)"
-    sleep 30
-    
-    print_success "VM started successfully"
+    print_success "Proceeding with assumption that VM is now running"
     return 0
 }
 
-# Function to stop VMware VM on darkstar (using REST API)
+# Function to stop VMware VM on darkstar (manual)
 stop_vmware_vm() {
     local vm_name=$1
-    local vm_uuid
+    local instance_vm_name="runner-${vm_name}"
     
-    print_info "Stopping VM on darkstar: runner-${vm_name}"
+    print_warning "════════════════════════════════════════════════════════════════"
+    print_warning "  MANUAL VM SHUTDOWN REQUIRED"
+    print_warning "════════════════════════════════════════════════════════════════"
+    print_warning ""
+    print_warning "  Please manually stop the VM: $instance_vm_name"
+    print_warning ""
+    print_warning "  On darkstar, you can stop it via:"
+    print_warning "    1. VMware Fusion GUI"
+    print_warning "    2. vmrun command:"
+    print_warning "       vmrun stop \"$VMWARE_BASE_DIR/${instance_vm_name}.vmwarevm/${instance_vm_name}.vmx\""
+    print_warning ""
+    print_warning "════════════════════════════════════════════════════════════════"
     
-    # Get the VM UUID by name
-    vm_uuid=$(get_vm_uuid_by_name "runner-${vm_name}")
-    
-    if [ -z "$vm_uuid" ]; then
-        print_error "Failed to find VM UUID for runner-${vm_name}"
-        return 1
-    fi
-    
-    if ! stop_vm_rest_api "$vm_uuid"; then
-        print_warning "VM stop may have failed or already stopped"
-    fi
-    
-    print_success "VM stop command sent"
     return 0
 }
 
