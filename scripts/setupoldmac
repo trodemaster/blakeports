@@ -414,23 +414,19 @@ main() {
     # so all the functions below will use them
     print_status "Detecting SSH compatibility for $hostname..."
     
-    # Try older legacy algorithms first (10.5-10.10)
-    local test_cmd="$OLDSSH_CMD -o ConnectTimeout=5 -o PasswordAuthentication=no -o PreferredAuthentications=publickey"
-    if $test_cmd "$username@$hostname" "echo 'test'" 2>/dev/null; then
+    # Try newer legacy algorithms first (10.11+) - this is likely what teneleven is
+    # We test with PasswordAuthentication=yes to allow initial password auth
+    local test_cmd="$NEWERLEGACYSSH_CMD -o ConnectTimeout=5 -o PasswordAuthentication=no"
+    if $test_cmd "$username@$hostname" "echo 'test'" 2>&1 | grep -q "no matching key exchange\|Unable to negotiate"; then
+        # Newer algorithms not supported, must be older system
         print_success "Detected older legacy system - using diffie-hellman-group1-sha1"
         OLDSSH_CMD="$OLDSSH_CMD"
         OLDSCP_CMD="$OLDSCP_CMD"
     else
-        # Fall back to newer legacy algorithms (10.11+)
-        test_cmd="$NEWERLEGACYSSH_CMD -o ConnectTimeout=5 -o PasswordAuthentication=no -o PreferredAuthentications=publickey"
-        if $test_cmd "$username@$hostname" "echo 'test'" 2>/dev/null; then
-            print_success "Detected newer legacy system - using diffie-hellman-group14-sha1"
-            OLDSSH_CMD="$NEWERLEGACYSSH_CMD"
-            OLDSCP_CMD="$NEWERLEGACYSCP_CMD"
-        else
-            print_warning "Could not detect algorithm compatibility - using older legacy settings"
-            # Keep original OLDSSH_CMD and OLDSCP_CMD as default
-        fi
+        # Newer algorithms work or SSH key auth worked
+        print_success "Detected newer legacy system - using diffie-hellman-group14-sha1"
+        OLDSSH_CMD="$NEWERLEGACYSSH_CMD"
+        OLDSCP_CMD="$NEWERLEGACYSCP_CMD"
     fi
     
     # Setup SSH keys (handles both testing and setup)
