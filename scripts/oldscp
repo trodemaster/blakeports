@@ -5,7 +5,7 @@
 
 # SCP command configuration with algorithm fallbacks
 # Try newer algorithms first (10.11+), then fall back to older ones (10.5-10.10)
-SCP_CMD="scp9"
+SCP_CMD="/opt/local/bin/scp9"
 SCP_OPTS=(
     "-i" "$HOME/.ssh/oldmac"
     "-o" "HostKeyAlgorithms=ssh-rsa"
