@@ -73,8 +73,8 @@ if {${subport} eq ${name}} {
             depends_build-append port:curl
             
             fetch {
-                # GitHub archive API returns .tar.gz files
-                system "curl -L -o ${distpath}/${distname}.tar.gz '${github.master_sites}.tar.gz'"
+                # GitHub releases use .tar.xz files
+                system "curl -L -o ${distpath}/${distname}.tar.xz 'https://github.com/Netatalk/netatalk/releases/download/netatalk-${github.version}/${distname}.tar.xz'"
             }
         }
     }
