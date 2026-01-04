@@ -285,6 +285,8 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
+          cipher: aes128-cbc
+          use_insecure_cipher: true
           script: |
             set -e
             set -o pipefail
@@ -326,6 +328,8 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
+          cipher: aes128-cbc
+          use_insecure_cipher: true
           script: |
             set -e
             set -o pipefail
@@ -354,6 +358,8 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
+          cipher: aes128-cbc
+          use_insecure_cipher: true
           script: |
             set -e
             set -o pipefail
@@ -378,6 +384,8 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
+          cipher: aes128-cbc
+          use_insecure_cipher: true
           script: |
             set -e
             set -o pipefail
@@ -388,13 +396,13 @@ jobs:
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
             
-            # Try lint first, if "Unknown dependency" error occurs, run port sync and retry once
+            # Try lint first, if "Unknown dependency" error occurs, run port selfupdate and retry once
             LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1) || true
             echo "$LINT_OUTPUT"
             
             if echo "$LINT_OUTPUT" | grep -q "Unknown dependency"; then
-              echo "⚠️  Unknown dependency error - running port sync and retrying..."
-              sudo port sync
+              echo "⚠️  Unknown dependency error - running port selfupdate and retrying..."
+              sudo port selfupdate
               LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1)
               echo "$LINT_OUTPUT"
             fi
@@ -412,6 +420,8 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
+          cipher: aes128-cbc
+          use_insecure_cipher: true
           script: |
             set -e
             set -o pipefail
@@ -432,6 +442,8 @@ jobs:
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
           command_timeout: ${{ matrix.timeout }}m
+          cipher: aes128-cbc
+          use_insecure_cipher: true
           script: |
             set -e
             set -o pipefail
@@ -451,6 +463,8 @@ jobs:
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
           command_timeout: ${{ matrix.timeout }}m
+          cipher: aes128-cbc
+          use_insecure_cipher: true
           script: |
             set -e
             set -o pipefail
@@ -470,6 +484,8 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
+          cipher: aes128-cbc
+          use_insecure_cipher: true
           script: |
             set -e
             set -o pipefail
@@ -494,6 +510,8 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
+          cipher: aes128-cbc
+          use_insecure_cipher: true
           script: |
             if [ -f ~/.profile ]; then
               source ~/.profile
