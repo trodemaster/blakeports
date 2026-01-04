@@ -168,30 +168,35 @@ cp "$SSH_KEY_PATH" "/home/runner/.ssh/${SSH_KEY_NAME}"
 chmod 600 "/home/runner/.ssh/${SSH_KEY_NAME}"
 print_info "SSH key found: $SSH_KEY_PATH"
 
-# Create SSH config with legacy algorithms
-cat > "$SSH_CONFIG_FILE" << EOF
-Host $VM_HOSTNAME
-    HostName $SSH_TARGET
-    User $VM_USER
-    IdentityFile /home/runner/.ssh/${SSH_KEY_NAME}
+# Create SSH config with auto-detected algorithms for legacy VM compatibility
+# Try multiple algorithm combinations to support systems from 10.5 to current
+print_info "Creating SSH config with algorithm compatibility detection..."
+
+cat > "$SSH_CONFIG_FILE" << 'EOF'
+Host *
+    # Detect and use best available algorithms
+    # Try newer algorithms first (10.11+), fall back to older ones (10.5-10.10)
     HostKeyAlgorithms ssh-rsa
     PubkeyAcceptedKeyTypes ssh-rsa
-    KexAlgorithms diffie-hellman-group1-sha1
-    Ciphers aes128-cbc
+    
+    # Key exchange: Try newer algorithms first, then fall back to older
+    KexAlgorithms diffie-hellman-group14-sha1,ecdh-sha2-nistp256,diffie-hellman-group1-sha1
+    
+    # Ciphers: Try both aes128-ctr (10.11+) and aes128-cbc (10.5-10.10)
+    Ciphers aes128-ctr,aes128-cbc
+    
+    # MAC algorithms
     MACs hmac-sha1
+    
+    # SSH security settings
     StrictHostKeyChecking no
     UserKnownHostsFile=/dev/null
     ConnectTimeout 10
 
-# Wildcard defaults for any host (by IP or other hostname)
-Host *
-    HostKeyAlgorithms ssh-rsa
-    PubkeyAcceptedKeyTypes ssh-rsa
-    KexAlgorithms diffie-hellman-group1-sha1
-    Ciphers aes128-cbc
-    MACs hmac-sha1
-    StrictHostKeyChecking no
-    UserKnownHostsFile=/dev/null
+Host $VM_HOSTNAME
+    HostName $SSH_TARGET
+    User $VM_USER
+    IdentityFile /home/runner/.ssh/${SSH_KEY_NAME}
 EOF
 
 chmod 600 "$SSH_CONFIG_FILE"
