@@ -286,6 +286,7 @@ jobs:
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
           use_insecure_cipher: true
+          debug: true
           script: |
             set -e
             set -o pipefail
