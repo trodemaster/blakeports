@@ -10,13 +10,7 @@
 			"path": "../netatalk"
 		},
 		{
-			"path": "../../Developer/packer_macOS_26"
-		},
-		{
-			"path": "../throwback_mac"
-		},
-		{
-			"path": "../skhd.zig"
+			"path": "../drone-ssh"
 		}
 	],
 	"settings": {}
