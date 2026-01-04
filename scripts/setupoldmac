@@ -7,8 +7,14 @@ set -e  # Exit on any error
 set -o pipefail  # Catch errors in pipelines
 
 # SSH command for legacy systems (compatible with old OpenSSH versions)
+# Note: Different macOS versions support different algorithms
 OLDSSH_CMD="ssh9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
 OLDSCP_CMD="scp9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
+
+# SSH command for newer legacy systems (10.11+) that don't support very old algorithms
+# Uses more modern but still compatible algorithms
+NEWERLEGACYSSH_CMD="ssh9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group14-sha1,ecdh-sha2-nistp256 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
+NEWERLEGACYSCP_CMD="scp9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group14-sha1,ecdh-sha2-nistp256 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
 
 # Colors for output
 RED='\033[0;31m'
@@ -106,7 +112,7 @@ setup_ssh_keys() {
     
     print_status "Setting up SSH directory and authorized_keys file..."
     
-    ssh -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group1-sha1 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2 "$username@$hostname" "
+    $OLDSSH_CMD "$username@$hostname" "
         echo 'Creating ~/.ssh directory...'
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
@@ -402,6 +408,29 @@ main() {
         print_error "You can test connectivity manually with:"
         print_error "  ping -c 1 $hostname"
         exit 1
+    fi
+    
+    # Detect appropriate SSH commands for this system and set them as variables
+    # so all the functions below will use them
+    print_status "Detecting SSH compatibility for $hostname..."
+    
+    # Try older legacy algorithms first (10.5-10.10)
+    local test_cmd="$OLDSSH_CMD -o ConnectTimeout=5 -o PasswordAuthentication=no -o PreferredAuthentications=publickey"
+    if $test_cmd "$username@$hostname" "echo 'test'" 2>/dev/null; then
+        print_success "Detected older legacy system - using diffie-hellman-group1-sha1"
+        OLDSSH_CMD="$OLDSSH_CMD"
+        OLDSCP_CMD="$OLDSCP_CMD"
+    else
+        # Fall back to newer legacy algorithms (10.11+)
+        test_cmd="$NEWERLEGACYSSH_CMD -o ConnectTimeout=5 -o PasswordAuthentication=no -o PreferredAuthentications=publickey"
+        if $test_cmd "$username@$hostname" "echo 'test'" 2>/dev/null; then
+            print_success "Detected newer legacy system - using diffie-hellman-group14-sha1"
+            OLDSSH_CMD="$NEWERLEGACYSSH_CMD"
+            OLDSCP_CMD="$NEWERLEGACYSCP_CMD"
+        else
+            print_warning "Could not detect algorithm compatibility - using older legacy settings"
+            # Keep original OLDSSH_CMD and OLDSCP_CMD as default
+        fi
     fi
     
     # Setup SSH keys (handles both testing and setup)
