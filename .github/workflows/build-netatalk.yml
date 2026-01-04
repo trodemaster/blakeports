@@ -318,13 +318,8 @@ jobs:
 
       - name: Extract repository on legacy VM
         if: matrix.type == 'legacy'
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ env.VM_IP }}
-          username: ${{ env.VM_USERNAME }}
-          key_path: ${{ env.SSH_KEY_PATH }}
-          use_insecure_cipher: true
-          script: |
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
             set -e
             set -o pipefail
             if [ -f ~/.profile ]; then
@@ -344,16 +339,12 @@ jobs:
             tar xzf /tmp/blakeports.tar.gz --strip-components=1
             rm /tmp/blakeports.tar.gz
             echo "✅ Repository ready"
+          EOF
 
       - name: Verify MacPorts and setup environment
         if: matrix.type == 'legacy'
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ env.VM_IP }}
-          username: ${{ env.VM_USERNAME }}
-          key_path: ${{ env.SSH_KEY_PATH }}
-          use_insecure_cipher: true
-          script: |
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
             set -e
             set -o pipefail
             set -x
@@ -369,16 +360,12 @@ jobs:
             source ./setupenv.bash
             portindex
             echo "✅ MacPorts verified"
+          EOF
 
       - name: Lint portfile (legacy)
         if: matrix.type == 'legacy'
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ env.VM_IP }}
-          username: ${{ env.VM_USERNAME }}
-          key_path: ${{ env.SSH_KEY_PATH }}
-          use_insecure_cipher: true
-          script: |
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
             set -e
             set -o pipefail
             set -x
@@ -404,16 +391,12 @@ jobs:
               exit 1
             fi
             echo "✅ Lint passed"
+          EOF
 
       - name: Clean existing installation (legacy)
         if: matrix.type == 'legacy'
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ env.VM_IP }}
-          username: ${{ env.VM_USERNAME }}
-          key_path: ${{ env.SSH_KEY_PATH }}
-          use_insecure_cipher: true
-          script: |
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
             set -e
             set -o pipefail
             if [ -f ~/.profile ]; then
@@ -424,17 +407,12 @@ jobs:
             sudo port -f uninstall netatalk || true
             sudo port clean --dist netatalk
             echo "✅ Clean complete"
+          EOF
 
       - name: Install dependencies (legacy)
         if: matrix.type == 'legacy'
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ env.VM_IP }}
-          username: ${{ env.VM_USERNAME }}
-          key_path: ${{ env.SSH_KEY_PATH }}
-          command_timeout: ${{ matrix.timeout }}m
-          use_insecure_cipher: true
-          script: |
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
             set -e
             set -o pipefail
             set -x
@@ -444,17 +422,12 @@ jobs:
             cd /Users/blake/code/blakeports
             ./scripts/install-deps netatalk
             echo "✅ Dependencies installed"
+          EOF
 
       - name: Build port (legacy)
         if: matrix.type == 'legacy'
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ env.VM_IP }}
-          username: ${{ env.VM_USERNAME }}
-          key_path: ${{ env.SSH_KEY_PATH }}
-          command_timeout: ${{ matrix.timeout }}m
-          use_insecure_cipher: true
-          script: |
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
             set -e
             set -o pipefail
             set -x
@@ -465,16 +438,12 @@ jobs:
             source ./setupenv.bash
             sudo port -v install netatalk
             echo "✅ Build complete"
+          EOF
 
       - name: Verify installation (legacy)
         if: matrix.type == 'legacy'
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ env.VM_IP }}
-          username: ${{ env.VM_USERNAME }}
-          key_path: ${{ env.SSH_KEY_PATH }}
-          use_insecure_cipher: true
-          script: |
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
             set -e
             set -o pipefail
             if [ -f ~/.profile ]; then
@@ -490,18 +459,15 @@ jobs:
               exit 1
             fi
             echo "✅ Installation verified"
+          EOF
 
       - name: Cleanup (legacy)
         if: matrix.type == 'legacy' && always()
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ env.VM_IP }}
-          username: ${{ env.VM_USERNAME }}
-          key_path: ${{ env.SSH_KEY_PATH }}
-          use_insecure_cipher: true
-          script: |
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
             if [ -f ~/.profile ]; then
               source ~/.profile
             fi
             rm -f /tmp/blakeports.tar.gz
             echo "✅ Cleanup complete"
+          EOF
