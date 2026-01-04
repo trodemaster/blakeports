@@ -885,7 +885,7 @@ inspect_legacy_vms() {
     # Get list of running VMs
     # Use simple SSH - user's SSH config is properly configured
     local vm_list
-    vm_list=$(ssh darkstar "$VMWARE_VMRUN_PATH list" 2>/dev/null)
+    vm_list=$(ssh darkstar "\"$VMWARE_VMRUN_PATH\" list" 2>/dev/null)
     
     if [ $? -ne 0 ]; then
         print_error "Failed to connect to darkstar via SSH or vmrun not available"
@@ -1184,7 +1184,7 @@ start_vmware_vm_if_needed() {
     # Check if VM is already running
     # Use simple SSH - user's SSH config is properly configured
     local vm_list
-    vm_list=$(ssh darkstar "$VMWARE_VMRUN_PATH list" 2>/dev/null)
+    vm_list=$(ssh darkstar "\"$VMWARE_VMRUN_PATH\" list" 2>/dev/null)
     
     if [ $? -ne 0 ]; then
         print_error "Failed to connect to darkstar via SSH or vmrun not available"
@@ -1224,7 +1224,7 @@ start_vmware_vm_if_needed() {
         
         printf "[%2d/%2d] Checking if VM is running..." $attempt $max_attempts
         
-        vm_list=$(ssh darkstar "$VMWARE_VMRUN_PATH list" 2>/dev/null)
+        vm_list=$(ssh darkstar "\"$VMWARE_VMRUN_PATH\" list" 2>/dev/null)
         
         if echo "$vm_list" | grep -q "$vm_path"; then
             echo ""
