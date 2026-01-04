@@ -15,19 +15,18 @@ long_description    Netatalk is a freely-available Open Source AFP fileserver. \
                     servers for Macintosh computers.
 
 if {${subport} eq ${name}} {
-    github.setup        Netatalk netatalk fe225c6bafaee8c4aa5f9065efc4eb5e346ced3d
+    github.setup        Netatalk netatalk 4-4-0 netatalk-
     version             4.4.0
-    github.tarball_from archive
-    # Using latest main branch commit after PR merge
-    # GitHub archive API returns .tar.gz files, not .tar.xz
-    # distname will be netatalk-{commit_sha} from github.setup
-    # extract.rename will handle renaming the extracted directory
+    revision            0
+    github.tarball_from releases
+    distname            netatalk-${version}
+    use_xz              yes
 
     compiler.c_standard 2011
 
-    checksums       rmd160  311bb62bd9975fdcd81ac9ec0ac2f7cc89ba57dd \
-                    sha256  ea5e9ede8f7a70a1d834e10d5a907f658bf10232b6080556fba15578a16a9218 \
-                    size    1572835
+    checksums       rmd160  238bdb1456e276b1758b61009b4d46e62573ccde \
+                    sha256  18ca32dc6c25e7ba3528594b784379f013888fa9840ffc478cd1fef55513825c \
+                    size    1054224
     
     license             GPL-2+
     maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
