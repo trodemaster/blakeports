@@ -5,7 +5,7 @@
 
 # SSH command configuration with algorithm fallbacks
 # Try newer algorithms first (10.11+), then fall back to older ones (10.5-10.10)
-SSH_CMD="ssh9"
+SSH_CMD="/opt/local/bin/ssh9"
 SSH_OPTS=(
     "-i" "$HOME/.ssh/oldmac"
     "-o" "HostKeyAlgorithms=ssh-rsa"
