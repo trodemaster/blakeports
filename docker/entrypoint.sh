@@ -182,6 +182,16 @@ Host $VM_HOSTNAME
     StrictHostKeyChecking no
     UserKnownHostsFile=/dev/null
     ConnectTimeout 10
+
+# Wildcard defaults for any host (by IP or other hostname)
+Host *
+    HostKeyAlgorithms ssh-rsa
+    PubkeyAcceptedKeyTypes ssh-rsa
+    KexAlgorithms diffie-hellman-group1-sha1
+    Ciphers aes128-cbc
+    MACs hmac-sha1
+    StrictHostKeyChecking no
+    UserKnownHostsFile=/dev/null
 EOF
 
 chmod 600 "$SSH_CONFIG_FILE"
