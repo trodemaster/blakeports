@@ -54,6 +54,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_teneleven:
+        description: 'Mac OS X 10.11 (El Capitan)'
+        required: false
+        default: false
+        type: boolean
 
 defaults:
   run:
@@ -132,6 +137,13 @@ jobs:
             if [[ "${{ inputs.run_tenten }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
               MATRIX+='{"platform":"tenten","runner":["self-hosted","tenten"],"type":"legacy","port":"security/libfido2","vm_ip":"${{ vars.LEGACY_TENTEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenTen","os_version":"10.10","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.11
+            if [[ "${{ inputs.run_teneleven }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"teneleven","runner":["self-hosted","teneleven"],"type":"legacy","port":"security/libfido2","vm_ip":"${{ vars.LEGACY_TENELEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenEleven","os_version":"10.11","timeout":"60"}'
               FIRST=false
             fi
 
