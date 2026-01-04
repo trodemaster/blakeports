@@ -1171,32 +1171,81 @@ stop_legacy_docker_runner() {
     print_success "Docker runner $runner_name stopped"
 }
 
-# Function to start VMware VM on darkstar if not running (using REST API)
+# Function to start VMware VM on darkstar if not running
 # Note: Linked clone VMs must be pre-created manually on darkstar
 start_vmware_vm_if_needed() {
     local vm_name=$1
     local instance_vm_name="runner-${vm_name}"
+    local vm_path="$VMWARE_BASE_DIR/${instance_vm_name}.vmwarevm/${instance_vm_name}.vmx"
     
+    print_info "Checking if VM $instance_vm_name is running on darkstar..."
+    
+    # Check if VM is already running
+    local vm_list
+    vm_list=$(ssh "${SSH_OPTS[@]}" "$VMWARE_SSH_HOST" "vmrun list" 2>/dev/null)
+    
+    if [ $? -ne 0 ]; then
+        print_error "Failed to connect to darkstar via SSH"
+        print_error "Please ensure SSH access to darkstar is configured"
+        return 1
+    fi
+    
+    if echo "$vm_list" | grep -q "$vm_path"; then
+        print_success "VM $instance_vm_name is already running"
+        return 0
+    fi
+    
+    # VM is not running - prompt for manual start and poll
     print_warning "════════════════════════════════════════════════════════════════"
     print_warning "  MANUAL VM STARTUP REQUIRED"
     print_warning "════════════════════════════════════════════════════════════════"
     print_warning ""
-    print_warning "  Please manually start the VM: $instance_vm_name"
+    print_warning "  VM not running: $instance_vm_name"
     print_warning ""
-    print_warning "  On darkstar, you can start it via:"
+    print_warning "  On darkstar, start it via:"
     print_warning "    1. VMware Fusion GUI"
     print_warning "    2. vmrun command:"
-    print_warning "       vmrun start \"$VMWARE_BASE_DIR/${instance_vm_name}.vmwarevm/${instance_vm_name}.vmx\""
+    print_warning "       vmrun start \"$vm_path\""
     print_warning ""
-    print_warning "  Waiting for you to start the VM..."
-    print_warning "  Press ENTER once the VM is running and accessible via SSH"
+    print_warning "  Polling every 5 seconds for 3 minutes..."
+    print_warning "  Press Ctrl+C to cancel"
     print_warning ""
     print_warning "════════════════════════════════════════════════════════════════"
+    echo
     
-    read -p "Press ENTER to continue once VM is running: "
+    # Poll for VM to appear in running list
+    local max_attempts=36  # 36 * 5 seconds = 3 minutes
+    local attempt=0
     
-    print_success "Proceeding with assumption that VM is now running"
-    return 0
+    while [ $attempt -lt $max_attempts ]; do
+        attempt=$((attempt + 1))
+        
+        printf "[%2d/%2d] Checking if VM is running..." $attempt $max_attempts
+        
+        vm_list=$(ssh "${SSH_OPTS[@]}" "$VMWARE_SSH_HOST" "vmrun list" 2>/dev/null)
+        
+        if echo "$vm_list" | grep -q "$vm_path"; then
+            echo ""
+            print_success "VM $instance_vm_name detected as running!"
+            
+            # Give it a few more seconds to fully boot
+            print_info "Waiting 10 seconds for VM to fully boot..."
+            sleep 10
+            
+            return 0
+        fi
+        
+        echo " not yet"
+        
+        if [ $attempt -lt $max_attempts ]; then
+            sleep 5
+        fi
+    done
+    
+    echo ""
+    print_error "Timeout: VM did not start within 3 minutes"
+    print_error "Please check darkstar and ensure VM started successfully"
+    return 1
 }
 
 # Function to stop VMware VM on darkstar (manual)
