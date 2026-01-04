@@ -171,6 +171,7 @@ jobs:
       - name: Checkout repository
         if: matrix.type == 'modern'
         uses: actions/checkout@v4
+        with:
           ref: ${{ inputs.branch || github.ref }}
 
       - name: Setup MacPorts and BlakePorts Environment
@@ -219,6 +220,7 @@ jobs:
       - name: Checkout repository (for tarball)
         if: matrix.type == 'legacy'
         uses: actions/checkout@v4
+        with:
           ref: ${{ inputs.branch || github.ref }}
 
       - name: Verify VM configuration
