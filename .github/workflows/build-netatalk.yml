@@ -280,14 +280,8 @@ jobs:
 
       - name: Show macOS version (legacy VM)
         if: matrix.type == 'legacy'
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ env.VM_IP }}
-          username: ${{ env.VM_USERNAME }}
-          key_path: ${{ env.SSH_KEY_PATH }}
-          use_insecure_cipher: true
-          debug: true
-          script: |
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
             set -e
             set -o pipefail
             if [ -f ~/.profile ]; then
@@ -299,6 +293,7 @@ jobs:
             sw_vers
             echo ""
             uname -a
+          EOF
 
       - name: Download repository tarball
         if: matrix.type == 'legacy'
