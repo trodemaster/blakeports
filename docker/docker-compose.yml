@@ -155,6 +155,31 @@ services:
     network_mode: bridge
 
 
+  # ============================================================================
+  # Mac OS X 10.11 (El Capitan) Runner
+  # ============================================================================
+  teneleven-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNNER_VERSION: 2.321.0
+    container_name: teneleven-runner
+    hostname: teneleven-runner
+    restart: unless-stopped
+
+    environment:
+      - RUNNER_ID=teneleven
+      - RUNNER_NAME=teneleven-runner
+      - RUNNER_WORKDIR=_work
+
+    volumes:
+      - ./config:/config:ro
+      - runner-work-teneleven:/home/runner/_work
+
+    network_mode: bridge
+
+
 volumes:
   runner-work-tenfive:
     driver: local
@@ -167,4 +192,6 @@ volumes:
   runner-work-tennine:
     driver: local
   runner-work-tenten:
+    driver: local
+  runner-work-teneleven:
     driver: local
