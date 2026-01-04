@@ -40,7 +40,7 @@ RUNNER_CONFIG="${RUNNER_CONFIG:-$DEFAULT_RUNNER_CONFIG}"
 
 # Tool paths
 TART_PATH="/Applications/tart.app/Contents/MacOS/tart"
-VMWARE_VMRUN_PATH="/Applications/VMware Fusion.app/Contents/Public/vmrun"
+VMWARE_VMRUN_PATH="/Applications/VMware Fusion.app/Contents/Library/vmrun"
 LIMACTL_PATH="/opt/local/bin/limactl"
 
 # VMware configuration
@@ -883,9 +883,9 @@ inspect_legacy_vms() {
     print_info "Querying VMs via SSH to darkstar..."
     
     # Get list of running VMs
-    # Use simple SSH without control master options
+    # Use simple SSH - user's SSH config is properly configured
     local vm_list
-    vm_list=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$VMWARE_SSH_HOST" "vmrun list" 2>/dev/null)
+    vm_list=$(ssh darkstar "$VMWARE_VMRUN_PATH list" 2>/dev/null)
     
     if [ $? -ne 0 ]; then
         print_error "Failed to connect to darkstar via SSH or vmrun not available"
@@ -906,7 +906,7 @@ inspect_legacy_vms() {
     echo
     
     local base_vms
-    base_vms=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$VMWARE_SSH_HOST" "ls -1 '$VMWARE_BASE_DIR' | grep -E '.*-base\.vmwarevm$'" 2>/dev/null)
+    base_vms=$(ssh darkstar "ls -1 '$VMWARE_BASE_DIR' | grep -E '.*-base\.vmwarevm$'" 2>/dev/null)
     
     if [ -z "$base_vms" ]; then
         print_warning "  No base images found"
@@ -928,7 +928,7 @@ inspect_legacy_vms() {
     echo "────────────────────────────────────────────────────────────────────"
     
     local runner_vms
-    runner_vms=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$VMWARE_SSH_HOST" "ls -1 '$VMWARE_BASE_DIR' | grep -E '^runner-.*\.vmwarevm$' | grep -v -- '-base\.vmwarevm$'" 2>/dev/null)
+    runner_vms=$(ssh darkstar "ls -1 '$VMWARE_BASE_DIR' | grep -E '^runner-.*\.vmwarevm$' | grep -v -- '-base\.vmwarevm$'" 2>/dev/null)
     
     if [ -z "$runner_vms" ]; then
         print_warning "  No runner VMs found"
@@ -1182,12 +1182,12 @@ start_vmware_vm_if_needed() {
     print_info "Checking if VM $instance_vm_name is running on darkstar..."
     
     # Check if VM is already running
-    # Use simple SSH without control master options to avoid path issues
+    # Use simple SSH - user's SSH config is properly configured
     local vm_list
-    vm_list=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$VMWARE_SSH_HOST" "vmrun list" 2>/dev/null)
+    vm_list=$(ssh darkstar "$VMWARE_VMRUN_PATH list" 2>/dev/null)
     
     if [ $? -ne 0 ]; then
-        print_error "Failed to connect to darkstar via SSH"
+        print_error "Failed to connect to darkstar via SSH or vmrun not available"
         print_error "Please ensure SSH access to darkstar is configured"
         return 1
     fi
@@ -1224,7 +1224,7 @@ start_vmware_vm_if_needed() {
         
         printf "[%2d/%2d] Checking if VM is running..." $attempt $max_attempts
         
-        vm_list=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$VMWARE_SSH_HOST" "vmrun list" 2>/dev/null)
+        vm_list=$(ssh darkstar "$VMWARE_VMRUN_PATH list" 2>/dev/null)
         
         if echo "$vm_list" | grep -q "$vm_path"; then
             echo ""
