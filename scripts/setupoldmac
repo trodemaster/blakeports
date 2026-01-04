@@ -13,8 +13,8 @@ OLDSCP_CMD="scp9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o Pub
 
 # SSH command for newer legacy systems (10.11+) that don't support very old algorithms
 # Uses more modern but still compatible algorithms
-NEWERLEGACYSSH_CMD="ssh9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group14-sha1,ecdh-sha2-nistp256 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
-NEWERLEGACYSCP_CMD="scp9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group14-sha1,ecdh-sha2-nistp256 -o Ciphers=aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
+NEWERLEGACYSSH_CMD="ssh9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group14-sha1,ecdh-sha2-nistp256 -o Ciphers=aes128-ctr,aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
+NEWERLEGACYSCP_CMD="scp9 -i /Users/blake/.ssh/oldmac -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedKeyTypes=ssh-rsa -o KexAlgorithms=diffie-hellman-group14-sha1,ecdh-sha2-nistp256 -o Ciphers=aes128-ctr,aes128-cbc -o MACs=hmac-sha1 -o StrictHostKeyChecking=no -o Protocol=2"
 
 # Colors for output
 RED='\033[0;31m'
