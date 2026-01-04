@@ -285,7 +285,6 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
-          cipher: aes128-cbc
           use_insecure_cipher: true
           script: |
             set -e
@@ -328,7 +327,6 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
-          cipher: aes128-cbc
           use_insecure_cipher: true
           script: |
             set -e
@@ -358,7 +356,6 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
-          cipher: aes128-cbc
           use_insecure_cipher: true
           script: |
             set -e
@@ -384,7 +381,6 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
-          cipher: aes128-cbc
           use_insecure_cipher: true
           script: |
             set -e
@@ -420,7 +416,6 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
-          cipher: aes128-cbc
           use_insecure_cipher: true
           script: |
             set -e
@@ -442,7 +437,6 @@ jobs:
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
           command_timeout: ${{ matrix.timeout }}m
-          cipher: aes128-cbc
           use_insecure_cipher: true
           script: |
             set -e
@@ -463,7 +457,6 @@ jobs:
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
           command_timeout: ${{ matrix.timeout }}m
-          cipher: aes128-cbc
           use_insecure_cipher: true
           script: |
             set -e
@@ -484,7 +477,6 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
-          cipher: aes128-cbc
           use_insecure_cipher: true
           script: |
             set -e
@@ -510,7 +502,6 @@ jobs:
           host: ${{ env.VM_IP }}
           username: ${{ env.VM_USERNAME }}
           key_path: ${{ env.SSH_KEY_PATH }}
-          cipher: aes128-cbc
           use_insecure_cipher: true
           script: |
             if [ -f ~/.profile ]; then
