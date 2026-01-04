@@ -172,7 +172,7 @@ print_info "SSH key found: $SSH_KEY_PATH"
 # Try multiple algorithm combinations to support systems from 10.5 to current
 print_info "Creating SSH config with algorithm compatibility detection..."
 
-cat > "$SSH_CONFIG_FILE" << 'EOF'
+cat > "$SSH_CONFIG_FILE" << EOF
 Host *
     # Detect and use best available algorithms
     # Try newer algorithms first (10.11+), fall back to older ones (10.5-10.10)
