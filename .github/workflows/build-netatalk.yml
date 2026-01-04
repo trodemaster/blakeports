@@ -211,6 +211,15 @@ jobs:
         run: |
           source ./setupenv.bash
           port installed netatalk
+          echo "Checking netatalk binary:"
+          if [ -f /opt/local/sbin/netatalk ]; then
+            echo "✅ netatalk binary found"
+            /opt/local/sbin/netatalk -v
+          else
+            echo "❌ netatalk binary not found"
+          fi
+          echo ""
+          echo "Checking afpd binary:"
           which afpd || echo "afpd binary not found in PATH"
           ls -la /opt/local/sbin/afpd || echo "afpd binary not found"
           /opt/local/sbin/afpd -V || echo "Could not get afpd version"
@@ -452,10 +461,12 @@ jobs:
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
             port installed netatalk
-            if [ -f ${prefix}/sbin/netatalk ]; then
+            if [ -f /opt/local/sbin/netatalk ]; then
               echo "✅ netatalk binary found"
+              echo "Running netatalk -v to show version:"
+              /opt/local/sbin/netatalk -v
             else
-              echo "❌ netatalk binary not found"
+              echo "❌ netatalk binary not found at /opt/local/sbin/netatalk"
               exit 1
             fi
             echo "✅ Installation verified"
