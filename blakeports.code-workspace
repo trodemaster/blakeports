@@ -8,9 +8,6 @@
 		},
 		{
 			"path": "../netatalk"
-		},
-		{
-			"path": "../drone-ssh"
 		}
 	],
 	"settings": {}
