@@ -51,7 +51,7 @@ if {${subport} eq ${name}} {
     configure.args-append -Dwith-init-style=none \
                           -Dwith-pam-config-path=${prefix}/etc/pam.d \
                           -Dwith-lockfile-path=${prefix}/var/run \
-                          -Dwith-cnid-backends=sqlite \
+                          -Dwith-cnid-backends=sqlite,dbd,mysql \
                           -Dwith-cnid-default-backend=sqlite \
                           -Dwith-spotlight=true
     
