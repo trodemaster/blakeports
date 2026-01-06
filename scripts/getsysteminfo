@@ -1,0 +1,184 @@
+#!/bin/bash
+# -*- coding: utf-8; mode: shell-script; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+#
+# getsysteminfo - Gather system information for macOS build environments
+#
+# This script detects:
+#   - macOS version (via sw_vers)
+#   - Architecture (via uname -m)
+#   - Xcode version (if installed)
+#   - Command Line Tools version (if installed)
+#
+# Output format: Sets environment variables that can be sourced or used in CI/CD
+# Usage: source ./scripts/getsysteminfo
+#        or: eval $(./scripts/getsysteminfo)
+
+set +e  # Don't exit on errors - we want to gather what we can
+
+# Initialize variables
+MACOS_VERSION="Unknown"
+MACOS_BUILD="Unknown"
+MACOS_PRODUCT_NAME="Unknown"
+ARCH="Unknown"
+XCODE_VERSION="N/A"
+CLT_VERSION="N/A"
+XCODE_SELECT_PATH="Unknown"
+
+# Get macOS version information
+if command -v sw_vers &> /dev/null; then
+    MACOS_VERSION=$(sw_vers -productVersion 2>/dev/null || echo "Unknown")
+    MACOS_BUILD=$(sw_vers -buildVersion 2>/dev/null || echo "Unknown")
+    MACOS_PRODUCT_NAME=$(sw_vers -productName 2>/dev/null || echo "Unknown")
+else
+    echo "⚠️  Warning: sw_vers not found" >&2
+fi
+
+# Get architecture
+ARCH=$(uname -m 2>/dev/null || echo "Unknown")
+
+# Extract major and minor version numbers
+if [[ "$MACOS_VERSION" != "Unknown" ]]; then
+    MACOS_MAJOR=$(echo "$MACOS_VERSION" | cut -d. -f1)
+    MACOS_MINOR=$(echo "$MACOS_VERSION" | cut -d. -f2)
+    MACOS_PATCH=$(echo "$MACOS_VERSION" | cut -d. -f3)
+else
+    MACOS_MAJOR="0"
+    MACOS_MINOR="0"
+    MACOS_PATCH="0"
+fi
+
+# Get xcode-select path
+if command -v xcode-select &> /dev/null; then
+    XCODE_SELECT_PATH=$(xcode-select -p 2>/dev/null || echo "Unknown")
+fi
+
+# Detect Xcode version
+# Note: xcodebuild -version requires full Xcode, not just CLT
+if command -v xcodebuild &> /dev/null; then
+    # Try to get Xcode version
+    if XCODE_OUTPUT=$(xcodebuild -version 2>&1); then
+        # Success - extract version number
+        XCODE_VERSION=$(echo "$XCODE_OUTPUT" | head -1 | awk '{print $2}' 2>/dev/null || echo "N/A")
+        # Also get build number if available
+        XCODE_BUILD=$(echo "$XCODE_OUTPUT" | grep -i "build version" | awk '{print $3}' 2>/dev/null || echo "")
+    else
+        # xcodebuild exists but failed - likely only CLT installed
+        if echo "$XCODE_OUTPUT" | grep -qi "requires Xcode"; then
+            XCODE_VERSION="N/A (CLT only)"
+            echo "⚠️  xcodebuild requires Xcode (only Command Line Tools available)" >&2
+        else
+            XCODE_VERSION="N/A (error)"
+            echo "⚠️  Could not determine Xcode version" >&2
+        fi
+    fi
+else
+    XCODE_VERSION="N/A (not installed)"
+fi
+
+# Detect Command Line Tools version
+# Methods vary by macOS version
+CLT_DETECTED=false
+
+# Method 1: Check for version.txt file (works on most macOS versions)
+if [ -f /Library/Developer/CommandLineTools/version.txt ]; then
+    CLT_VERSION=$(cat /Library/Developer/CommandLineTools/version.txt 2>/dev/null | head -1 | tr -d '\n' || echo "N/A")
+    if [[ "$CLT_VERSION" != "N/A" && -n "$CLT_VERSION" ]]; then
+        CLT_DETECTED=true
+    fi
+fi
+
+# Method 2: Use pkgutil (works on macOS 10.8+)
+if [[ "$CLT_DETECTED" == "false" ]] && command -v pkgutil &> /dev/null; then
+    # Try the standard CLT package identifier
+    if pkgutil --pkg-info=com.apple.pkg.CLTools_Executables &> /dev/null; then
+        CLT_VERSION=$(pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | \
+                     grep "^version:" | awk '{print $2}' | head -1 || echo "N/A")
+        if [[ "$CLT_VERSION" != "N/A" && -n "$CLT_VERSION" ]]; then
+            CLT_DETECTED=true
+        fi
+    fi
+    
+    # Try alternative package identifiers for older systems
+    if [[ "$CLT_DETECTED" == "false" ]]; then
+        for pkg_id in com.apple.pkg.DeveloperToolsCLI com.apple.pkg.Xcode; do
+            if pkgutil --pkg-info="$pkg_id" &> /dev/null; then
+                CLT_VERSION=$(pkgutil --pkg-info="$pkg_id" 2>/dev/null | \
+                             grep "^version:" | awk '{print $2}' | head -1 || echo "N/A")
+                if [[ "$CLT_VERSION" != "N/A" && -n "$CLT_VERSION" ]]; then
+                    CLT_DETECTED=true
+                    break
+                fi
+            fi
+        done
+    fi
+fi
+
+# Method 3: Check if CLT are bundled with Xcode (macOS 10.7 and earlier)
+if [[ "$CLT_DETECTED" == "false" ]]; then
+    if [ -d /Applications/Xcode.app ]; then
+        # Check if we can get version from Xcode.app
+        if [ -f /Applications/Xcode.app/Contents/version.plist ]; then
+            # Try to extract version using defaults (macOS 10.0+)
+            if command -v defaults &> /dev/null; then
+                CLT_VERSION=$(defaults read /Applications/Xcode.app/Contents/version.plist CFBundleShortVersionString 2>/dev/null || echo "N/A")
+                if [[ "$CLT_VERSION" != "N/A" && -n "$CLT_VERSION" ]]; then
+                    CLT_VERSION="Bundled with Xcode $CLT_VERSION"
+                    CLT_DETECTED=true
+                fi
+            fi
+        fi
+        
+        if [[ "$CLT_DETECTED" == "false" ]]; then
+            CLT_VERSION="Bundled with Xcode"
+            CLT_DETECTED=true
+        fi
+    fi
+fi
+
+# Method 4: Check xcode-select path for CLT location (macOS 10.9+)
+if [[ "$CLT_DETECTED" == "false" && "$XCODE_SELECT_PATH" != "Unknown" ]]; then
+    if [[ "$XCODE_SELECT_PATH" == "/Library/Developer/CommandLineTools" ]]; then
+        # CLT is selected, try to find version in the path
+        if [ -f "$XCODE_SELECT_PATH/usr/include/version.txt" ]; then
+            CLT_VERSION=$(cat "$XCODE_SELECT_PATH/usr/include/version.txt" 2>/dev/null | head -1 || echo "N/A")
+            if [[ "$CLT_VERSION" != "N/A" && -n "$CLT_VERSION" ]]; then
+                CLT_DETECTED=true
+            fi
+        fi
+    fi
+fi
+
+# Final fallback
+if [[ "$CLT_DETECTED" == "false" ]]; then
+    CLT_VERSION="N/A"
+fi
+
+# Output variables in a format that can be sourced or used in CI/CD
+# Format: export VAR="value"
+cat <<EOF
+export MACOS_VERSION="${MACOS_VERSION}"
+export MACOS_MAJOR="${MACOS_MAJOR}"
+export MACOS_MINOR="${MACOS_MINOR}"
+export MACOS_PATCH="${MACOS_PATCH}"
+export MACOS_BUILD="${MACOS_BUILD}"
+export MACOS_PRODUCT_NAME="${MACOS_PRODUCT_NAME}"
+export ARCH="${ARCH}"
+export XCODE_VERSION="${XCODE_VERSION}"
+export CLT_VERSION="${CLT_VERSION}"
+export XCODE_SELECT_PATH="${XCODE_SELECT_PATH}"
+EOF
+
+# Also output human-readable summary to stderr (so it doesn't interfere with sourcing)
+cat >&2 <<EOF
+
+System Information Summary:
+===========================
+Operating System: ${MACOS_PRODUCT_NAME} ${MACOS_VERSION} (Build ${MACOS_BUILD})
+Architecture: ${ARCH}
+Xcode Version: ${XCODE_VERSION}
+Command Line Tools: ${CLT_VERSION}
+Xcode Select Path: ${XCODE_SELECT_PATH}
+===========================
+
+EOF
+
