@@ -175,41 +175,44 @@ jobs:
       - name: Gather system information
         if: matrix.type == 'modern'
         id: system-info
+        continue-on-error: true
         run: |
           echo "Running on: ${{ matrix.platform }}"
           echo "Building port: libfido2"
           echo "Building from branch: ${{ inputs.branch || github.ref_name }}"
           
-          # Collect macOS version
-          MACOS_VERSION=$(sw_vers -productVersion)
-          ARCH=$(uname -m)
+          # Collect macOS version (should always work)
+          MACOS_VERSION=$(sw_vers -productVersion 2>/dev/null || echo "Unknown")
+          ARCH=$(uname -m 2>/dev/null || echo "Unknown")
           echo "macos_version=${MACOS_VERSION}" >> $GITHUB_OUTPUT
           echo "arch=${ARCH}" >> $GITHUB_OUTPUT
           
-          # Collect Xcode version
+          # Collect Xcode version (may fail if only CLT is installed)
+          XCODE_VERSION="N/A"
           if command -v xcodebuild &> /dev/null; then
-            XCODE_VERSION=$(xcodebuild -version | head -1 | awk '{print $2}')
-            echo "xcode_version=${XCODE_VERSION}" >> $GITHUB_OUTPUT
-          else
-            echo "xcode_version=N/A" >> $GITHUB_OUTPUT
+            if XCODE_OUTPUT=$(xcodebuild -version 2>&1); then
+              XCODE_VERSION=$(echo "$XCODE_OUTPUT" | head -1 | awk '{print $2}' || echo "N/A")
+            else
+              echo "⚠️  xcodebuild requires Xcode (only Command Line Tools available)"
+              XCODE_VERSION="N/A (CLT only)"
+            fi
           fi
+          echo "xcode_version=${XCODE_VERSION}" >> $GITHUB_OUTPUT
           
           # Collect Command Line Tools version
+          CLT_VERSION="N/A"
           if [ -f /Library/Developer/CommandLineTools/version.txt ]; then
-            CLT_VERSION=$(cat /Library/Developer/CommandLineTools/version.txt)
-            echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
+            CLT_VERSION=$(cat /Library/Developer/CommandLineTools/version.txt 2>/dev/null || echo "N/A")
           elif pkgutil --pkg-info=com.apple.pkg.CLTools_Executables &> /dev/null; then
-            CLT_VERSION=$(pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | grep version | awk '{print $2}')
-            echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
-          else
-            echo "clt_version=N/A" >> $GITHUB_OUTPUT
+            CLT_VERSION=$(pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | grep version | awk '{print $2}' || echo "N/A")
           fi
+          echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
           
           echo "System Information:"
-          sw_vers
+          sw_vers || echo "⚠️  Could not determine macOS version"
           echo ""
-          echo "Xcode Version: ${XCODE_VERSION:-N/A}"
-          echo "Command Line Tools: ${CLT_VERSION:-N/A}"
+          echo "Xcode Version: ${XCODE_VERSION}"
+          echo "Command Line Tools: ${CLT_VERSION}"
           echo "Architecture: ${ARCH}"
 
       - name: Checkout repository
@@ -306,25 +309,29 @@ jobs:
       - name: Gather system information (legacy VM)
         if: matrix.type == 'legacy'
         id: legacy-system-info
+        continue-on-error: true
         run: |
           ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
-            set -e
-            set -o pipefail
+            set +e
             if [ -f ~/.profile ]; then
               source ~/.profile
             fi
             echo "=================================================="
             echo "  Building libfido2 on Mac OS X ${{ matrix.os_version }} (${{ matrix.vm_name }})"
             echo "=================================================="
-            sw_vers
+            sw_vers || echo "⚠️  Could not determine macOS version"
             echo ""
-            echo "Architecture: $(uname -m)"
+            echo "Architecture: $(uname -m 2>/dev/null || echo 'Unknown')"
             echo ""
             
-            # Try to get Xcode version
+            # Try to get Xcode version (may fail if only CLT is installed)
             if command -v xcodebuild &> /dev/null; then
               echo "Xcode Version:"
-              xcodebuild -version | head -1
+              if xcodebuild -version 2>&1 | head -1; then
+                : # Success
+              else
+                echo "⚠️  xcodebuild requires Xcode (only Command Line Tools available)"
+              fi
             else
               echo "Xcode: Not installed"
             fi
@@ -332,7 +339,7 @@ jobs:
             # Try to get Command Line Tools version
             if [ -f /Library/Developer/CommandLineTools/version.txt ]; then
               echo "Command Line Tools:"
-              cat /Library/Developer/CommandLineTools/version.txt
+              cat /Library/Developer/CommandLineTools/version.txt 2>/dev/null || echo "⚠️  Could not read version"
             elif [ -d /Applications/Xcode.app ]; then
               echo "Command Line Tools: Bundled with Xcode"
             else
@@ -340,7 +347,7 @@ jobs:
             fi
             
             echo ""
-            uname -a
+            uname -a || echo "⚠️  Could not get system information"
           EOF
 
       - name: Download repository tarball
