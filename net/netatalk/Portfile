@@ -74,7 +74,7 @@ if {${subport} eq ${name}} {
             
             fetch {
                 # GitHub releases use .tar.xz files
-                system "curl -L -o ${distpath}/${distname}.tar.xz 'https://github.com/Netatalk/netatalk/releases/download/netatalk-${github.version}/${distname}.tar.xz'"
+                system "/opt/local/bin/curl -L -o ${distpath}/${distname}.tar.xz 'https://github.com/Netatalk/netatalk/releases/download/netatalk-${github.version}/${distname}.tar.xz'"
             }
         }
     }
