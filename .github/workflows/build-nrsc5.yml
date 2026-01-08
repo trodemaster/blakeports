@@ -175,41 +175,30 @@ jobs:
       - name: Gather system information
         if: matrix.type == 'modern'
         id: system-info
+        continue-on-error: true
         run: |
           echo "Running on: ${{ matrix.platform }}"
           echo "Building port: nrsc5"
           echo "Building from branch: ${{ inputs.branch || github.ref_name }}"
           
-          # Collect macOS version
-          MACOS_VERSION=$(sw_vers -productVersion)
-          ARCH=$(uname -m)
+          # Use centralized system info script
+          eval $(./scripts/getsysteminfo)
+          
+          # Export variables for GitHub Actions
           echo "macos_version=${MACOS_VERSION}" >> $GITHUB_OUTPUT
+          echo "macos_major=${MACOS_MAJOR}" >> $GITHUB_OUTPUT
+          echo "macos_minor=${MACOS_MINOR}" >> $GITHUB_OUTPUT
+          echo "macos_build=${MACOS_BUILD}" >> $GITHUB_OUTPUT
           echo "arch=${ARCH}" >> $GITHUB_OUTPUT
+          echo "xcode_version=${XCODE_VERSION}" >> $GITHUB_OUTPUT
+          echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
           
-          # Collect Xcode version
-          if command -v xcodebuild &> /dev/null; then
-            XCODE_VERSION=$(xcodebuild -version | head -1 | awk '{print $2}')
-            echo "xcode_version=${XCODE_VERSION}" >> $GITHUB_OUTPUT
-          else
-            echo "xcode_version=N/A" >> $GITHUB_OUTPUT
-          fi
-          
-          # Collect Command Line Tools version
-          if [ -f /Library/Developer/CommandLineTools/version.txt ]; then
-            CLT_VERSION=$(cat /Library/Developer/CommandLineTools/version.txt)
-            echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
-          elif pkgutil --pkg-info=com.apple.pkg.CLTools_Executables &> /dev/null; then
-            CLT_VERSION=$(pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | grep version | awk '{print $2}')
-            echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
-          else
-            echo "clt_version=N/A" >> $GITHUB_OUTPUT
-          fi
-          
-          echo "System Information:"
-          sw_vers
           echo ""
-          echo "Xcode Version: ${XCODE_VERSION:-N/A}"
-          echo "Command Line Tools: ${CLT_VERSION:-N/A}"
+          echo "System Information:"
+          sw_vers || echo "⚠️  Could not determine macOS version"
+          echo ""
+          echo "Xcode Version: ${XCODE_VERSION}"
+          echo "Command Line Tools: ${CLT_VERSION}"
           echo "Architecture: ${ARCH}"
 
       - name: Checkout repository
@@ -305,41 +294,58 @@ jobs:
       - name: Gather system information (legacy VM)
         if: matrix.type == 'legacy'
         id: legacy-system-info
+        continue-on-error: true
         run: |
           ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
-            set -e
-            set -o pipefail
+            set +e
             if [ -f ~/.profile ]; then
               source ~/.profile
             fi
             echo "=================================================="
             echo "  Building nrsc5 on Mac OS X ${{ matrix.os_version }} (${{ matrix.vm_name }})"
             echo "=================================================="
-            sw_vers
-            echo ""
-            echo "Architecture: $(uname -m)"
-            echo ""
             
-            # Try to get Xcode version
-            if command -v xcodebuild &> /dev/null; then
-              echo "Xcode Version:"
-              xcodebuild -version | head -1
+            # Use centralized system info script if available
+            if [ -f /Users/blake/code/blakeports/scripts/getsysteminfo ]; then
+              cd /Users/blake/code/blakeports
+              eval $(./scripts/getsysteminfo)
+              echo ""
+              echo "System Information:"
+              sw_vers || echo "⚠️  Could not determine macOS version"
+              echo ""
+              echo "Architecture: ${ARCH}"
+              echo "Xcode Version: ${XCODE_VERSION}"
+              echo "Command Line Tools: ${CLT_VERSION}"
             else
-              echo "Xcode: Not installed"
+              # Fallback to basic detection if script not available
+              sw_vers || echo "⚠️  Could not determine macOS version"
+              echo ""
+              echo "Architecture: $(uname -m 2>/dev/null || echo 'Unknown')"
+              echo ""
+              
+              if command -v xcodebuild &> /dev/null; then
+                echo "Xcode Version:"
+                if xcodebuild -version 2>&1 | head -1; then
+                  : # Success
+                else
+                  echo "⚠️  xcodebuild requires Xcode (only Command Line Tools available)"
+                fi
+              else
+                echo "Xcode: Not installed"
+              fi
+              
+              if [ -f /Library/Developer/CommandLineTools/version.txt ]; then
+                echo "Command Line Tools:"
+                cat /Library/Developer/CommandLineTools/version.txt 2>/dev/null || echo "⚠️  Could not read version"
+              elif [ -d /Applications/Xcode.app ]; then
+                echo "Command Line Tools: Bundled with Xcode"
+              else
+                echo "Command Line Tools: Not found"
+              fi
             fi
             
-            # Try to get Command Line Tools version
-            if [ -f /Library/Developer/CommandLineTools/version.txt ]; then
-              echo "Command Line Tools:"
-              cat /Library/Developer/CommandLineTools/version.txt
-            elif [ -d /Applications/Xcode.app ]; then
-              echo "Command Line Tools: Bundled with Xcode"
-            else
-              echo "Command Line Tools: Not found"
-            fi
-            
             echo ""
-            uname -a
+            uname -a || echo "⚠️  Could not get system information"
           EOF
 
       - name: Download repository tarball
