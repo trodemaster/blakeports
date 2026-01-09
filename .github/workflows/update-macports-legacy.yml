@@ -8,6 +8,11 @@ on:
         required: false
         default: ''
         type: string
+      force_rebuild:
+        description: 'Force rebuild even if version matches'
+        required: false
+        default: false
+        type: boolean
       branch:
         description: 'Branch to use for scripts'
         required: false
@@ -223,6 +228,55 @@ jobs:
           # and then SCP them to the VM's distfiles directory
           chmod +x scripts/prefetch-distfiles
           ./scripts/prefetch-distfiles "${{ env.VM_IP }}" "${{ env.VM_USERNAME }}" "${{ env.SSH_KEY_PATH }}"
+
+      - name: Pre-fetch MacPorts tarball
+        run: |
+          echo "Pre-fetching MacPorts tarball for ${{ matrix.vm_name }}..."
+          
+          # Determine MacPorts version (default to 2.11.6)
+          MACPORTS_VERSION="${{ inputs.macports_version }}"
+          if [ -z "$MACPORTS_VERSION" ]; then
+            # Try to detect latest version from GitHub API
+            MACPORTS_VERSION=$(curl -s https://api.github.com/repos/macports/macports-base/releases/latest | \
+              grep '"tag_name"' | sed 's/.*"tag_name": "v\([^"]*\)".*/\1/' || echo "2.11.6")
+            echo "Detected MacPorts version: $MACPORTS_VERSION"
+          fi
+          
+          TARBALL_NAME="MacPorts-${MACPORTS_VERSION}.tar.bz2"
+          TARBALL_URL="https://distfiles.macports.org/MacPorts/${TARBALL_NAME}"
+          
+          echo "Downloading $TARBALL_NAME from container..."
+          echo "URL: $TARBALL_URL"
+          
+          # Download in container using modern curl
+          if curl -f -L -o "/tmp/$TARBALL_NAME" "$TARBALL_URL"; then
+            echo "✅ Downloaded $(ls -lh /tmp/$TARBALL_NAME | awk '{print $5}') tarball"
+            
+            # Transfer to VM
+            echo "Transferring tarball to VM..."
+            scp -i ${{ env.SSH_KEY_PATH }} \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o HostKeyAlgorithms=+ssh-rsa \
+                -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+                "/tmp/$TARBALL_NAME" \
+                ${{ env.VM_USERNAME }}@${{ env.VM_IP }}:/tmp/
+            
+            echo "✅ MacPorts tarball transferred to VM"
+            
+            # Create a flag file so updatemacports knows tarball is pre-fetched
+            ssh -i ${{ env.SSH_KEY_PATH }} \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o HostKeyAlgorithms=+ssh-rsa \
+                -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+                ${{ env.VM_USERNAME }}@${{ env.VM_IP }} \
+                "echo '$MACPORTS_VERSION' > /tmp/macports-version.txt"
+            
+            echo "✅ Version file created on VM"
+          else
+            echo "⚠️  Failed to download MacPorts tarball - will let VM try"
+          fi
 
       - name: Make script executable on VM
         run: |
