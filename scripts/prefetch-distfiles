@@ -45,37 +45,35 @@ header() {
     echo -e "${BLUE}════════════════════════════════════════${NC}"
 }
 
-# Hardcoded distfiles list for curl +ssl -brotli -http2 -idn -psl -zstd bootstrap
-# Format: "port:distfile:url" - Using upstream/GitHub as primary (fast in GitHub Actions)
+# Distfiles list for curl +ssl -brotli -http2 -idn -psl -zstd bootstrap
+# Format: "port:distfile" - Files are copied from /config/distfiles-cache/
+# which is populated by running ./scripts/cache-distfiles on the host
 declare -a DISTFILES=(
     # curl and dependencies
-    "curl:curl-8.13.0.tar.xz:https://curl.se/download/curl-8.13.0.tar.xz"
-    "zlib:zlib-1.3.1.tar.xz:https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.xz"
-    "openssl3:openssl-3.5.4.tar.gz:https://github.com/openssl/openssl/releases/download/openssl-3.5.4/openssl-3.5.4.tar.gz"
-    "pkgconfig:pkg-config-0.29.2.tar.gz:https://pkg-config.freedesktop.org/releases/pkg-config-0.29.2.tar.gz"
-    
-    # curl-ca-bundle needs curl again (already have it)
-    # curl-ca-bundle:certdata-20241119-fc857d1685f9cd017a2cf656a52d871b02a4cc89.zip:https://hg.mozilla.org/mozilla-central/archive/fc857d1685f9cd017a2cf656a52d871b02a4cc89.zip
+    "curl:curl-8.13.0.tar.xz"
+    "zlib:zlib-1.3.1.tar.xz"
+    "openssl3:openssl-3.5.4.tar.gz"
+    "pkgconfig:pkg-config-0.29.2.tar.gz"
     
     # libiconv and dependencies
-    "libiconv:libiconv-1.17.tar.gz:https://ftp.gnu.org/gnu/libiconv/libiconv-1.17.tar.gz"
-    "gperf:gperf-3.3.tar.gz:https://ftp.gnu.org/gnu/gperf/gperf-3.3.tar.gz"
+    "libiconv:libiconv-1.17.tar.gz"
+    "gperf:gperf-3.3.tar.gz"
     
     # Perl and dependencies
-    "perl5.34:perl-5.34.3.tar.xz:https://www.cpan.org/src/5.0/perl-5.34.3.tar.xz"
-    "db48:db-4.8.30.tar.gz:https://download.oracle.com/berkeley-db/db-4.8.30.tar.gz"
-    "gdbm:gdbm-1.26.tar.gz:https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz"
+    "perl5.34:perl-5.34.3.tar.xz"
+    "db48:db-4.8.30.tar.gz"
+    "gdbm:gdbm-1.26.tar.gz"
     
     # gettext and dependencies
-    "gettext:gettext-0.22.5.tar.gz:https://ftp.gnu.org/gnu/gettext/gettext-0.22.5.tar.gz"
-    "ncurses:ncurses-6.5.tar.gz:https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz"
+    "gettext:gettext-0.22.5.tar.gz"
+    "ncurses:ncurses-6.5.tar.gz"
     
     # readline
-    "readline:readline-8.2.tar.gz:https://ftp.gnu.org/gnu/readline/readline-8.2.tar.gz"
+    "readline:readline-8.2.tar.gz"
     
     # Tools
-    "xz:xz-5.8.1.tar.bz2:https://github.com/tukaani-project/xz/releases/download/v5.8.1/xz-5.8.1.tar.bz2"
-    "unzip:unzip60.tar.gz:https://downloads.sourceforge.net/infozip/unzip60.tar.gz"
+    "xz:xz-5.8.1.tar.bz2"
+    "unzip:unzip60.tar.gz"
 )
 
 # Parse arguments
@@ -109,119 +107,66 @@ info "Temp directory: $TEMP_DIR"
 mkdir -p "$TEMP_DIR"
 cd "$TEMP_DIR"
 
-# Phase 1: Download all distfiles locally
-header "Phase 1: Downloading distfiles in container"
+# Phase 1: Copy distfiles from mounted cache
+header "Phase 1: Copying distfiles from cache"
+
+CACHE_DIR="/config/distfiles-cache"
+
+# Verify cache directory is mounted
+if [ ! -d "$CACHE_DIR" ]; then
+    error "Cache directory not found: $CACHE_DIR"
+    error "Run './scripts/cache-distfiles' on the host to populate the cache first"
+    exit 1
+fi
+
+info "Cache directory found: $CACHE_DIR"
 
 total_files=${#DISTFILES[@]}
-downloaded_count=0
+copied_count=0
 failed_files=()
 
 for entry in "${DISTFILES[@]}"; do
     port_name=$(echo "$entry" | cut -d: -f1)
     distfile=$(echo "$entry" | cut -d: -f2)
-    # Extract URL (everything after second colon, handles https:// correctly)
-    url=$(echo "$entry" | cut -d: -f3-)
     
     echo ""
-    info "[$((++downloaded_count))/$total_files] Downloading $port_name: $distfile"
+    info "[$((++copied_count))/$total_files] Copying $port_name: $distfile"
     
     # Create port-specific directory
     mkdir -p "$port_name"
-    cd "$port_name"
     
-    # Try to download - show errors but filter progress bars
-    set +e
-    curl -f -L -o "$distfile" "$url" 2>&1 | grep -v "^  %"
-    curl_exit=$?
-    set -e
+    # Try to copy from cache
+    cache_file="$CACHE_DIR/$port_name/$distfile"
     
-    if [ $curl_exit -eq 0 ] && [ -f "$distfile" ] && [ -s "$distfile" ]; then
-        info "✅ Downloaded: $distfile"
-    else
-        warn "Download failed from primary URL (exit code: $curl_exit), trying alternate sources..."
-        
-        # Fallback URLs (MacPorts mirrors and alternate sources)
+    # Handle ports that share distfile directories (gettext family)
+    if [ ! -f "$cache_file" ]; then
         case "$port_name" in
-            curl)
-                urls=("https://curl.askapache.com/$distfile" "https://distfiles.macports.org/curl/$distfile")
-                ;;
-            zlib)
-                urls=("https://www.zlib.net/$distfile" "https://distfiles.macports.org/zlib/$distfile")
-                ;;
-            openssl3)
-                urls=("https://www.openssl.org/source/$distfile" "https://distfiles.macports.org/openssl3/$distfile")
-                ;;
-            pkgconfig)
-                urls=("https://distfiles.macports.org/pkgconfig/$distfile")
-                ;;
-            libiconv)
-                urls=("https://ftpmirror.gnu.org/libiconv/$distfile" "https://distfiles.macports.org/libiconv/$distfile")
-                ;;
-            gperf)
-                urls=("https://ftpmirror.gnu.org/gperf/$distfile" "https://distfiles.macports.org/gperf/$distfile")
-                ;;
-            perl5.34)
-                urls=("https://cpan.metacpan.org/authors/id/S/SH/SHAY/$distfile" "https://distfiles.macports.org/perl5.34/$distfile")
-                ;;
-            db48)
-                urls=("https://distfiles.macports.org/db48/$distfile")
-                ;;
-            gdbm)
-                urls=("https://ftpmirror.gnu.org/gdbm/$distfile" "https://distfiles.macports.org/gdbm/$distfile")
-                ;;
-            gettext)
-                urls=("https://ftpmirror.gnu.org/gettext/$distfile" "https://distfiles.macports.org/gettext/$distfile")
-                ;;
-            ncurses)
-                urls=("https://invisible-mirror.net/archives/ncurses/$distfile" "https://distfiles.macports.org/ncurses/$distfile")
-                ;;
-            readline)
-                urls=("https://ftpmirror.gnu.org/readline/$distfile" "https://distfiles.macports.org/readline/$distfile")
-                ;;
-            xz)
-                urls=("https://sourceforge.net/projects/lzmautils/files/$distfile" "https://distfiles.macports.org/xz/$distfile")
-                ;;
-            unzip)
-                urls=("https://distfiles.macports.org/unzip/$distfile")
-                ;;
-            *)
-                urls=()
+            gettext-runtime|gettext-tools-libs|libtextstyle)
+                cache_file="$CACHE_DIR/gettext/$distfile"
                 ;;
         esac
-        
-        downloaded=false
-        for alt_url in "${urls[@]}"; do
-            set +e
-            curl -f -L -o "$distfile" "$alt_url" 2>&1 | grep -v "^  %"
-            curl_exit=$?
-            set -e
-            if [ $curl_exit -eq 0 ] && [ -f "$distfile" ] && [ -s "$distfile" ]; then
-                info "✅ Downloaded from alternate source: $distfile"
-                downloaded=true
-                break
-            fi
-        done
-        
-        if [ "$downloaded" = false ]; then
-            error "Failed to download $distfile from any source"
-            failed_files+=("$port_name:$distfile")
-        fi
     fi
     
-    cd "$TEMP_DIR"
+    if [ -f "$cache_file" ]; then
+        cp "$cache_file" "$port_name/"
+        info "✅ Copied: $distfile ($(du -h "$port_name/$distfile" | cut -f1))"
+    else
+        error "File not found in cache: $cache_file"
+        failed_files+=("$port_name:$distfile")
+    fi
 done
 
 # Check for failures
 if [ ${#failed_files[@]} -gt 0 ]; then
-    error "Failed to download ${#failed_files[@]} files:"
+    error "Failed to copy ${#failed_files[@]} files from cache:"
     for failed in "${failed_files[@]}"; do
         echo "  - $failed"
     done
-    error "Cannot proceed without all distfiles"
+    error "Run './scripts/cache-distfiles' on the host to populate the cache"
     exit 1
 fi
 
-info "✅ All distfiles downloaded successfully"
+info "✅ All distfiles copied from cache successfully"
 
 # Phase 2: Transfer distfiles to legacy VM
 header "Phase 2: Transferring distfiles to legacy VM"
