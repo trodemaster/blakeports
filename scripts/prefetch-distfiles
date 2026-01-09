@@ -1,0 +1,251 @@
+#!/bin/bash
+# Script to pre-fetch distfiles for ports and transfer them to legacy VMs
+# This solves the circular dependency: curl needs distfiles, but system curl 
+# on legacy systems cannot download from modern HTTPS servers.
+#
+# Usage: prefetch-distfiles <vm_ip> <vm_username> <ssh_key_path> [port_list]
+#
+# Distfiles are downloaded in the container (which has modern curl) and then
+# SCPed to the legacy VM's MacPorts distfiles directory, where port install
+# will find them locally and skip the download phase.
+#
+# Default port list for curl +ssl bootstrap:
+# curl zlib openssl3 curl-ca-bundle pkgconfig libiconv perl5.34 gperf
+# db48 gdbm gettext gettext-runtime gettext-tools-libs readline 
+# libtextstyle ncurses xz unzip
+#
+# Extract dependencies: xz, unzip (pre-built tools used during extraction)
+
+set -euo pipefail
+IFS=$'\n\t'
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print colored messages
+info() {
+    echo -e "${GREEN}ℹ️  $*${NC}"
+}
+
+warn() {
+    echo -e "${YELLOW}⚠️  $*${NC}"
+}
+
+error() {
+    echo -e "${RED}❌ $*${NC}"
+}
+
+header() {
+    echo -e "${BLUE}════════════════════════════════════════${NC}"
+    echo -e "${BLUE}$*${NC}"
+    echo -e "${BLUE}════════════════════════════════════════${NC}"
+}
+
+# Hardcoded distfiles list for curl +ssl -brotli -http2 -idn -psl -zstd bootstrap
+# Format: "port:distfile:url" - URL uses distfiles.macports.org as primary source
+declare -a DISTFILES=(
+    # curl and dependencies
+    "curl:curl-8.13.0.tar.xz:https://distfiles.macports.org/curl/curl-8.13.0.tar.xz"
+    "zlib:zlib-1.3.1.tar.xz:https://distfiles.macports.org/zlib/zlib-1.3.1.tar.xz"
+    "openssl3:openssl-3.5.4.tar.gz:https://distfiles.macports.org/openssl3/openssl-3.5.4.tar.gz"
+    "pkgconfig:pkg-config-0.29.2.tar.gz:https://distfiles.macports.org/pkgconfig/pkg-config-0.29.2.tar.gz"
+    
+    # curl-ca-bundle needs curl again (already have it)
+    # curl-ca-bundle:certdata-20241119-fc857d1685f9cd017a2cf656a52d871b02a4cc89.zip:https://distfiles.macports.org/curl-ca-bundle/certdata-20241119-fc857d1685f9cd017a2cf656a52d871b02a4cc89.zip
+    
+    # libiconv and dependencies
+    "libiconv:libiconv-1.17.tar.gz:https://distfiles.macports.org/libiconv/libiconv-1.17.tar.gz"
+    "gperf:gperf-3.3.tar.gz:https://distfiles.macports.org/gperf/gperf-3.3.tar.gz"
+    
+    # Perl and dependencies
+    "perl5.34:perl-5.34.3.tar.xz:https://distfiles.macports.org/perl5.34/perl-5.34.3.tar.xz"
+    "db48:db-4.8.30.tar.gz:https://distfiles.macports.org/db48/db-4.8.30.tar.gz"
+    "gdbm:gdbm-1.26.tar.gz:https://distfiles.macports.org/gdbm/gdbm-1.26.tar.gz"
+    
+    # gettext and dependencies
+    "gettext:gettext-0.22.5.tar.gz:https://distfiles.macports.org/gettext/gettext-0.22.5.tar.gz"
+    "ncurses:ncurses-6.5.tar.gz:https://distfiles.macports.org/ncurses/ncurses-6.5.tar.gz"
+    
+    # readline patches
+    "readline:readline-8.2.tar.gz:https://distfiles.macports.org/readline/readline-8.2.tar.gz"
+    
+    # Tools
+    "xz:xz-5.8.1.tar.bz2:https://distfiles.macports.org/xz/xz-5.8.1.tar.bz2"
+    "unzip:unzip60.tar.gz:https://distfiles.macports.org/unzip/unzip60.tar.gz"
+)
+
+# Parse arguments
+if [[ $# -lt 3 ]]; then
+    error "Usage: $0 <vm_ip> <vm_username> <ssh_key_path> [port_list_file]"
+    echo "Example: $0 192.168.234.110 blake /config/ssh_keys/oldmac"
+    exit 1
+fi
+
+VM_IP="$1"
+VM_USERNAME="$2"
+SSH_KEY_PATH="$3"
+MACPORTS_PREFIX="/opt/local"
+DISTFILES_DIR="/opt/local/var/macports/distfiles"
+TEMP_DIR="/tmp/prefetch-distfiles-$$"
+
+# Cleanup on exit
+cleanup() {
+    if [ -d "$TEMP_DIR" ]; then
+        info "Cleaning up temporary directory..."
+        rm -rf "$TEMP_DIR"
+    fi
+}
+trap cleanup EXIT
+
+header "Prefetching distfiles for curl bootstrap"
+info "VM: $VM_USERNAME@$VM_IP"
+info "Temp directory: $TEMP_DIR"
+
+# Create temporary directory
+mkdir -p "$TEMP_DIR"
+cd "$TEMP_DIR"
+
+# Phase 1: Download all distfiles locally
+header "Phase 1: Downloading distfiles in container"
+
+total_files=${#DISTFILES[@]}
+downloaded_count=0
+failed_files=()
+
+for entry in "${DISTFILES[@]}"; do
+    port_name=$(echo "$entry" | cut -d: -f1)
+    distfile=$(echo "$entry" | cut -d: -f2)
+    url=$(echo "$entry" | cut -d: -f3)
+    
+    echo ""
+    info "[$((++downloaded_count))/$total_files] Downloading $port_name: $distfile"
+    
+    # Create port-specific directory
+    mkdir -p "$port_name"
+    cd "$port_name"
+    
+    # Try to download - if it fails, try alternate URLs
+    if curl -f -L -o "$distfile" "$url" 2>/dev/null; then
+        info "✅ Downloaded: $distfile"
+    else
+        warn "Download failed from primary URL, trying alternate sources..."
+        
+        # Fallback URLs (MacPorts mirrors or upstream)
+        case "$port_name" in
+            curl)
+                urls=("https://curl.se/download/$distfile" "https://curl.askapache.com/$distfile")
+                ;;
+            zlib)
+                urls=("https://www.zlib.net/$distfile")
+                ;;
+            openssl3)
+                urls=("https://github.com/openssl/openssl/releases/download/openssl-3.5.4/$distfile")
+                ;;
+            *)
+                urls=()
+                ;;
+        esac
+        
+        downloaded=false
+        for alt_url in "${urls[@]}"; do
+            if curl -f -L -o "$distfile" "$alt_url" 2>/dev/null; then
+                info "✅ Downloaded from alternate source: $distfile"
+                downloaded=true
+                break
+            fi
+        done
+        
+        if [ "$downloaded" = false ]; then
+            error "Failed to download $distfile from any source"
+            failed_files+=("$port_name:$distfile")
+        fi
+    fi
+    
+    cd "$TEMP_DIR"
+done
+
+# Check for failures
+if [ ${#failed_files[@]} -gt 0 ]; then
+    error "Failed to download ${#failed_files[@]} files:"
+    for failed in "${failed_files[@]}"; do
+        echo "  - $failed"
+    done
+    error "Cannot proceed without all distfiles"
+    exit 1
+fi
+
+info "✅ All distfiles downloaded successfully"
+
+# Phase 2: Transfer distfiles to legacy VM
+header "Phase 2: Transferring distfiles to legacy VM"
+
+info "Creating distfiles directory structure on VM..."
+ssh -i "$SSH_KEY_PATH" \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o HostKeyAlgorithms=+ssh-rsa \
+    -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+    "$VM_USERNAME@$VM_IP" bash <<'VMEOF'
+set -e
+mkdir -p /opt/local/var/macports/distfiles/{curl,zlib,openssl3,pkgconfig,libiconv,gperf,perl5.34,db48,gdbm,gettext,ncurses,readline,xz,unzip}
+chmod -R 755 /opt/local/var/macports/distfiles
+echo "✅ Distfiles directory structure created"
+VMEOF
+
+# Transfer each distfile via SCP
+transferred_count=0
+cd "$TEMP_DIR"
+
+for entry in "${DISTFILES[@]}"; do
+    port_name=$(echo "$entry" | cut -d: -f1)
+    distfile=$(echo "$entry" | cut -d: -f2)
+    
+    if [ ! -f "$port_name/$distfile" ]; then
+        warn "Skipping $port_name/$distfile (not found locally, may have failed to download)"
+        continue
+    fi
+    
+    info "[$((++transferred_count))/$total_files] Transferring $port_name/$distfile..."
+    
+    scp -i "$SSH_KEY_PATH" \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -o HostKeyAlgorithms=+ssh-rsa \
+        -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+        "$port_name/$distfile" \
+        "$VM_USERNAME@$VM_IP:$DISTFILES_DIR/$port_name/" || {
+        error "Failed to transfer $port_name/$distfile"
+        exit 1
+    }
+done
+
+info "✅ All distfiles transferred successfully"
+
+# Phase 3: Verify transfer
+header "Phase 3: Verifying distfiles on VM"
+
+info "Checking distfiles directory on VM..."
+ssh -i "$SSH_KEY_PATH" \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o HostKeyAlgorithms=+ssh-rsa \
+    -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+    "$VM_USERNAME@$VM_IP" bash <<'VMEOF'
+set -e
+echo "Distfiles directory contents:"
+du -sh /opt/local/var/macports/distfiles/*/
+echo ""
+echo "Total distfiles size:"
+du -sh /opt/local/var/macports/distfiles/
+find /opt/local/var/macports/distfiles -type f | wc -l | xargs echo "Total files:"
+VMEOF
+
+header "✅ Distfile prefetch complete!"
+info "Distfiles are now available locally on the VM"
+info "port install curl -brotli -http2 -idn -psl -zstd +ssl will use local files"
+
+exit 0
