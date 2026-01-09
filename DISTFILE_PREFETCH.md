@@ -29,26 +29,36 @@ The solution uses a three-phase approach:
 ### Workflow
 
 ```
-GitHub Actions Container                Legacy VM
-(Ubuntu/modern curl)                   (macOS 10.5-10.11)
+Host System (local MacPorts)      Container (GitHub Actions)      Legacy VM
+        │                                    │                      │
+        ├─ Run cache-distfiles               │                      │
+        │   (port fetch curl ...)            │                      │
+        │                                    │                      │
+        ├─ Copy to cache dir ───────────────>│ /config/distfiles-cache/
+        │   ~/jibb-runners/                  │   (mounted volume)
+        │   docker/config/                   │
+        │   distfiles-cache/                 │
         │                                    │
-        ├─ Run prefetch-distfiles            │
-        │   (uses container's curl)          │
+        │                          Run prefetch-distfiles
         │                                    │
-        ├─ Download from distfiles.macports.org
-        │   (zlib, openssl3, curl, etc)     │
-        │   Total: ~150MB                    │
+        │                          Copy from cache to /tmp
         │                                    │
-        ├─ SCP files ──────────────────────>│ /opt/local/var/macports/distfiles/
-        │                                    │
-        │                          port install curl
-        │                          (finds files locally,
-        │                           NO network needed)
-        │                                    │
-        │<───────── MacPorts updated ───────┤
+        │                          SCP files ──────────────────────>│ /tmp/prefetch-distfiles/
+        │                                    │                      │
+        │                                    │         sudo mv to /opt/local/var/macports/distfiles/
+        │                                    │         sudo chmod 644
+        │                                    │                      │
+        │                                    │           port install curl
+        │                                    │           (finds files locally,
+        │                                    │            NO network needed)
+        │                                    │                      │
+        │                                    │<────── MacPorts updated
 ```
 
-**IMPORTANT**: The prefetch script runs IN THE CONTAINER, not on the VM. The container has modern curl that can handle HTTPS.
+**IMPORTANT**: 
+1. Run `./scripts/cache-distfiles` on the host BEFORE running the workflow
+2. The cache directory is mounted into containers at `/config/distfiles-cache/`
+3. The prefetch script copies from cache (no network downloads in container)
 
 ## Implementation
 
