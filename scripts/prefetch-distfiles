@@ -128,22 +128,60 @@ for entry in "${DISTFILES[@]}"; do
     mkdir -p "$port_name"
     cd "$port_name"
     
-    # Try to download - if it fails, try alternate URLs
-    if curl -f -L -o "$distfile" "$url" 2>/dev/null; then
+    # Try to download - show errors but filter progress bars
+    set +e
+    curl -f -L -o "$distfile" "$url" 2>&1 | grep -v "^  %"
+    curl_exit=$?
+    set -e
+    
+    if [ $curl_exit -eq 0 ] && [ -f "$distfile" ] && [ -s "$distfile" ]; then
         info "✅ Downloaded: $distfile"
     else
-        warn "Download failed from primary URL, trying alternate sources..."
+        warn "Download failed from primary URL (exit code: $curl_exit), trying alternate sources..."
         
-        # Fallback URLs (MacPorts mirrors or upstream)
+        # Fallback URLs (upstream sources and GNU mirrors)
         case "$port_name" in
             curl)
                 urls=("https://curl.se/download/$distfile" "https://curl.askapache.com/$distfile")
                 ;;
             zlib)
-                urls=("https://www.zlib.net/$distfile")
+                urls=("https://www.zlib.net/$distfile" "https://github.com/madler/zlib/releases/download/v1.3.1/$distfile")
                 ;;
             openssl3)
-                urls=("https://github.com/openssl/openssl/releases/download/openssl-3.5.4/$distfile")
+                urls=("https://github.com/openssl/openssl/releases/download/openssl-3.5.4/$distfile" "https://www.openssl.org/source/$distfile")
+                ;;
+            pkgconfig)
+                urls=("https://pkg-config.freedesktop.org/releases/$distfile")
+                ;;
+            libiconv)
+                urls=("https://ftp.gnu.org/gnu/libiconv/$distfile" "https://ftpmirror.gnu.org/libiconv/$distfile")
+                ;;
+            gperf)
+                urls=("https://ftp.gnu.org/gnu/gperf/$distfile" "https://ftpmirror.gnu.org/gperf/$distfile")
+                ;;
+            perl5.34)
+                urls=("https://www.cpan.org/src/5.0/$distfile" "https://cpan.metacpan.org/authors/id/S/SH/SHAY/$distfile")
+                ;;
+            db48)
+                urls=("https://download.oracle.com/berkeley-db/$distfile")
+                ;;
+            gdbm)
+                urls=("https://ftp.gnu.org/gnu/gdbm/$distfile" "https://ftpmirror.gnu.org/gdbm/$distfile")
+                ;;
+            gettext)
+                urls=("https://ftp.gnu.org/gnu/gettext/$distfile" "https://ftpmirror.gnu.org/gettext/$distfile")
+                ;;
+            ncurses)
+                urls=("https://ftp.gnu.org/gnu/ncurses/$distfile" "https://invisible-mirror.net/archives/ncurses/$distfile")
+                ;;
+            readline)
+                urls=("https://ftp.gnu.org/gnu/readline/$distfile" "https://ftpmirror.gnu.org/readline/$distfile")
+                ;;
+            xz)
+                urls=("https://github.com/tukaani-project/xz/releases/download/v5.8.1/$distfile" "https://sourceforge.net/projects/lzmautils/files/$distfile")
+                ;;
+            unzip)
+                urls=("https://sourceforge.net/projects/infozip/files/UnZip%206.x%20%28latest%29/UnZip%206.0/$distfile")
                 ;;
             *)
                 urls=()
@@ -152,7 +190,11 @@ for entry in "${DISTFILES[@]}"; do
         
         downloaded=false
         for alt_url in "${urls[@]}"; do
-            if curl -f -L -o "$distfile" "$alt_url" 2>/dev/null; then
+            set +e
+            curl -f -L -o "$distfile" "$alt_url" 2>&1 | grep -v "^  %"
+            curl_exit=$?
+            set -e
+            if [ $curl_exit -eq 0 ] && [ -f "$distfile" ] && [ -s "$distfile" ]; then
                 info "✅ Downloaded from alternate source: $distfile"
                 downloaded=true
                 break
