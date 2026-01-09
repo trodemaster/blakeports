@@ -70,26 +70,46 @@ CURL_VARIANTS="-brotli -http2 -idn -psl -zstd +ssl"
 info "Running: port deps curl $CURL_VARIANTS"
 PORTS=()
 while IFS= read -r line; do
-    # Parse port name from dependency lines (format: "  dependency: portname")
-    if [[ $line =~ ^[[:space:]]+(build|library|runtime|depends|test):\ (.+)$ ]]; then
-        port_name="${BASH_REMATCH[2]}"
-        # Remove @version if present
-        port_name="${port_name%@*}"
-        PORTS+=("$port_name")
-        info "  Found dependency: $port_name"
+    # Parse dependencies from lines like "Library Dependencies: zlib, openssl, curl-ca-bundle"
+    if [[ $line =~ ^(Extract|Build|Library|Runtime|Test)[[:space:]]+Dependencies:[[:space:]]*(.+)$ ]]; then
+        deps="${BASH_REMATCH[2]}"
+        # Split comma-separated list
+        IFS=',' read -ra DEP_ARRAY <<< "$deps"
+        for dep in "${DEP_ARRAY[@]}"; do
+            # Trim whitespace
+            dep=$(echo "$dep" | xargs)
+            # Remove @version if present
+            dep="${dep%@*}"
+            if [ -n "$dep" ]; then
+                PORTS+=("$dep")
+                info "  Found dependency: $dep"
+            fi
+        done
     fi
 done < <(port deps curl $CURL_VARIANTS 2>&1)
 
 # Add curl itself
-PORTS=("curl" "${PORTS[@]}")
+if [ ${#PORTS[@]} -eq 0 ]; then
+    PORTS=("curl")
+else
+    PORTS=("curl" "${PORTS[@]}")
+fi
 
-# Remove duplicates while preserving order
+# Remove duplicates while preserving order (bash 3.2 compatible)
 declare -a UNIQUE_PORTS=()
-declare -A seen
 for port in "${PORTS[@]}"; do
-    if [[ ! ${seen[$port]} ]]; then
+    # Check if port already in UNIQUE_PORTS array
+    found=0
+    if [ ${#UNIQUE_PORTS[@]} -gt 0 ]; then
+        for existing in "${UNIQUE_PORTS[@]}"; do
+            if [ "$existing" = "$port" ]; then
+                found=1
+                break
+            fi
+        done
+    fi
+    if [ $found -eq 0 ]; then
         UNIQUE_PORTS+=("$port")
-        seen[$port]=1
     fi
 done
 PORTS=("${UNIQUE_PORTS[@]}")
@@ -129,12 +149,14 @@ for port in "${PORTS[@]}"; do
     # Query actual distfiles for this port
     info "Querying distfiles for: $port"
     distfiles=()
-    while IFS= read -r distfile; do
-        # Skip empty lines and lines that don't look like files
-        if [[ -n "$distfile" && "$distfile" != *"no distfiles"* ]]; then
+    while IFS= read -r line; do
+        # Extract filename from lines like: "[filename] /path/to/file"
+        if [[ $line =~ ^\[([^\]]+)\] ]]; then
+            distfile="${BASH_REMATCH[1]}"
             distfiles+=("$distfile")
+            info "  Found distfile: $distfile"
         fi
-    done < <(port distfiles "$port" 2>/dev/null | grep -v "^$port has no" || true)
+    done < <(port distfiles "$port" 2>&1)
     
     if [ ${#distfiles[@]} -eq 0 ]; then
         info "  No distfiles for $port (meta-port or subport)"
