@@ -202,33 +202,27 @@ jobs:
             uname -a || echo "⚠️  Could not get system information"
           EOF
 
-      - name: Transfer scripts to VM
+      - name: Transfer update script to VM
         run: |
-          echo "Transferring scripts to ${{ matrix.vm_name }} VM..."
+          echo "Transferring updatemacports script to ${{ matrix.vm_name }} VM..."
           scp -i ${{ env.SSH_KEY_PATH }} \
               -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
               -o HostKeyAlgorithms=+ssh-rsa \
               -o PubkeyAcceptedKeyTypes=+ssh-rsa \
-              scripts/updatemacports scripts/prefetch-distfiles \
+              scripts/updatemacports \
               ${{ env.VM_USERNAME }}@${{ env.VM_IP }}:/tmp/
-          echo "✅ Scripts transferred"
+          echo "✅ Script transferred"
 
       - name: Pre-fetch distfiles for curl bootstrap
         run: |
           echo "Pre-fetching distfiles for curl on ${{ matrix.vm_name }}..."
-          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
-            set -e
-            chmod +x /tmp/prefetch-distfiles
-            
-            # Run prefetch script to download distfiles in container and SCP to VM
-            # This solves the circular dependency: curl is needed to download files,
-            # but system curl on legacy VMs cannot handle modern HTTPS
-            echo "Starting distfile prefetch..."
-            /tmp/prefetch-distfiles "${{ env.VM_IP }}" "${{ env.VM_USERNAME }}" "${{ env.SSH_KEY_PATH }}" 2>&1
-            
-            echo "✅ Distfile prefetch completed"
-          EOF
+          
+          # Run prefetch script IN THE CONTAINER (not on VM)
+          # The script will download distfiles using modern curl in container
+          # and then SCP them to the VM's distfiles directory
+          chmod +x scripts/prefetch-distfiles
+          ./scripts/prefetch-distfiles "${{ env.VM_IP }}" "${{ env.VM_USERNAME }}" "${{ env.SSH_KEY_PATH }}"
 
       - name: Make script executable on VM
         run: |
