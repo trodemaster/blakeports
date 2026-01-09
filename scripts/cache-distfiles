@@ -49,12 +49,12 @@ info "MacPorts version: $(port version)"
 # Determine cache directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BLAKEPORTS_ROOT="$(dirname "$SCRIPT_DIR")"
-DOCKER_CONFIG_DIR="$BLAKEPORTS_ROOT/../jibb-runners/docker/config"
+DOCKER_CONFIG_DIR="$BLAKEPORTS_ROOT/docker/config"
 CACHE_DIR="$DOCKER_CONFIG_DIR/distfiles-cache"
 
 if [ ! -d "$DOCKER_CONFIG_DIR" ]; then
     error "Docker config directory not found: $DOCKER_CONFIG_DIR"
-    error "Expected jibb-runners to be at: $(dirname "$BLAKEPORTS_ROOT")/jibb-runners"
+    error "Expected docker/config at: $DOCKER_CONFIG_DIR"
     exit 1
 fi
 

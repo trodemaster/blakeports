@@ -1,0 +1,6 @@
+# Ignore all distfiles (large binary archives)
+*
+
+# But keep the directory structure
+!.gitignore
+!/*/
