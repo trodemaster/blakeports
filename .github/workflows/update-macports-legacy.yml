@@ -48,6 +48,11 @@ on:
         required: false
         default: true
         type: boolean
+      force_rebuild:
+        description: 'Force rebuild even if version matches and curl is configured'
+        required: false
+        default: false
+        type: boolean
 
 defaults:
   run:
@@ -227,15 +232,25 @@ jobs:
             
             echo "Starting MacPorts update process..."
             
+            CMD="/tmp/updatemacports"
+            
+            if [[ "${{ inputs.force_rebuild }}" == "true" ]]; then
+              CMD="$CMD --force"
+              echo "Force rebuild: enabled"
+            fi
+            
             VERSION="${{ inputs.macports_version }}"
             if [ -n "$VERSION" ]; then
+              CMD="$CMD $VERSION"
               echo "Target version: $VERSION"
-              /tmp/updatemacports "$VERSION"
             else
               echo "Target version: latest (auto-detect)"
-              /tmp/updatemacports
             fi
+            
+            echo "Executing: $CMD"
+            $CMD
           EOF
+
 
       - name: Verify updated MacPorts version
         run: |
