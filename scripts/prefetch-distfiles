@@ -133,7 +133,7 @@ for entry in "${DISTFILES[@]}"; do
     if [ -f "$cache_file" ]; then
         cp "$cache_file" "$port_name/"
         info "  ✅ Copied: $distfile ($(du -h "$port_name/$distfile" | cut -f1))"
-        ((copied_count++))
+        copied_count=$((copied_count + 1))
     else
         error "  File not found in cache: $cache_file"
         failed_files+=("$port_name:$distfile")
@@ -185,7 +185,8 @@ for entry in "${DISTFILES[@]}"; do
         continue
     fi
     
-    info "[$((++transferred_count))/$total_files] Transferring $port_name/$distfile..."
+    transferred_count=$((transferred_count + 1))
+    info "[$transferred_count/$total_files] Transferring $port_name/$distfile..."
     
     # SCP to /tmp first (no sudo needed)
     scp -i "$SSH_KEY_PATH" \
