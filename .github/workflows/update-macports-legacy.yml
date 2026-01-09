@@ -8,11 +8,6 @@ on:
         required: false
         default: ''
         type: string
-      force_rebuild:
-        description: 'Force rebuild even if version matches'
-        required: false
-        default: false
-        type: boolean
       branch:
         description: 'Branch to use for scripts'
         required: false
