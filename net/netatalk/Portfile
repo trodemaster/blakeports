@@ -66,18 +66,6 @@ if {${subport} eq ${name}} {
     
     # Disable legacy support for newer macOS versions that don't need it
     legacysupport.newest_darwin_requires_legacy 20
-    
-    # SSL workaround for older macOS versions with GitHub download issues
-    platform darwin {
-        if {${os.major} <= 12} {
-            depends_build-append port:curl
-            
-            fetch {
-                # GitHub releases use .tar.xz files
-                system "${prefix}/bin/curl -L -o ${distpath}/${distname}.tar.xz 'https://github.com/Netatalk/netatalk/releases/download/netatalk-${github.version}/${distname}.tar.xz'"
-            }
-        }
-    }
 }
 
 # Netatalk 4.x stub port
