@@ -226,7 +226,7 @@ info "✅ All distfiles downloaded successfully"
 # Phase 2: Transfer distfiles to legacy VM
 header "Phase 2: Transferring distfiles to legacy VM"
 
-info "Creating distfiles directory structure on VM..."
+info "Creating temporary transfer directory on VM..."
 ssh -i "$SSH_KEY_PATH" \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
@@ -234,12 +234,14 @@ ssh -i "$SSH_KEY_PATH" \
     -o PubkeyAcceptedKeyTypes=+ssh-rsa \
     "$VM_USERNAME@$VM_IP" bash <<'VMEOF'
 set -e
-mkdir -p /opt/local/var/macports/distfiles/{curl,zlib,openssl3,pkgconfig,libiconv,gperf,perl5.34,db48,gdbm,gettext,ncurses,readline,xz,unzip}
-chmod -R 755 /opt/local/var/macports/distfiles
-echo "✅ Distfiles directory structure created"
+# Create temp directory for transfers (no sudo needed)
+mkdir -p /tmp/prefetch-distfiles
+# Create distfiles structure with sudo
+sudo mkdir -p /opt/local/var/macports/distfiles/{curl,zlib,openssl3,pkgconfig,libiconv,gperf,perl5.34,db48,gdbm,gettext,ncurses,readline,xz,unzip}
+echo "✅ Directories created"
 VMEOF
 
-# Transfer each distfile via SCP
+# Transfer each distfile via SCP to /tmp first
 transferred_count=0
 cd "$TEMP_DIR"
 
@@ -254,21 +256,33 @@ for entry in "${DISTFILES[@]}"; do
     
     info "[$((++transferred_count))/$total_files] Transferring $port_name/$distfile..."
     
+    # SCP to /tmp first (no sudo needed)
     scp -i "$SSH_KEY_PATH" \
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null \
         -o HostKeyAlgorithms=+ssh-rsa \
         -o PubkeyAcceptedKeyTypes=+ssh-rsa \
         "$port_name/$distfile" \
-        "$VM_USERNAME@$VM_IP:$DISTFILES_DIR/$port_name/" || {
+        "$VM_USERNAME@$VM_IP:/tmp/prefetch-distfiles/" || {
         error "Failed to transfer $port_name/$distfile"
+        exit 1
+    }
+    
+    # Move to final location with sudo and set permissions
+    ssh -i "$SSH_KEY_PATH" \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -o HostKeyAlgorithms=+ssh-rsa \
+        -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+        "$VM_USERNAME@$VM_IP" "sudo mv /tmp/prefetch-distfiles/$distfile $DISTFILES_DIR/$port_name/ && sudo chmod 644 $DISTFILES_DIR/$port_name/$distfile" || {
+        error "Failed to move $port_name/$distfile to final location"
         exit 1
     }
 done
 
 info "✅ All distfiles transferred successfully"
 
-# Phase 3: Verify transfer
+# Phase 3: Verify transfer and cleanup
 header "Phase 3: Verifying distfiles on VM"
 
 info "Checking distfiles directory on VM..."
@@ -280,11 +294,19 @@ ssh -i "$SSH_KEY_PATH" \
     "$VM_USERNAME@$VM_IP" bash <<'VMEOF'
 set -e
 echo "Distfiles directory contents:"
-du -sh /opt/local/var/macports/distfiles/*/
+du -sh /opt/local/var/macports/distfiles/*/ 2>/dev/null || echo "No subdirectories yet"
 echo ""
 echo "Total distfiles size:"
 du -sh /opt/local/var/macports/distfiles/
-find /opt/local/var/macports/distfiles -type f | wc -l | xargs echo "Total files:"
+echo ""
+echo "Total files:"
+find /opt/local/var/macports/distfiles -type f | wc -l
+echo ""
+echo "Permissions check (should be readable by all):"
+ls -la /opt/local/var/macports/distfiles/curl/ 2>/dev/null | head -5 || echo "curl directory not found"
+echo ""
+echo "Cleaning up temp directory..."
+rm -rf /tmp/prefetch-distfiles
 VMEOF
 
 header "✅ Distfile prefetch complete!"
