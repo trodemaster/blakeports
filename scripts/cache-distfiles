@@ -62,30 +62,46 @@ header "Caching distfiles for curl bootstrap"
 info "Source: Local MacPorts (/opt/local/var/macports/distfiles)"
 info "Destination: $CACHE_DIR"
 
+# Query MacPorts for curl dependencies dynamically
+info "Querying MacPorts for curl dependencies (with +ssl -brotli -http2 -idn -psl -zstd)..."
+CURL_VARIANTS="-brotli -http2 -idn -psl -zstd +ssl"
+
+# Get all dependencies (recursive)
+info "Running: port deps curl $CURL_VARIANTS"
+PORTS=()
+while IFS= read -r line; do
+    # Parse port name from dependency lines (format: "  dependency: portname")
+    if [[ $line =~ ^[[:space:]]+(build|library|runtime|depends|test):\ (.+)$ ]]; then
+        port_name="${BASH_REMATCH[2]}"
+        # Remove @version if present
+        port_name="${port_name%@*}"
+        PORTS+=("$port_name")
+        info "  Found dependency: $port_name"
+    fi
+done < <(port deps curl $CURL_VARIANTS 2>&1)
+
+# Add curl itself
+PORTS=("curl" "${PORTS[@]}")
+
+# Remove duplicates while preserving order
+declare -a UNIQUE_PORTS=()
+declare -A seen
+for port in "${PORTS[@]}"; do
+    if [[ ! ${seen[$port]} ]]; then
+        UNIQUE_PORTS+=("$port")
+        seen[$port]=1
+    fi
+done
+PORTS=("${UNIQUE_PORTS[@]}")
+
+info "Total unique ports to cache: ${#PORTS[@]}"
+echo ""
+
 # Create cache directory structure
 info "Creating cache directory structure..."
-mkdir -p "$CACHE_DIR"/{curl,zlib,openssl3,pkgconfig,libiconv,gperf,perl5.34,db48,gdbm,gettext,ncurses,readline,xz,unzip}
-
-# List of ports we need for curl +ssl -brotli -http2 -idn -psl -zstd
-PORTS=(
-    "curl"
-    "zlib"
-    "openssl3"
-    "pkgconfig"
-    "libiconv"
-    "gperf"
-    "perl5.34"
-    "db48"
-    "gdbm"
-    "gettext"
-    "gettext-runtime"
-    "gettext-tools-libs"
-    "libtextstyle"
-    "ncurses"
-    "readline"
-    "xz"
-    "unzip"
-)
+for port in "${PORTS[@]}"; do
+    mkdir -p "$CACHE_DIR/$port"
+done
 
 header "Phase 1: Fetching distfiles with MacPorts"
 
@@ -98,48 +114,59 @@ for port in "${PORTS[@]}"; do
     fi
 done
 
-header "Phase 2: Copying distfiles to cache"
+header "Phase 2: Copying distfiles to cache and creating manifest"
 
 # Copy distfiles from MacPorts to cache
 MACPORTS_DISTFILES="/opt/local/var/macports/distfiles"
 copied_count=0
 failed_count=0
+MANIFEST_FILE="$CACHE_DIR/manifest.txt"
+
+# Clear old manifest
+> "$MANIFEST_FILE"
 
 for port in "${PORTS[@]}"; do
-    # Handle ports that share the same distfile directory
-    case "$port" in
-        gettext-runtime|gettext-tools-libs|libtextstyle)
-            src_dir="$MACPORTS_DISTFILES/gettext"
-            ;;
-        *)
-            src_dir="$MACPORTS_DISTFILES/$port"
-            ;;
-    esac
+    # Query actual distfiles for this port
+    info "Querying distfiles for: $port"
+    distfiles=()
+    while IFS= read -r distfile; do
+        # Skip empty lines and lines that don't look like files
+        if [[ -n "$distfile" && "$distfile" != *"no distfiles"* ]]; then
+            distfiles+=("$distfile")
+        fi
+    done < <(port distfiles "$port" 2>/dev/null | grep -v "^$port has no" || true)
     
-    if [ ! -d "$src_dir" ]; then
-        warn "Source directory not found: $src_dir"
-        ((failed_count++))
+    if [ ${#distfiles[@]} -eq 0 ]; then
+        info "  No distfiles for $port (meta-port or subport)"
         continue
     fi
     
-    info "Copying $port distfiles..."
+    # Determine source directory (handle subports that share distfiles)
+    src_dir="$MACPORTS_DISTFILES/$port"
+    if [ ! -d "$src_dir" ]; then
+        # Try parent port for subports (e.g., gettext-runtime -> gettext)
+        parent_port="${port%-*}"
+        if [ "$parent_port" != "$port" ] && [ -d "$MACPORTS_DISTFILES/$parent_port" ]; then
+            src_dir="$MACPORTS_DISTFILES/$parent_port"
+            info "  Using parent distfiles: $parent_port"
+        else
+            warn "  Source directory not found: $src_dir"
+            ((failed_count++))
+            continue
+        fi
+    fi
     
-    # Copy all files from source to cache
-    for file in "$src_dir"/*; do
-        if [ -f "$file" ]; then
-            filename=$(basename "$file")
-            # Determine cache subdirectory
-            case "$port" in
-                gettext-runtime|gettext-tools-libs|libtextstyle)
-                    cache_subdir="$CACHE_DIR/gettext"
-                    ;;
-                *)
-                    cache_subdir="$CACHE_DIR/$port"
-                    ;;
-            esac
-            
-            cp "$file" "$cache_subdir/" && info "  ✅ $filename"
+    # Copy distfiles
+    for distfile in "${distfiles[@]}"; do
+        src_file="$src_dir/$distfile"
+        if [ -f "$src_file" ]; then
+            cp "$src_file" "$CACHE_DIR/$port/" && info "  ✅ $distfile"
             ((copied_count++))
+            # Add to manifest
+            echo "$port:$distfile" >> "$MANIFEST_FILE"
+        else
+            warn "  Distfile not found: $src_file"
+            ((failed_count++))
         fi
     done
 done
@@ -147,14 +174,20 @@ done
 header "Phase 3: Verification"
 
 info "Cache directory contents:"
-du -sh "$CACHE_DIR"/*/ 2>/dev/null || echo "No subdirectories"
+du -sh "$CACHE_DIR"/*/ 2>/dev/null | head -20 || echo "No subdirectories"
+if [ $(find "$CACHE_DIR" -type d -mindepth 1 -maxdepth 1 | wc -l) -gt 20 ]; then
+    echo "  ... and $(($(find "$CACHE_DIR" -type d -mindepth 1 -maxdepth 1 | wc -l) - 20)) more directories"
+fi
 echo ""
-info "Total cached files: $(find "$CACHE_DIR" -type f | wc -l | tr -d ' ')"
+info "Total cached files: $(grep -c ':' "$MANIFEST_FILE" 2>/dev/null || echo 0)"
 echo ""
 info "Total cache size: $(du -sh "$CACHE_DIR" | cut -f1)"
+echo ""
+info "Manifest file: $MANIFEST_FILE"
+info "  Contains $(wc -l < "$MANIFEST_FILE" | tr -d ' ') entries"
 
 if [ $failed_count -gt 0 ]; then
-    warn "Warning: $failed_count ports had issues"
+    warn "Warning: $failed_count items had issues"
 fi
 
 header "✅ Distfile caching complete!"
@@ -163,6 +196,9 @@ info "Cache location: $CACHE_DIR"
 info ""
 info "The GitHub Actions containers will find these files at:"
 info "  /config/distfiles-cache/<portname>/<distfile>"
+info ""
+info "Manifest created at:"
+info "  /config/distfiles-cache/manifest.txt"
 info ""
 info "You can now run the update-macports-legacy workflow."
 

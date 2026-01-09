@@ -64,21 +64,22 @@ Host System (local MacPorts)      Container (GitHub Actions)      Legacy VM
 
 ### Files Created/Modified
 
-#### 1. `scripts/prefetch-distfiles` (NEW)
+#### 1. `scripts/cache-distfiles` (NEW)
 
-**Purpose**: Download all required distfiles in container and transfer to legacy VM
+**Purpose**: Pre-cache all required distfiles using local MacPorts on the host system
 
 **Features**:
-- Hardcoded list of 18 distfiles for minimal curl build
-- Downloads via `https://distfiles.macports.org/` (reliable, modern HTTPS)
-- Fallback URLs for upstream sources (GitHub, GNU, etc)
-- SSH/SCP to transfer files to VM
-- Three-phase process with detailed logging
-- Automatic cleanup of temporary files
+- Dynamically queries MacPorts for `curl -brotli -http2 -idn -psl -zstd +ssl` dependencies
+- Uses `port deps` to get dependency tree
+- Uses `port distfiles` to get actual filenames (current versions)
+- Uses `port fetch` to download with MacPorts' proven mechanism
+- Copies to `~/Developer/jibb-runners/docker/config/distfiles-cache/`
+- Creates manifest file listing all cached distfiles
+- Automatic .gitignore to prevent committing large binary files
 
-**Dependency Tree Included**:
+**Dependency Tree** (determined dynamically):
 ```
-curl +ssl (minimal)
+curl +ssl (minimal variants)
 ├── zlib
 ├── openssl3
 │   └── zlib (already have)
@@ -97,9 +98,20 @@ curl +ssl (minimal)
     unzip (extract tool)
 ```
 
-**Total**: 18 unique distfiles (~150MB total)
+**Total**: ~150MB (varies based on current port versions)
 
-#### 2. `scripts/updatemacports` (MODIFIED)
+#### 2. `scripts/prefetch-distfiles` (MODIFIED)
+
+**Purpose**: Copy cached distfiles from mounted volume and transfer to legacy VM
+
+**Features**:
+- Reads manifest file (`/config/distfiles-cache/manifest.txt`)
+- Copies files from mounted cache (no downloads!)
+- SSH/SCP to transfer files to VM with proper permissions
+- Three-phase process with detailed logging
+- Automatic cleanup of temporary files
+
+#### 3. `scripts/updatemacports` (MODIFIED)
 
 **Changes**:
 - Modified curl installation to use minimal variants: `-brotli -http2 -idn -psl -zstd +ssl`
@@ -114,7 +126,7 @@ curl +ssl (minimal)
 - `-zstd`: Less critical
 - `+ssl`: OpenSSL provides modern TLS, no circular dep
 
-#### 3. `.github/workflows/update-macports-legacy.yml` (MODIFIED)
+#### 4. `.github/workflows/update-macports-legacy.yml` (MODIFIED)
 
 **New Step**: "Pre-fetch distfiles for curl bootstrap"
 
@@ -162,28 +174,21 @@ gh workflow run "update-macports-legacy.yml" -f run_tenseven=true
    - `port install curl` completes without downloading from internet
    - MacPorts binary is now linked to MacPorts curl
 
-## Distfiles List
+## Distfiles Manifest
 
-All 18 distfiles downloaded via `distfiles.macports.org`:
+The cache directory contains a `manifest.txt` file listing all cached distfiles:
 
 ```
-curl/curl-8.13.0.tar.xz                                2.7 MB
-zlib/zlib-1.3.1.tar.xz                                 1.3 MB
-openssl3/openssl-3.5.4.tar.gz                          53 MB
-pkgconfig/pkg-config-0.29.2.tar.gz                     2.0 MB
-libiconv/libiconv-1.17.tar.gz                          5.4 MB
-gperf/gperf-3.3.tar.gz                                 1.8 MB
-perl5.34/perl-5.34.3.tar.xz                            12.8 MB
-db48/db-4.8.30.tar.gz                                  ~7 MB
-gdbm/gdbm-1.26.tar.gz                                  0.7 MB
-gettext/gettext-0.22.5.tar.gz                          26.8 MB
-ncurses/ncurses-6.5.tar.gz                             ~3.5 MB
-readline/readline-8.2.tar.gz                           ~3 MB
-xz/xz-5.8.1.tar.bz2                                    1.9 MB
-unzip/unzip60.tar.gz                                   1.4 MB
----
-Total: ~150 MB
+# Format: port:distfile
+curl:curl-8.13.0.tar.xz
+zlib:zlib-1.3.1.tar.xz
+openssl3:openssl-3.5.4.tar.gz
+...
 ```
+
+**Note**: The actual files and versions are determined dynamically by `cache-distfiles` script when you run it. The manifest reflects your current MacPorts installation's port versions.
+
+Total cache size: ~150 MB (varies based on current port versions)
 
 ## Troubleshooting
 
@@ -225,8 +230,8 @@ When working correctly:
 
 ## Future Improvements
 
-1. **Dynamic dependency tree**: Query PortIndex instead of hardcoding distfiles
-2. **Retry mechanism**: Implement exponential backoff for transient failures
-3. **Progress tracking**: Show download progress in workflow logs
-4. **Compression**: Pre-compress distfiles directory, transfer as single tarball
-5. **Cache management**: Keep distfiles on runner for subsequent builds
+1. ✅ **Dynamic dependency tree**: IMPLEMENTED - Uses `port deps` and `port distfiles` 
+2. **Retry mechanism**: Implement exponential backoff for transient SCP failures
+3. **Progress tracking**: Show individual file transfer progress in workflow logs
+4. **Compression**: Pre-compress distfiles directory, transfer as single tarball to VM
+5. **Incremental updates**: Only transfer files that changed since last cache
