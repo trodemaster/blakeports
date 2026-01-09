@@ -46,36 +46,36 @@ header() {
 }
 
 # Hardcoded distfiles list for curl +ssl -brotli -http2 -idn -psl -zstd bootstrap
-# Format: "port:distfile:url" - URL uses distfiles.macports.org as primary source
+# Format: "port:distfile:url" - Using upstream/GitHub as primary (fast in GitHub Actions)
 declare -a DISTFILES=(
     # curl and dependencies
-    "curl:curl-8.13.0.tar.xz:https://distfiles.macports.org/curl/curl-8.13.0.tar.xz"
-    "zlib:zlib-1.3.1.tar.xz:https://distfiles.macports.org/zlib/zlib-1.3.1.tar.xz"
-    "openssl3:openssl-3.5.4.tar.gz:https://distfiles.macports.org/openssl3/openssl-3.5.4.tar.gz"
-    "pkgconfig:pkg-config-0.29.2.tar.gz:https://distfiles.macports.org/pkgconfig/pkg-config-0.29.2.tar.gz"
+    "curl:curl-8.13.0.tar.xz:https://curl.se/download/curl-8.13.0.tar.xz"
+    "zlib:zlib-1.3.1.tar.xz:https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.xz"
+    "openssl3:openssl-3.5.4.tar.gz:https://github.com/openssl/openssl/releases/download/openssl-3.5.4/openssl-3.5.4.tar.gz"
+    "pkgconfig:pkg-config-0.29.2.tar.gz:https://pkg-config.freedesktop.org/releases/pkg-config-0.29.2.tar.gz"
     
     # curl-ca-bundle needs curl again (already have it)
-    # curl-ca-bundle:certdata-20241119-fc857d1685f9cd017a2cf656a52d871b02a4cc89.zip:https://distfiles.macports.org/curl-ca-bundle/certdata-20241119-fc857d1685f9cd017a2cf656a52d871b02a4cc89.zip
+    # curl-ca-bundle:certdata-20241119-fc857d1685f9cd017a2cf656a52d871b02a4cc89.zip:https://hg.mozilla.org/mozilla-central/archive/fc857d1685f9cd017a2cf656a52d871b02a4cc89.zip
     
     # libiconv and dependencies
-    "libiconv:libiconv-1.17.tar.gz:https://distfiles.macports.org/libiconv/libiconv-1.17.tar.gz"
-    "gperf:gperf-3.3.tar.gz:https://distfiles.macports.org/gperf/gperf-3.3.tar.gz"
+    "libiconv:libiconv-1.17.tar.gz:https://ftp.gnu.org/gnu/libiconv/libiconv-1.17.tar.gz"
+    "gperf:gperf-3.3.tar.gz:https://ftp.gnu.org/gnu/gperf/gperf-3.3.tar.gz"
     
     # Perl and dependencies
-    "perl5.34:perl-5.34.3.tar.xz:https://distfiles.macports.org/perl5.34/perl-5.34.3.tar.xz"
-    "db48:db-4.8.30.tar.gz:https://distfiles.macports.org/db48/db-4.8.30.tar.gz"
-    "gdbm:gdbm-1.26.tar.gz:https://distfiles.macports.org/gdbm/gdbm-1.26.tar.gz"
+    "perl5.34:perl-5.34.3.tar.xz:https://www.cpan.org/src/5.0/perl-5.34.3.tar.xz"
+    "db48:db-4.8.30.tar.gz:https://download.oracle.com/berkeley-db/db-4.8.30.tar.gz"
+    "gdbm:gdbm-1.26.tar.gz:https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz"
     
     # gettext and dependencies
-    "gettext:gettext-0.22.5.tar.gz:https://distfiles.macports.org/gettext/gettext-0.22.5.tar.gz"
-    "ncurses:ncurses-6.5.tar.gz:https://distfiles.macports.org/ncurses/ncurses-6.5.tar.gz"
+    "gettext:gettext-0.22.5.tar.gz:https://ftp.gnu.org/gnu/gettext/gettext-0.22.5.tar.gz"
+    "ncurses:ncurses-6.5.tar.gz:https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz"
     
-    # readline patches
-    "readline:readline-8.2.tar.gz:https://distfiles.macports.org/readline/readline-8.2.tar.gz"
+    # readline
+    "readline:readline-8.2.tar.gz:https://ftp.gnu.org/gnu/readline/readline-8.2.tar.gz"
     
     # Tools
-    "xz:xz-5.8.1.tar.bz2:https://distfiles.macports.org/xz/xz-5.8.1.tar.bz2"
-    "unzip:unzip60.tar.gz:https://distfiles.macports.org/unzip/unzip60.tar.gz"
+    "xz:xz-5.8.1.tar.bz2:https://github.com/tukaani-project/xz/releases/download/v5.8.1/xz-5.8.1.tar.bz2"
+    "unzip:unzip60.tar.gz:https://downloads.sourceforge.net/infozip/unzip60.tar.gz"
 )
 
 # Parse arguments
@@ -139,49 +139,49 @@ for entry in "${DISTFILES[@]}"; do
     else
         warn "Download failed from primary URL (exit code: $curl_exit), trying alternate sources..."
         
-        # Fallback URLs (upstream sources and GNU mirrors)
+        # Fallback URLs (MacPorts mirrors and alternate sources)
         case "$port_name" in
             curl)
-                urls=("https://curl.se/download/$distfile" "https://curl.askapache.com/$distfile")
+                urls=("https://curl.askapache.com/$distfile" "https://distfiles.macports.org/curl/$distfile")
                 ;;
             zlib)
-                urls=("https://www.zlib.net/$distfile" "https://github.com/madler/zlib/releases/download/v1.3.1/$distfile")
+                urls=("https://www.zlib.net/$distfile" "https://distfiles.macports.org/zlib/$distfile")
                 ;;
             openssl3)
-                urls=("https://github.com/openssl/openssl/releases/download/openssl-3.5.4/$distfile" "https://www.openssl.org/source/$distfile")
+                urls=("https://www.openssl.org/source/$distfile" "https://distfiles.macports.org/openssl3/$distfile")
                 ;;
             pkgconfig)
-                urls=("https://pkg-config.freedesktop.org/releases/$distfile")
+                urls=("https://distfiles.macports.org/pkgconfig/$distfile")
                 ;;
             libiconv)
-                urls=("https://ftp.gnu.org/gnu/libiconv/$distfile" "https://ftpmirror.gnu.org/libiconv/$distfile")
+                urls=("https://ftpmirror.gnu.org/libiconv/$distfile" "https://distfiles.macports.org/libiconv/$distfile")
                 ;;
             gperf)
-                urls=("https://ftp.gnu.org/gnu/gperf/$distfile" "https://ftpmirror.gnu.org/gperf/$distfile")
+                urls=("https://ftpmirror.gnu.org/gperf/$distfile" "https://distfiles.macports.org/gperf/$distfile")
                 ;;
             perl5.34)
-                urls=("https://www.cpan.org/src/5.0/$distfile" "https://cpan.metacpan.org/authors/id/S/SH/SHAY/$distfile")
+                urls=("https://cpan.metacpan.org/authors/id/S/SH/SHAY/$distfile" "https://distfiles.macports.org/perl5.34/$distfile")
                 ;;
             db48)
-                urls=("https://download.oracle.com/berkeley-db/$distfile")
+                urls=("https://distfiles.macports.org/db48/$distfile")
                 ;;
             gdbm)
-                urls=("https://ftp.gnu.org/gnu/gdbm/$distfile" "https://ftpmirror.gnu.org/gdbm/$distfile")
+                urls=("https://ftpmirror.gnu.org/gdbm/$distfile" "https://distfiles.macports.org/gdbm/$distfile")
                 ;;
             gettext)
-                urls=("https://ftp.gnu.org/gnu/gettext/$distfile" "https://ftpmirror.gnu.org/gettext/$distfile")
+                urls=("https://ftpmirror.gnu.org/gettext/$distfile" "https://distfiles.macports.org/gettext/$distfile")
                 ;;
             ncurses)
-                urls=("https://ftp.gnu.org/gnu/ncurses/$distfile" "https://invisible-mirror.net/archives/ncurses/$distfile")
+                urls=("https://invisible-mirror.net/archives/ncurses/$distfile" "https://distfiles.macports.org/ncurses/$distfile")
                 ;;
             readline)
-                urls=("https://ftp.gnu.org/gnu/readline/$distfile" "https://ftpmirror.gnu.org/readline/$distfile")
+                urls=("https://ftpmirror.gnu.org/readline/$distfile" "https://distfiles.macports.org/readline/$distfile")
                 ;;
             xz)
-                urls=("https://github.com/tukaani-project/xz/releases/download/v5.8.1/$distfile" "https://sourceforge.net/projects/lzmautils/files/$distfile")
+                urls=("https://sourceforge.net/projects/lzmautils/files/$distfile" "https://distfiles.macports.org/xz/$distfile")
                 ;;
             unzip)
-                urls=("https://sourceforge.net/projects/infozip/files/UnZip%206.x%20%28latest%29/UnZip%206.0/$distfile")
+                urls=("https://distfiles.macports.org/unzip/$distfile")
                 ;;
             *)
                 urls=()
