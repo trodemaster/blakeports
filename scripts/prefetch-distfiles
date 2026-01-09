@@ -45,36 +45,9 @@ header() {
     echo -e "${BLUE}════════════════════════════════════════${NC}"
 }
 
-# Distfiles list for curl +ssl -brotli -http2 -idn -psl -zstd bootstrap
-# Format: "port:distfile" - Files are copied from /config/distfiles-cache/
-# which is populated by running ./scripts/cache-distfiles on the host
-declare -a DISTFILES=(
-    # curl and dependencies
-    "curl:curl-8.13.0.tar.xz"
-    "zlib:zlib-1.3.1.tar.xz"
-    "openssl3:openssl-3.5.4.tar.gz"
-    "pkgconfig:pkg-config-0.29.2.tar.gz"
-    
-    # libiconv and dependencies
-    "libiconv:libiconv-1.17.tar.gz"
-    "gperf:gperf-3.3.tar.gz"
-    
-    # Perl and dependencies
-    "perl5.34:perl-5.34.3.tar.xz"
-    "db48:db-4.8.30.tar.gz"
-    "gdbm:gdbm-1.26.tar.gz"
-    
-    # gettext and dependencies
-    "gettext:gettext-0.22.5.tar.gz"
-    "ncurses:ncurses-6.5.tar.gz"
-    
-    # readline
-    "readline:readline-8.2.tar.gz"
-    
-    # Tools
-    "xz:xz-5.8.1.tar.bz2"
-    "unzip:unzip60.tar.gz"
-)
+# Distfiles are dynamically determined from manifest file
+# The manifest is created by ./scripts/cache-distfiles on the host
+# and contains the actual distfiles for curl's dependencies
 
 # Parse arguments
 if [[ $# -lt 3 ]]; then
@@ -111,6 +84,7 @@ cd "$TEMP_DIR"
 header "Phase 1: Copying distfiles from cache"
 
 CACHE_DIR="/config/distfiles-cache"
+MANIFEST_FILE="$CACHE_DIR/manifest.txt"
 
 # Verify cache directory is mounted
 if [ ! -d "$CACHE_DIR" ]; then
@@ -119,9 +93,28 @@ if [ ! -d "$CACHE_DIR" ]; then
     exit 1
 fi
 
+# Verify manifest exists
+if [ ! -f "$MANIFEST_FILE" ]; then
+    error "Manifest file not found: $MANIFEST_FILE"
+    error "Run './scripts/cache-distfiles' on the host to create the manifest"
+    exit 1
+fi
+
 info "Cache directory found: $CACHE_DIR"
+info "Reading manifest: $MANIFEST_FILE"
+
+# Read distfiles from manifest
+declare -a DISTFILES=()
+while IFS= read -r line; do
+    # Skip empty lines and comments
+    [[ -z "$line" || "$line" =~ ^# ]] && continue
+    DISTFILES+=("$line")
+done < "$MANIFEST_FILE"
 
 total_files=${#DISTFILES[@]}
+info "Found $total_files distfiles in manifest"
+echo ""
+
 copied_count=0
 failed_files=()
 
@@ -129,32 +122,25 @@ for entry in "${DISTFILES[@]}"; do
     port_name=$(echo "$entry" | cut -d: -f1)
     distfile=$(echo "$entry" | cut -d: -f2)
     
-    echo ""
-    info "[$((++copied_count))/$total_files] Copying $port_name: $distfile"
+    info "[$((copied_count+1))/$total_files] Copying $port_name: $distfile"
     
     # Create port-specific directory
     mkdir -p "$port_name"
     
-    # Try to copy from cache
+    # Copy from cache
     cache_file="$CACHE_DIR/$port_name/$distfile"
-    
-    # Handle ports that share distfile directories (gettext family)
-    if [ ! -f "$cache_file" ]; then
-        case "$port_name" in
-            gettext-runtime|gettext-tools-libs|libtextstyle)
-                cache_file="$CACHE_DIR/gettext/$distfile"
-                ;;
-        esac
-    fi
     
     if [ -f "$cache_file" ]; then
         cp "$cache_file" "$port_name/"
-        info "✅ Copied: $distfile ($(du -h "$port_name/$distfile" | cut -f1))"
+        info "  ✅ Copied: $distfile ($(du -h "$port_name/$distfile" | cut -f1))"
+        ((copied_count++))
     else
-        error "File not found in cache: $cache_file"
+        error "  File not found in cache: $cache_file"
         failed_files+=("$port_name:$distfile")
     fi
 done
+
+echo ""
 
 # Check for failures
 if [ ${#failed_files[@]} -gt 0 ]; then
@@ -166,7 +152,7 @@ if [ ${#failed_files[@]} -gt 0 ]; then
     exit 1
 fi
 
-info "✅ All distfiles copied from cache successfully"
+info "✅ All $copied_count distfiles copied from cache successfully"
 
 # Phase 2: Transfer distfiles to legacy VM
 header "Phase 2: Transferring distfiles to legacy VM"
