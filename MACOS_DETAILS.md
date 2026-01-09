@@ -39,11 +39,12 @@ This document provides a reference table for macOS versions, Darwin kernel versi
 
 ## SSL/TLS Compatibility Notes
 
-| macOS Version Range | SSL/TLS Issues | Recommended Solution |
+| macOS Version Range | SSL/TLS Issues | Automatic Solution |
 |-------------------|----------------|---------------------|
-| macOS 10.7 and earlier | GitHub SSL handshake failures | Use MacPorts curl with custom fetch override |
-| macOS 10.8 - 11.x | Occasional SSL issues | Use MacPorts curl, may need custom fetch |
-| macOS 12 and later | No SSL issues | Use standard GitHub portgroup |
+| macOS 10.11 and earlier (Darwin 15) | GitHub SSL handshake failures | GitHub portgroup automatically uses MacPorts curl |
+| macOS 10.12 and later (Darwin 16+) | No SSL issues | Standard fetch mechanism works |
+
+**Note:** The GitHub portgroup (github 1.0) automatically handles SSL/TLS issues on older macOS versions. Ports using `PortGroup github 1.0` will automatically use MacPorts curl for fetching on Darwin 15 and earlier.
 
 ## Portfile Conditional Logic Examples
 
@@ -60,22 +61,27 @@ platform darwin {
 }
 ```
 
-### Legacy Support with SSL Workaround
+### GitHub-based Portfile
+```tcl
+# SSL workaround is automatically handled by github 1.0 portgroup for Darwin 15 and earlier
+PortSystem          1.0
+PortGroup           github 1.0
+
+github.setup        owner repo version
+# No custom fetch logic needed - portgroup handles SSL issues automatically
+```
+
+### Legacy Support Selection
 ```tcl
 platform darwin {
     if {${os.major} <= 11} {
-        # Legacy Support 1.1 + SSL workaround
+        # Legacy Support 1.1 for very old systems
         PortGroup           legacysupport 1.1
-        depends_build-append port:curl
-        
-        fetch {
-            system "curl -L -o ${distpath}/${distname}.tar.xz 'https://github.com/${github.author}/${github.project}/releases/download/${git.branch}/${distname}.tar.xz'"
-        }
-    } elseif {${os.major} <= 15} {
-        # Legacy Support 1.2 (no SSL workaround needed)
+    } elseif {${os.major} <= 20} {
+        # Legacy Support 1.2 for intermediate systems
         PortGroup           legacysupport 1.2
     }
-    # macOS 16+: No legacy support needed
+    # macOS 12+ (Darwin 21+): No legacy support needed
 }
 ```
 

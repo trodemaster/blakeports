@@ -1,0 +1,271 @@
+name: Update MacPorts on Legacy VMs
+
+on:
+  workflow_dispatch:
+    inputs:
+      macports_version:
+        description: 'MacPorts version to install (e.g., "2.11.6" or leave empty for latest)'
+        required: false
+        default: ''
+        type: string
+      branch:
+        description: 'Branch to use for scripts'
+        required: false
+        default: 'main'
+        type: string
+      run_tenfive:
+        description: 'Mac OS X 10.5 (Leopard)'
+        required: false
+        default: true
+        type: boolean
+      run_tensix:
+        description: 'Mac OS X 10.6 (Snow Leopard)'
+        required: false
+        default: true
+        type: boolean
+      run_tenseven:
+        description: 'Mac OS X 10.7 (Lion)'
+        required: false
+        default: true
+        type: boolean
+      run_teneight:
+        description: 'Mac OS X 10.8 (Mountain Lion)'
+        required: false
+        default: true
+        type: boolean
+      run_tennine:
+        description: 'Mac OS X 10.9 (Mavericks)'
+        required: false
+        default: true
+        type: boolean
+      run_tenten:
+        description: 'Mac OS X 10.10 (Yosemite)'
+        required: false
+        default: true
+        type: boolean
+      run_teneleven:
+        description: 'Mac OS X 10.11 (El Capitan)'
+        required: false
+        default: true
+        type: boolean
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          MATRIX='{"include":['
+          FIRST=true
+
+          # Mac OS X 10.5
+          if [[ "${{ inputs.run_tenfive }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tenfive","runner":["self-hosted","tenfive"],"vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenFive","os_version":"10.5","timeout":"120"}'
+            FIRST=false
+          fi
+
+          # Mac OS X 10.6
+          if [[ "${{ inputs.run_tensix }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tensix","runner":["self-hosted","tensix"],"vm_ip":"${{ vars.LEGACY_TENSIX_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenSix","os_version":"10.6","timeout":"120"}'
+            FIRST=false
+          fi
+
+          # Mac OS X 10.7
+          if [[ "${{ inputs.run_tenseven }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tenseven","runner":["self-hosted","tenseven"],"vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenSeven","os_version":"10.7","timeout":"120"}'
+            FIRST=false
+          fi
+
+          # Mac OS X 10.8
+          if [[ "${{ inputs.run_teneight }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"teneight","runner":["self-hosted","teneight"],"vm_ip":"${{ vars.LEGACY_TENEIGHT_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenEight","os_version":"10.8","timeout":"120"}'
+            FIRST=false
+          fi
+
+          # Mac OS X 10.9
+          if [[ "${{ inputs.run_tennine }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tennine","runner":["self-hosted","tennine"],"vm_ip":"${{ vars.LEGACY_TENNINE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenNine","os_version":"10.9","timeout":"120"}'
+            FIRST=false
+          fi
+
+          # Mac OS X 10.10
+          if [[ "${{ inputs.run_tenten }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tenten","runner":["self-hosted","tenten"],"vm_ip":"${{ vars.LEGACY_TENTEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenTen","os_version":"10.10","timeout":"120"}'
+            FIRST=false
+          fi
+
+          # Mac OS X 10.11
+          if [[ "${{ inputs.run_teneleven }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"teneleven","runner":["self-hosted","teneleven"],"vm_ip":"${{ vars.LEGACY_TENELEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenEleven","os_version":"10.11","timeout":"120"}'
+            FIRST=false
+          fi
+
+          # If no platforms selected, fail
+          if [[ "$FIRST" == "true" ]]; then
+            echo "Error: No platforms selected"
+            exit 1
+          fi
+
+          MATRIX+=']}'
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix:"
+          echo "$MATRIX" | jq '.'
+
+  update-macports:
+    needs: setup-matrix
+    name: update-macports (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ fromJSON(matrix.timeout) }}
+    strategy:
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository (for scripts)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Verify VM configuration
+        run: |
+          # Read VM configuration from mounted config file
+          CONFIG_FILE="/config/runners.json"
+          
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Error: Config file not found at $CONFIG_FILE"
+            ls -la /config/ 2>/dev/null || echo "  /config directory not accessible"
+            exit 1
+          fi
+          
+          VM_IP=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_ip // empty" "$CONFIG_FILE")
+          VM_USERNAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_user // empty" "$CONFIG_FILE")
+          SSH_KEY_NAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].ssh_key // \"oldmac\"" "$CONFIG_FILE")
+          SSH_KEY_PATH="/config/ssh_keys/${SSH_KEY_NAME}"
+          
+          if [ -z "$VM_IP" ]; then
+            echo "Error: VM IP not set for ${{ matrix.platform }} in config"
+            exit 1
+          fi
+          if [ -z "$VM_USERNAME" ]; then
+            echo "Error: VM username not set for ${{ matrix.platform }} in config"
+            exit 1
+          fi
+          if [ ! -f "$SSH_KEY_PATH" ]; then
+            echo "Error: SSH key not found at $SSH_KEY_PATH"
+            exit 1
+          fi
+          
+          echo "VM_IP=$VM_IP" >> $GITHUB_ENV
+          echo "VM_USERNAME=$VM_USERNAME" >> $GITHUB_ENV
+          echo "SSH_KEY_PATH=$SSH_KEY_PATH" >> $GITHUB_ENV
+          
+          echo "✅ Configuration verified. Will connect to: $VM_USERNAME@$VM_IP"
+
+      - name: Display current system information
+        continue-on-error: true
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set +e
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            echo "=================================================="
+            echo "  Updating MacPorts on Mac OS X ${{ matrix.os_version }} (${{ matrix.vm_name }})"
+            echo "=================================================="
+            echo ""
+            echo "System Information:"
+            sw_vers || echo "⚠️  Could not determine macOS version"
+            echo ""
+            echo "Current MacPorts version:"
+            port version || echo "⚠️  MacPorts not found"
+            echo ""
+            uname -a || echo "⚠️  Could not get system information"
+          EOF
+
+      - name: Transfer update script to VM
+        run: |
+          echo "Transferring updatemacports script to ${{ matrix.vm_name }} VM..."
+          scp -i ${{ env.SSH_KEY_PATH }} \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o HostKeyAlgorithms=+ssh-rsa \
+              -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+              scripts/updatemacports \
+              ${{ env.VM_USERNAME }}@${{ env.VM_IP }}:/tmp/
+          echo "✅ Script transferred"
+
+      - name: Make script executable on VM
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            chmod +x /tmp/updatemacports
+            echo "✅ Script is executable"
+          EOF
+
+      - name: Execute MacPorts update
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set -e
+            set -o pipefail
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            
+            echo "Starting MacPorts update process..."
+            
+            VERSION="${{ inputs.macports_version }}"
+            if [ -n "$VERSION" ]; then
+              echo "Target version: $VERSION"
+              /tmp/updatemacports "$VERSION"
+            else
+              echo "Target version: latest (auto-detect)"
+              /tmp/updatemacports
+            fi
+          EOF
+
+      - name: Verify updated MacPorts version
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set -e
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            
+            echo ""
+            echo "=================================================="
+            echo "  MacPorts Update Verification"
+            echo "=================================================="
+            echo ""
+            echo "New MacPorts version:"
+            port version
+            echo ""
+            echo "MacPorts curl location:"
+            which curl
+            echo ""
+            echo "MacPorts curl version:"
+            /opt/local/bin/curl --version | head -1
+            echo ""
+            echo "✅ MacPorts update completed successfully on ${{ matrix.vm_name }}"
+          EOF
+
+      - name: Cleanup
+        if: always()
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            rm -f /tmp/updatemacports
+            echo "✅ Cleanup complete"
+          EOF
