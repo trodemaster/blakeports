@@ -158,17 +158,42 @@ info "✅ All $copied_count distfiles copied from cache successfully"
 header "Phase 2: Transferring distfiles to legacy VM"
 
 info "Creating temporary transfer directory on VM..."
+
+# Build list of unique port names from manifest
+declare -a PORT_DIRS=()
+for entry in "${DISTFILES[@]}"; do
+    port_name=$(echo "$entry" | cut -d: -f1)
+    # Check if already in list
+    found=0
+    if [ ${#PORT_DIRS[@]} -gt 0 ]; then
+        for existing in "${PORT_DIRS[@]}"; do
+            if [ "$existing" = "$port_name" ]; then
+                found=1
+                break
+            fi
+        done
+    fi
+    if [ $found -eq 0 ]; then
+        PORT_DIRS+=("$port_name")
+    fi
+done
+
+# Create directories string
+DIRS_STRING=$(IFS=' ' ; echo "${PORT_DIRS[*]}")
+
 ssh -i "$SSH_KEY_PATH" \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
     -o HostKeyAlgorithms=+ssh-rsa \
     -o PubkeyAcceptedKeyTypes=+ssh-rsa \
-    "$VM_USERNAME@$VM_IP" bash <<'VMEOF'
+    "$VM_USERNAME@$VM_IP" bash <<VMEOF
 set -e
 # Create temp directory for transfers (no sudo needed)
 mkdir -p /tmp/prefetch-distfiles
-# Create distfiles structure with sudo
-sudo mkdir -p /opt/local/var/macports/distfiles/{curl,zlib,openssl3,pkgconfig,libiconv,gperf,perl5.34,db48,gdbm,gettext,ncurses,readline,xz,unzip}
+# Create distfiles structure with sudo - one directory at a time
+for dir in $DIRS_STRING; do
+    sudo mkdir -p /opt/local/var/macports/distfiles/\$dir
+done
 echo "✅ Directories created"
 VMEOF
 
