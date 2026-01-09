@@ -32,16 +32,23 @@ The solution uses a three-phase approach:
 GitHub Actions Container                Legacy VM
 (Ubuntu/modern curl)                   (macOS 10.5-10.11)
         │                                    │
-        ├─ Download distfiles ─────────────>│
-        │   (zlib, openssl3, curl, etc)    │
+        ├─ Run prefetch-distfiles            │
+        │   (uses container's curl)          │
+        │                                    │
+        ├─ Download from distfiles.macports.org
+        │   (zlib, openssl3, curl, etc)     │
+        │   Total: ~150MB                    │
         │                                    │
         ├─ SCP files ──────────────────────>│ /opt/local/var/macports/distfiles/
         │                                    │
         │                          port install curl
-        │                          (finds files locally)
+        │                          (finds files locally,
+        │                           NO network needed)
         │                                    │
         │<───────── MacPorts updated ───────┤
 ```
+
+**IMPORTANT**: The prefetch script runs IN THE CONTAINER, not on the VM. The container has modern curl that can handle HTTPS.
 
 ## Implementation
 
