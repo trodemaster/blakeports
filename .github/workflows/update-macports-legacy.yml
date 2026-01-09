@@ -214,14 +214,6 @@ jobs:
               ${{ env.VM_USERNAME }}@${{ env.VM_IP }}:/tmp/
           echo "✅ Script transferred"
 
-      - name: Debug - Check /config directory
-        run: |
-          echo "Checking /config directory structure..."
-          ls -la /config/ 2>/dev/null || echo "/config not found"
-          ls -la /config/distfiles-cache/ 2>/dev/null || echo "/config/distfiles-cache not found"
-          echo "Current working directory: $(pwd)"
-          echo "Home directory: $HOME"
-
       - name: Pre-fetch distfiles for curl bootstrap
         run: |
           echo "Pre-fetching distfiles for curl on ${{ matrix.vm_name }}..."
