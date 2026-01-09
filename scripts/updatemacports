@@ -134,27 +134,41 @@ info "Current MacPorts version: $CURRENT_VERSION"
 
 export PATH="${MACPORTS_PREFIX}/bin:${MACPORTS_PREFIX}/sbin:$PATH"
 
-# Step 1: Ensure MacPorts curl is installed
-info "Checking for MacPorts curl..."
-if [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
-    info "MacPorts curl not found, installing with minimal variants (+ssl only)..."
-    
-    # Check if distfiles were pre-fetched (for legacy systems with SSL issues)
-    if [ -f "${MACPORTS_PREFIX}/var/macports/distfiles/curl/curl-8.13.0.tar.xz" ]; then
-        info "Pre-fetched distfiles found, using local sources..."
-    fi
-    
-    # Install with minimal variants to reduce dependency chain
-    # Disable brotli, http2, idn, psl, zstd to avoid circular dependency with openssl
-    if sudo port install curl -brotli -http2 -idn -psl -zstd +ssl; then
-        info "MacPorts curl installed successfully"
+# Determine if this is a fresh MacPorts install or needs two-stage build
+FRESH_INSTALL=false
+if [ ! -f "${MACPORTS_PREFIX}/bin/port" ]; then
+    FRESH_INSTALL=true
+    info "Fresh MacPorts install detected - will use two-stage build process"
+elif [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
+    FRESH_INSTALL=true
+    info "MacPorts curl missing - will use two-stage build process"
+fi
+
+# Step 1: Ensure MacPorts curl is installed (or prepare for two-stage build)
+if [[ "$FRESH_INSTALL" == "false" ]]; then
+    info "Checking for MacPorts curl..."
+    if [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
+        info "MacPorts curl not found, installing with minimal variants (+ssl only)..."
+        
+        # Check if distfiles were pre-fetched (for legacy systems with SSL issues)
+        if [ -f "${MACPORTS_PREFIX}/var/macports/distfiles/curl/curl-8.13.0.tar.xz" ]; then
+            info "Pre-fetched distfiles found, using local sources..."
+        fi
+        
+        # Install with minimal variants to reduce dependency chain
+        # Disable brotli, http2, idn, psl, zstd to avoid circular dependency with openssl
+        if sudo port install curl -brotli -http2 -idn -psl -zstd +ssl; then
+            info "MacPorts curl installed successfully"
+        else
+            error "Failed to install MacPorts curl"
+            exit 1
+        fi
     else
-        error "Failed to install MacPorts curl"
-        exit 1
+        info "MacPorts curl is already installed: ${MACPORTS_PREFIX}/bin/curl"
+        ${MACPORTS_PREFIX}/bin/curl --version | head -1
     fi
 else
-    info "MacPorts curl is already installed: ${MACPORTS_PREFIX}/bin/curl"
-    ${MACPORTS_PREFIX}/bin/curl --version | head -1
+    info "Skipping curl install for now - will install after stage 1 build"
 fi
 
 # Determine MacPorts version to install
@@ -162,21 +176,28 @@ if [ -z "$MACPORTS_VERSION" ]; then
     info "No version specified, attempting to detect latest stable version..."
     
     # Try to get latest version from GitHub API
+    CURL_FOR_DETECTION=""
     if [ -f "${MACPORTS_PREFIX}/bin/curl" ]; then
-        LATEST_VERSION=$(${MACPORTS_PREFIX}/bin/curl -s https://api.github.com/repos/macports/macports-base/releases/latest | \
+        CURL_FOR_DETECTION="${MACPORTS_PREFIX}/bin/curl"
+    elif [ -f "/usr/bin/curl" ]; then
+        CURL_FOR_DETECTION="/usr/bin/curl"
+        warn "Using system curl for version detection (may fail on legacy systems)"
+    fi
+    
+    if [ -n "$CURL_FOR_DETECTION" ]; then
+        LATEST_VERSION=$($CURL_FOR_DETECTION -s https://api.github.com/repos/macports/macports-base/releases/latest | \
             grep '"tag_name"' | sed 's/.*"tag_name": "v\([^"]*\)".*/\1/' || echo "")
         
         if [ -n "$LATEST_VERSION" ]; then
             MACPORTS_VERSION="$LATEST_VERSION"
             info "Detected latest version: $MACPORTS_VERSION"
         else
-            error "Could not detect latest version. Please specify version manually."
-            echo "Usage: $0 [--force] [VERSION]"
-            echo "Example: $0 2.11.6"
-            exit 1
+            warn "Could not detect latest version from GitHub API"
+            info "Defaulting to version 2.11.6"
+            MACPORTS_VERSION="2.11.6"
         fi
     else
-        error "curl not available to detect latest version. Please specify version manually."
+        error "No curl available to detect latest version. Please specify version manually."
         echo "Usage: $0 [--force] [VERSION]"
         echo "Example: $0 2.11.6"
         exit 1
@@ -245,13 +266,23 @@ cd "$BUILD_DIR"
 info "Downloading MacPorts base tarball..."
 info "URL: $TARBALL_URL"
 
-# Use MacPorts curl
-CURL_BIN="${MACPORTS_PREFIX}/bin/curl"
-info "Using MacPorts curl: $CURL_BIN"
+# Determine which curl to use
+if [ -f "${MACPORTS_PREFIX}/bin/curl" ]; then
+    CURL_BIN="${MACPORTS_PREFIX}/bin/curl"
+    info "Using MacPorts curl: $CURL_BIN"
+else
+    CURL_BIN="/usr/bin/curl"
+    info "Using system curl: $CURL_BIN (MacPorts curl not yet available)"
+    warn "Note: System curl may have SSL issues on legacy systems"
+fi
 
 if ! $CURL_BIN -f -L -o "$TARBALL_NAME" "$TARBALL_URL"; then
     error "Failed to download MacPorts tarball"
     error "URL: $TARBALL_URL"
+    if [ "$CURL_BIN" = "/usr/bin/curl" ]; then
+        error "System curl failed - this is expected on some legacy systems"
+        error "Try pre-downloading the tarball or using a different system"
+    fi
     exit 1
 fi
 
@@ -269,34 +300,113 @@ cd "$EXTRACTED_DIR"
 
 info "Extracted to: $(pwd)"
 
-# Step 4: Configure with --with-curlprefix
-info "Configuring MacPorts base..."
-info "Using --with-curlprefix=${MACPORTS_PREFIX}"
+# Step 4: Configure and build MacPorts
+# For fresh installs, do two-stage build:
+#   Stage 1: Build without --with-curlprefix (uses system tools)
+#   Install curl with pre-fetched distfiles
+#   Stage 2: Rebuild with --with-curlprefix (uses MacPorts curl)
 
-if ! ./configure --prefix="${MACPORTS_PREFIX}" --with-curlprefix="${MACPORTS_PREFIX}"; then
-    error "Configure failed"
-    exit 1
+if [[ "$FRESH_INSTALL" == "true" ]]; then
+    # STAGE 1: Build without curl prefix
+    info "=========================================="
+    info "STAGE 1: Building MacPorts (without curl)"
+    info "=========================================="
+    info "Configuring MacPorts base..."
+    info "Using basic configuration (no curlprefix)"
+    
+    if ! ./configure --prefix="${MACPORTS_PREFIX}"; then
+        error "Stage 1 configure failed"
+        exit 1
+    fi
+    
+    info "Building MacPorts base..."
+    if ! make; then
+        error "Stage 1 build failed"
+        exit 1
+    fi
+    
+    info "Installing MacPorts base..."
+    if ! sudo make install; then
+        error "Stage 1 installation failed"
+        exit 1
+    fi
+    
+    info "✅ Stage 1 complete - MacPorts installed without curl support"
+    
+    # Now install curl using the freshly built MacPorts
+    info "=========================================="
+    info "Installing curl with pre-fetched distfiles"
+    info "=========================================="
+    
+    if [ -f "${MACPORTS_PREFIX}/var/macports/distfiles/curl/curl-8.13.0.tar.xz" ]; then
+        info "Pre-fetched distfiles found, using local sources..."
+    else
+        warn "Pre-fetched distfiles not found - curl installation may fail on legacy systems"
+    fi
+    
+    if sudo port install curl -brotli -http2 -idn -psl -zstd +ssl; then
+        info "✅ MacPorts curl installed successfully"
+        ${MACPORTS_PREFIX}/bin/curl --version | head -1
+    else
+        error "Failed to install MacPorts curl"
+        exit 1
+    fi
+    
+    # STAGE 2: Rebuild with curl prefix
+    info "=========================================="
+    info "STAGE 2: Rebuilding MacPorts (with curl)"
+    info "=========================================="
+    info "Cleaning previous build..."
+    make clean || true
+    
+    info "Reconfiguring with --with-curlprefix=${MACPORTS_PREFIX}"
+    
+    if ! ./configure --prefix="${MACPORTS_PREFIX}" --with-curlprefix="${MACPORTS_PREFIX}"; then
+        error "Stage 2 configure failed"
+        exit 1
+    fi
+    
+    info "Rebuilding MacPorts base..."
+    if ! make; then
+        error "Stage 2 build failed"
+        exit 1
+    fi
+    
+    info "Reinstalling MacPorts base..."
+    if ! sudo make install; then
+        error "Stage 2 installation failed"
+        exit 1
+    fi
+    
+    info "✅ Stage 2 complete - MacPorts now uses MacPorts curl"
+else
+    # Single-stage build (normal case when MacPorts already exists)
+    info "Configuring MacPorts base..."
+    info "Using --with-curlprefix=${MACPORTS_PREFIX}"
+    
+    if ! ./configure --prefix="${MACPORTS_PREFIX}" --with-curlprefix="${MACPORTS_PREFIX}"; then
+        error "Configure failed"
+        exit 1
+    fi
+    
+    info "Configuration complete"
+    
+    info "Building MacPorts base..."
+    if ! make; then
+        error "Build failed"
+        exit 1
+    fi
+    
+    info "Build complete"
+    
+    info "Installing MacPorts base..."
+    if ! sudo make install; then
+        error "Installation failed"
+        exit 1
+    fi
+    
+    info "Installation complete"
 fi
-
-info "Configuration complete"
-
-# Step 5: Build
-info "Building MacPorts base..."
-if ! make; then
-    error "Build failed"
-    exit 1
-fi
-
-info "Build complete"
-
-# Step 6: Install
-info "Installing MacPorts base..."
-if ! sudo make install; then
-    error "Installation failed"
-    exit 1
-fi
-
-info "Installation complete"
 
 # Step 7: Verify installation
 info "Verifying installation..."
