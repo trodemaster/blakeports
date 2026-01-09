@@ -119,7 +119,8 @@ failed_files=()
 for entry in "${DISTFILES[@]}"; do
     port_name=$(echo "$entry" | cut -d: -f1)
     distfile=$(echo "$entry" | cut -d: -f2)
-    url=$(echo "$entry" | cut -d: -f3)
+    # Extract URL (everything after second colon, handles https:// correctly)
+    url=$(echo "$entry" | cut -d: -f3-)
     
     echo ""
     info "[$((++downloaded_count))/$total_files] Downloading $port_name: $distfile"
