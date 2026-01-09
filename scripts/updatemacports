@@ -1,0 +1,205 @@
+#!/bin/bash
+# Script to update MacPorts base on legacy VMs
+# Ensures MacPorts curl is installed, then downloads and builds MacPorts base
+# with --with-curlprefix=/opt/local to use MacPorts curl instead of system curl
+#
+# Usage: updatemacports [VERSION]
+#   VERSION: MacPorts version to install (e.g., "2.11.6")
+#            If not specified, attempts to detect latest stable version
+
+set -euo pipefail
+IFS=$'\n\t'
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Function to print colored messages
+info() {
+    echo -e "${GREEN}ℹ️  $*${NC}"
+}
+
+warn() {
+    echo -e "${YELLOW}⚠️  $*${NC}"
+}
+
+error() {
+    echo -e "${RED}❌ $*${NC}"
+}
+
+# Parse arguments
+MACPORTS_VERSION="${1:-}"
+
+# Source profile if available to get MacPorts in PATH
+if [ -f ~/.profile ]; then
+    source ~/.profile
+fi
+
+# Verify MacPorts is installed
+if ! command -v port &> /dev/null; then
+    error "MacPorts is not installed or not in PATH"
+    error "Please install MacPorts first"
+    exit 1
+fi
+
+info "MacPorts is installed: $(which port)"
+CURRENT_VERSION=$(port version | head -1 || echo "unknown")
+info "Current MacPorts version: $CURRENT_VERSION"
+
+# Set MacPorts prefix
+MACPORTS_PREFIX="/opt/local"
+export PATH="${MACPORTS_PREFIX}/bin:${MACPORTS_PREFIX}/sbin:$PATH"
+
+# Step 1: Ensure MacPorts curl is installed
+info "Checking for MacPorts curl..."
+if [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
+    info "MacPorts curl not found, installing..."
+    sudo port install curl || {
+        error "Failed to install MacPorts curl"
+        exit 1
+    }
+    info "MacPorts curl installed successfully"
+else
+    info "MacPorts curl is already installed: $(which curl)"
+    curl --version | head -1
+fi
+
+# Determine MacPorts version to install
+if [ -z "$MACPORTS_VERSION" ]; then
+    info "No version specified, attempting to detect latest stable version..."
+    
+    # Try to get latest version from GitHub API
+    if command -v curl &> /dev/null; then
+        LATEST_VERSION=$(curl -s https://api.github.com/repos/macports/macports-base/releases/latest | \
+            grep '"tag_name"' | sed 's/.*"tag_name": "v\([^"]*\)".*/\1/' || echo "")
+        
+        if [ -n "$LATEST_VERSION" ]; then
+            MACPORTS_VERSION="$LATEST_VERSION"
+            info "Detected latest version: $MACPORTS_VERSION"
+        else
+            error "Could not detect latest version. Please specify version manually."
+            echo "Usage: $0 [VERSION]"
+            echo "Example: $0 2.11.6"
+            exit 1
+        fi
+    else
+        error "curl not available to detect latest version. Please specify version manually."
+        echo "Usage: $0 [VERSION]"
+        echo "Example: $0 2.11.6"
+        exit 1
+    fi
+fi
+
+info "Target MacPorts version: $MACPORTS_VERSION"
+
+# Check if we're already on this version
+if echo "$CURRENT_VERSION" | grep -q "$MACPORTS_VERSION"; then
+    info "Already running MacPorts $MACPORTS_VERSION"
+    info "No update needed"
+    exit 0
+fi
+
+# Step 2: Download MacPorts base tarball
+TARBALL_NAME="MacPorts-${MACPORTS_VERSION}.tar.bz2"
+TARBALL_URL="https://distfiles.macports.org/MacPorts/${TARBALL_NAME}"
+BUILD_DIR="/tmp/macports-build-$$"
+
+# Clean up any existing build directory
+rm -rf "$BUILD_DIR"
+mkdir -p "$BUILD_DIR"
+cd "$BUILD_DIR"
+
+info "Downloading MacPorts base tarball..."
+info "URL: $TARBALL_URL"
+
+# Use MacPorts curl if available, fallback to system curl
+if [ -f "${MACPORTS_PREFIX}/bin/curl" ]; then
+    CURL_BIN="${MACPORTS_PREFIX}/bin/curl"
+    info "Using MacPorts curl: $CURL_BIN"
+else
+    CURL_BIN="curl"
+    warn "Using system curl (MacPorts curl not found)"
+fi
+
+if ! $CURL_BIN -f -L -o "$TARBALL_NAME" "$TARBALL_URL"; then
+    error "Failed to download MacPorts tarball"
+    error "URL: $TARBALL_URL"
+    exit 1
+fi
+
+info "Tarball downloaded: $(ls -lh "$TARBALL_NAME")"
+
+# Step 3: Extract tarball
+info "Extracting tarball..."
+tar xjf "$TARBALL_NAME" || {
+    error "Failed to extract tarball"
+    exit 1
+}
+
+EXTRACTED_DIR=$(ls -d MacPorts-* | head -1)
+cd "$EXTRACTED_DIR"
+
+info "Extracted to: $(pwd)"
+
+# Step 4: Configure with --with-curlprefix
+info "Configuring MacPorts base..."
+info "Using --with-curlprefix=${MACPORTS_PREFIX}"
+
+if ! ./configure --prefix="${MACPORTS_PREFIX}" --with-curlprefix="${MACPORTS_PREFIX}"; then
+    error "Configure failed"
+    exit 1
+fi
+
+info "Configuration complete"
+
+# Step 5: Build
+info "Building MacPorts base..."
+if ! make; then
+    error "Build failed"
+    exit 1
+fi
+
+info "Build complete"
+
+# Step 6: Install
+info "Installing MacPorts base..."
+if ! sudo make install; then
+    error "Installation failed"
+    exit 1
+fi
+
+info "Installation complete"
+
+# Step 7: Verify installation
+info "Verifying installation..."
+NEW_VERSION=$(port version | head -1 || echo "unknown")
+info "New MacPorts version: $NEW_VERSION"
+
+if echo "$NEW_VERSION" | grep -q "$MACPORTS_VERSION"; then
+    info "✅ MacPorts successfully updated to version $MACPORTS_VERSION"
+else
+    warn "Version check: Expected $MACPORTS_VERSION, got $NEW_VERSION"
+    warn "Update may have completed, but version string doesn't match"
+fi
+
+# Verify curl is being used correctly
+info "Verifying curl configuration..."
+if port -v 2>&1 | grep -q "curl"; then
+    info "MacPorts is configured to use curl"
+else
+    warn "Could not verify curl configuration in port output"
+fi
+
+# Cleanup
+info "Cleaning up build directory..."
+cd /
+rm -rf "$BUILD_DIR"
+info "Cleanup complete"
+
+info "🎉 MacPorts update process completed!"
+info "Previous version: $CURRENT_VERSION"
+info "New version: $NEW_VERSION"
+
+exit 0
