@@ -3,9 +3,14 @@
 # Ensures MacPorts curl is installed, then downloads and builds MacPorts base
 # with --with-curlprefix=/opt/local to use MacPorts curl instead of system curl
 #
-# Usage: updatemacports [VERSION]
+# Usage: updatemacports [--force] [VERSION]
+#   --force, -f: Force rebuild even if version matches and curl is configured
 #   VERSION: MacPorts version to install (e.g., "2.11.6")
 #            If not specified, attempts to detect latest stable version
+#
+# The script will automatically rebuild if:
+#   - Version is out of date
+#   - OR port binary is not linked against MacPorts curl
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -29,8 +34,87 @@ error() {
     echo -e "${RED}❌ $*${NC}"
 }
 
+# Set MacPorts prefix
+MACPORTS_PREFIX="/opt/local"
+
+# Check if MacPorts base is compiled with MacPorts curl
+# Returns 0 if properly configured, 1 if rebuild needed
+check_curl_configuration() {
+    local CURL_LINK=""
+    
+    # Check if MacPorts curl exists first
+    if [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
+        return 1  # MacPorts curl not installed
+    fi
+    
+    # Check what curl the port binary links against using otool
+    if command -v otool &> /dev/null; then
+        CURL_LINK=$(otool -L "${MACPORTS_PREFIX}/bin/port" 2>/dev/null | grep -i libcurl || echo "")
+        if [ -n "$CURL_LINK" ]; then
+            if echo "$CURL_LINK" | grep -q "/opt/local"; then
+                return 0  # Linked against MacPorts curl
+            else
+                return 1  # Linked against system curl
+            fi
+        fi
+    fi
+    
+    # If we can't determine, assume rebuild needed
+    return 1
+}
+
+# Log the current curl configuration status
+log_curl_configuration() {
+    info "========================================"
+    info "  MacPorts Curl Configuration Status"
+    info "========================================"
+    
+    # Check if MacPorts curl exists
+    if [ -f "${MACPORTS_PREFIX}/bin/curl" ]; then
+        info "MacPorts curl installed: YES"
+        info "MacPorts curl path: ${MACPORTS_PREFIX}/bin/curl"
+        info "MacPorts curl version: $(${MACPORTS_PREFIX}/bin/curl --version | head -1)"
+    else
+        warn "MacPorts curl installed: NO"
+    fi
+    
+    # Check port binary linkage
+    if command -v otool &> /dev/null; then
+        local CURL_LINK=$(otool -L "${MACPORTS_PREFIX}/bin/port" 2>/dev/null | grep -i libcurl || echo "")
+        if [ -n "$CURL_LINK" ]; then
+            info "Port binary libcurl linkage:"
+            echo "$CURL_LINK" | sed 's/^/    /'
+            if echo "$CURL_LINK" | grep -q "/opt/local"; then
+                info "RESULT: Port binary IS linked against MacPorts curl ✓"
+            else
+                warn "RESULT: Port binary is NOT linked against MacPorts curl ✗"
+            fi
+        else
+            info "Port binary does not directly link libcurl (uses Tcl curl package)"
+        fi
+    else
+        warn "otool not available, cannot check binary linkage"
+    fi
+    
+    info "========================================"
+}
+
 # Parse arguments
-MACPORTS_VERSION="${1:-}"
+FORCE_REBUILD=false
+MACPORTS_VERSION=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --force|-f)
+            FORCE_REBUILD=true
+            shift
+            ;;
+        *)
+            MACPORTS_VERSION="$1"
+            shift
+            ;;
+    esac
+done
 
 # Source profile if available to get MacPorts in PATH
 if [ -f ~/.profile ]; then
@@ -48,8 +132,6 @@ info "MacPorts is installed: $(which port)"
 CURRENT_VERSION=$(port version | head -1 || echo "unknown")
 info "Current MacPorts version: $CURRENT_VERSION"
 
-# Set MacPorts prefix
-MACPORTS_PREFIX="/opt/local"
 export PATH="${MACPORTS_PREFIX}/bin:${MACPORTS_PREFIX}/sbin:$PATH"
 
 # Step 1: Ensure MacPorts curl is installed
@@ -62,8 +144,8 @@ if [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
     }
     info "MacPorts curl installed successfully"
 else
-    info "MacPorts curl is already installed: $(which curl)"
-    curl --version | head -1
+    info "MacPorts curl is already installed: ${MACPORTS_PREFIX}/bin/curl"
+    ${MACPORTS_PREFIX}/bin/curl --version | head -1
 fi
 
 # Determine MacPorts version to install
@@ -71,8 +153,8 @@ if [ -z "$MACPORTS_VERSION" ]; then
     info "No version specified, attempting to detect latest stable version..."
     
     # Try to get latest version from GitHub API
-    if command -v curl &> /dev/null; then
-        LATEST_VERSION=$(curl -s https://api.github.com/repos/macports/macports-base/releases/latest | \
+    if [ -f "${MACPORTS_PREFIX}/bin/curl" ]; then
+        LATEST_VERSION=$(${MACPORTS_PREFIX}/bin/curl -s https://api.github.com/repos/macports/macports-base/releases/latest | \
             grep '"tag_name"' | sed 's/.*"tag_name": "v\([^"]*\)".*/\1/' || echo "")
         
         if [ -n "$LATEST_VERSION" ]; then
@@ -80,13 +162,13 @@ if [ -z "$MACPORTS_VERSION" ]; then
             info "Detected latest version: $MACPORTS_VERSION"
         else
             error "Could not detect latest version. Please specify version manually."
-            echo "Usage: $0 [VERSION]"
+            echo "Usage: $0 [--force] [VERSION]"
             echo "Example: $0 2.11.6"
             exit 1
         fi
     else
         error "curl not available to detect latest version. Please specify version manually."
-        echo "Usage: $0 [VERSION]"
+        echo "Usage: $0 [--force] [VERSION]"
         echo "Example: $0 2.11.6"
         exit 1
     fi
@@ -94,12 +176,52 @@ fi
 
 info "Target MacPorts version: $MACPORTS_VERSION"
 
-# Check if we're already on this version
+# Determine if rebuild is needed
+NEEDS_REBUILD=false
+REBUILD_REASON=""
+
+# Check version
+VERSION_MATCHES=false
 if echo "$CURRENT_VERSION" | grep -q "$MACPORTS_VERSION"; then
-    info "Already running MacPorts $MACPORTS_VERSION"
-    info "No update needed"
+    VERSION_MATCHES=true
+fi
+
+# Check curl configuration
+CURL_OK=false
+if check_curl_configuration; then
+    CURL_OK=true
+fi
+
+# Log current status
+info "----------------------------------------"
+info "Rebuild Decision:"
+info "  Version check: Current='$CURRENT_VERSION', Target='$MACPORTS_VERSION'"
+info "  Version matches: $VERSION_MATCHES"
+info "  Curl configuration OK: $CURL_OK"
+info "  Force rebuild: $FORCE_REBUILD"
+info "----------------------------------------"
+
+# Decide if rebuild needed
+if [[ "$VERSION_MATCHES" == "false" ]]; then
+    NEEDS_REBUILD=true
+    REBUILD_REASON="version mismatch (have $CURRENT_VERSION, need $MACPORTS_VERSION)"
+elif [[ "$CURL_OK" == "false" ]]; then
+    NEEDS_REBUILD=true
+    REBUILD_REASON="curl not configured (port binary not linked to MacPorts curl)"
+elif [[ "$FORCE_REBUILD" == "true" ]]; then
+    NEEDS_REBUILD=true
+    REBUILD_REASON="force rebuild requested"
+fi
+
+# Log and proceed
+if [[ "$NEEDS_REBUILD" == "false" ]]; then
+    info "MacPorts $MACPORTS_VERSION is up to date and properly configured"
+    info "No rebuild needed"
+    log_curl_configuration
     exit 0
 fi
+
+info "🔨 REBUILD NEEDED: $REBUILD_REASON"
 
 # Step 2: Download MacPorts base tarball
 TARBALL_NAME="MacPorts-${MACPORTS_VERSION}.tar.bz2"
@@ -114,14 +236,9 @@ cd "$BUILD_DIR"
 info "Downloading MacPorts base tarball..."
 info "URL: $TARBALL_URL"
 
-# Use MacPorts curl if available, fallback to system curl
-if [ -f "${MACPORTS_PREFIX}/bin/curl" ]; then
-    CURL_BIN="${MACPORTS_PREFIX}/bin/curl"
-    info "Using MacPorts curl: $CURL_BIN"
-else
-    CURL_BIN="curl"
-    warn "Using system curl (MacPorts curl not found)"
-fi
+# Use MacPorts curl
+CURL_BIN="${MACPORTS_PREFIX}/bin/curl"
+info "Using MacPorts curl: $CURL_BIN"
 
 if ! $CURL_BIN -f -L -o "$TARBALL_NAME" "$TARBALL_URL"; then
     error "Failed to download MacPorts tarball"
@@ -184,13 +301,8 @@ else
     warn "Update may have completed, but version string doesn't match"
 fi
 
-# Verify curl is being used correctly
-info "Verifying curl configuration..."
-if port -v 2>&1 | grep -q "curl"; then
-    info "MacPorts is configured to use curl"
-else
-    warn "Could not verify curl configuration in port output"
-fi
+# Log final curl configuration
+log_curl_configuration
 
 # Cleanup
 info "Cleaning up build directory..."
@@ -201,5 +313,6 @@ info "Cleanup complete"
 info "🎉 MacPorts update process completed!"
 info "Previous version: $CURRENT_VERSION"
 info "New version: $NEW_VERSION"
+info "Rebuild reason was: $REBUILD_REASON"
 
 exit 0
