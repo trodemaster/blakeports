@@ -63,9 +63,6 @@ if {${subport} eq ${name}} {
     startupitem.debug          yes
     
     notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/."
-    
-    # Disable legacy support for newer macOS versions that don't need it
-    legacysupport.newest_darwin_requires_legacy 20
 }
 
 # Netatalk 4.x stub port
