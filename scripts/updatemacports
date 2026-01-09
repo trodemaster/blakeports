@@ -253,7 +253,7 @@ fi
 
 info "🔨 REBUILD NEEDED: $REBUILD_REASON"
 
-# Step 2: Download MacPorts base tarball
+# Step 2: Get MacPorts base tarball (pre-fetched or download)
 TARBALL_NAME="MacPorts-${MACPORTS_VERSION}.tar.bz2"
 TARBALL_URL="https://distfiles.macports.org/MacPorts/${TARBALL_NAME}"
 BUILD_DIR="/tmp/macports-build-$$"
@@ -263,30 +263,38 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-info "Downloading MacPorts base tarball..."
-info "URL: $TARBALL_URL"
-
-# Determine which curl to use
-if [ -f "${MACPORTS_PREFIX}/bin/curl" ]; then
-    CURL_BIN="${MACPORTS_PREFIX}/bin/curl"
-    info "Using MacPorts curl: $CURL_BIN"
+# Check if tarball was pre-fetched by workflow
+if [ -f "/tmp/$TARBALL_NAME" ]; then
+    info "Found pre-fetched MacPorts tarball in /tmp/"
+    info "Copying to build directory..."
+    cp "/tmp/$TARBALL_NAME" "$TARBALL_NAME"
+    info "✅ Using pre-fetched tarball: $(ls -lh "$TARBALL_NAME")"
 else
-    CURL_BIN="/usr/bin/curl"
-    info "Using system curl: $CURL_BIN (MacPorts curl not yet available)"
-    warn "Note: System curl may have SSL issues on legacy systems"
-fi
-
-if ! $CURL_BIN -f -L -o "$TARBALL_NAME" "$TARBALL_URL"; then
-    error "Failed to download MacPorts tarball"
-    error "URL: $TARBALL_URL"
-    if [ "$CURL_BIN" = "/usr/bin/curl" ]; then
-        error "System curl failed - this is expected on some legacy systems"
-        error "Try pre-downloading the tarball or using a different system"
+    info "No pre-fetched tarball found, attempting download..."
+    info "URL: $TARBALL_URL"
+    
+    # Determine which curl to use
+    if [ -f "${MACPORTS_PREFIX}/bin/curl" ]; then
+        CURL_BIN="${MACPORTS_PREFIX}/bin/curl"
+        info "Using MacPorts curl: $CURL_BIN"
+    else
+        CURL_BIN="/usr/bin/curl"
+        info "Using system curl: $CURL_BIN (MacPorts curl not yet available)"
+        warn "Note: System curl may have SSL issues on legacy systems"
     fi
-    exit 1
+    
+    if ! $CURL_BIN -f -L -o "$TARBALL_NAME" "$TARBALL_URL"; then
+        error "Failed to download MacPorts tarball"
+        error "URL: $TARBALL_URL"
+        if [ "$CURL_BIN" = "/usr/bin/curl" ]; then
+            error "System curl failed - this is expected on some legacy systems"
+            error "The workflow should pre-fetch the tarball to avoid this issue"
+        fi
+        exit 1
+    fi
+    
+    info "Tarball downloaded: $(ls -lh "$TARBALL_NAME")"
 fi
-
-info "Tarball downloaded: $(ls -lh "$TARBALL_NAME")"
 
 # Step 3: Extract tarball
 info "Extracting tarball..."
