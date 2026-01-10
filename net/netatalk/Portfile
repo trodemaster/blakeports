@@ -45,7 +45,6 @@ if {${subport} eq ${name}} {
                         port:tracker3 \
                         port:dbus \
                         port:talloc \
-                        port:glib2 \
                         port:bstring
     
     configure.args-append -Dwith-init-style=none \
