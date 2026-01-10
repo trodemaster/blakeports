@@ -155,6 +155,16 @@ for dep in $DEPS; do
                 echo "  📋 Error details:"
                 echo "$OUTPUT" | sed 's/^/     /'  # Indent error output
                 echo ""
+                
+                # Try to find and display MacPorts log file
+                LOG_FILE=$(echo "$OUTPUT" | grep -o '/opt/local/var/macports/logs/[^[:space:]]*main.log' | head -1)
+                if [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; then
+                    echo "  📄 MacPorts log file (last 200 lines):"
+                    echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    tail -200 "$LOG_FILE" | sed 's/^/     /'
+                    echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                fi
+                
                 exit $EXIT_CODE
             fi
         else
@@ -162,6 +172,16 @@ for dep in $DEPS; do
             echo "  📋 Error details:"
             echo "$OUTPUT" | sed 's/^/     /'  # Indent error output
             echo ""
+            
+            # Try to find and display MacPorts log file
+            LOG_FILE=$(echo "$OUTPUT" | grep -o '/opt/local/var/macports/logs/[^[:space:]]*main.log' | head -1)
+            if [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; then
+                echo "  📄 MacPorts log file (last 200 lines):"
+                echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                tail -200 "$LOG_FILE" | sed 's/^/     /'
+                echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            fi
+            
             exit $INSTALL_EXIT_CODE
         fi
     fi
