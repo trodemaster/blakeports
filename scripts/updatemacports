@@ -148,66 +148,19 @@ else
     # Check if curl is broken (missing libraries)
     if ! "${MACPORTS_PREFIX}/bin/curl" --version >/dev/null 2>&1; then
         BROKEN_CURL=true
+        FRESH_INSTALL=true
         warn "MacPorts curl exists but is broken (missing libraries)"
-        info "Will reinstall curl and its dependencies"
+        info "Will rebuild MacPorts from source to fix (two-stage build)"
     fi
 fi
 
-# Step 1: Ensure MacPorts curl is installed (or prepare for two-stage build)
+# Step 1: Skip curl install if doing fresh/two-stage build
 if [[ "$FRESH_INSTALL" == "false" ]]; then
-    # First, handle broken curl if detected
-    if [[ "$BROKEN_CURL" == "true" ]]; then
-        warn "Repairing broken curl installation..."
-        info "This happens when openssl3 was removed but curl still references it"
-        
-        # Force uninstall curl and openssl3
-        info "Force uninstalling openssl3 and curl..."
-        sudo port -f uninstall curl openssl3 2>/dev/null || true
-        info "Removed broken curl/openssl3 from registry"
-        
-        # Directly remove broken library files that may still exist
-        info "Removing broken library files..."
-        sudo rm -f /opt/local/lib/libcurl.* 2>/dev/null || true
-        sudo rm -rf /opt/local/libexec/openssl3 2>/dev/null || true
-        sudo rm -f /opt/local/bin/curl 2>/dev/null || true
-        info "Broken files removed"
-        
-        # Check for pre-fetched distfiles
-        if [ -f "${MACPORTS_PREFIX}/var/macports/distfiles/curl/curl-8.13.0.tar.xz" ]; then
-            info "Pre-fetched distfiles found, using local sources..."
-        fi
-        
-        # Reinstall with minimal variants
-        info "Reinstalling curl with +ssl variant..."
-        if sudo port install curl -brotli -http2 -idn -psl -zstd +ssl; then
-            info "✅ curl repaired successfully"
-            ${MACPORTS_PREFIX}/bin/curl --version | head -1
-        else
-            error "Failed to repair curl"
-            exit 1
-        fi
-    elif [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
-        info "MacPorts curl not found, installing with minimal variants (+ssl only)..."
-        
-        # Check if distfiles were pre-fetched (for legacy systems with SSL issues)
-        if [ -f "${MACPORTS_PREFIX}/var/macports/distfiles/curl/curl-8.13.0.tar.xz" ]; then
-            info "Pre-fetched distfiles found, using local sources..."
-        fi
-        
-        # Install with minimal variants to reduce dependency chain
-        # Disable brotli, http2, idn, psl, zstd to avoid circular dependency with openssl
-        if sudo port install curl -brotli -http2 -idn -psl -zstd +ssl; then
-            info "MacPorts curl installed successfully"
-        else
-            error "Failed to install MacPorts curl"
-            exit 1
-        fi
-    else
-        info "MacPorts curl is already installed: ${MACPORTS_PREFIX}/bin/curl"
-        ${MACPORTS_PREFIX}/bin/curl --version | head -1
-    fi
+    info "MacPorts and curl are working properly"
+    info "MacPorts curl: ${MACPORTS_PREFIX}/bin/curl"
+    ${MACPORTS_PREFIX}/bin/curl --version | head -1
 else
-    info "Skipping curl install for now - will install after stage 1 build"
+    info "Skipping curl checks - will handle during two-stage build process"
 fi
 
 # Determine MacPorts version to install
