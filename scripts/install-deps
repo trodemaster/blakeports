@@ -135,9 +135,14 @@ echo "Installing dependencies..."
 for dep in $DEPS; do
     echo "  Installing $dep..."
     
-    # Capture output and error status
-    OUTPUT=$(sudo port install "$dep" 2>&1)
+    # Capture output to temp file to avoid subshell issues
+    TEMP_OUTPUT="/tmp/install-deps-output-$$.txt"
+    set +e  # Temporarily disable exit on error
+    sudo port install "$dep" > "$TEMP_OUTPUT" 2>&1
     INSTALL_EXIT_CODE=$?
+    OUTPUT=$(cat "$TEMP_OUTPUT")
+    rm -f "$TEMP_OUTPUT"
+    set -e  # Re-enable exit on error
     
     if [ $INSTALL_EXIT_CODE -eq 0 ]; then
         echo "  ✅ $dep installed"
@@ -147,11 +152,20 @@ for dep in $DEPS; do
             echo "  ⚠️  Port $dep not found, syncing port index and retrying..."
             sudo port sync
             echo "  Retrying installation of $dep..."
-            if OUTPUT=$(sudo port install "$dep" 2>&1); then
+            
+            # Retry with temp file
+            TEMP_OUTPUT="/tmp/install-deps-retry-$$.txt"
+            set +e
+            sudo port install "$dep" > "$TEMP_OUTPUT" 2>&1
+            RETRY_EXIT_CODE=$?
+            OUTPUT=$(cat "$TEMP_OUTPUT")
+            rm -f "$TEMP_OUTPUT"
+            set -e
+            
+            if [ $RETRY_EXIT_CODE -eq 0 ]; then
                 echo "  ✅ $dep installed (after sync)"
             else
-                EXIT_CODE=$?
-                echo "  ❌ Failed to install $dep after sync (exit code: $EXIT_CODE)"
+                echo "  ❌ Failed to install $dep after sync (exit code: $RETRY_EXIT_CODE)"
                 echo "  📋 Error details:"
                 echo "$OUTPUT" | sed 's/^/     /'  # Indent error output
                 echo ""
@@ -163,9 +177,11 @@ for dep in $DEPS; do
                     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                     tail -200 "$LOG_FILE" | sed 's/^/     /'
                     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                else
+                    echo "  ⚠️  Log file not found or not accessible: $LOG_FILE"
                 fi
                 
-                exit $EXIT_CODE
+                exit $RETRY_EXIT_CODE
             fi
         else
             echo "  ❌ Failed to install $dep (exit code: $INSTALL_EXIT_CODE)"
@@ -180,6 +196,8 @@ for dep in $DEPS; do
                 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                 tail -200 "$LOG_FILE" | sed 's/^/     /'
                 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            else
+                echo "  ⚠️  Log file not found or not accessible: $LOG_FILE"
             fi
             
             exit $INSTALL_EXIT_CODE
