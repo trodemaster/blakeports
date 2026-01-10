@@ -160,12 +160,17 @@ if [[ "$FRESH_INSTALL" == "false" ]]; then
         warn "Repairing broken curl installation..."
         info "This happens when openssl3 was removed but curl still references it"
         
-        # Force reinstall curl and openssl3 to fix broken state
-        # Use -f here because we KNOW it's broken and need to fix it
-        info "Force reinstalling openssl3 and curl..."
-        if sudo port -f uninstall curl openssl3 2>/dev/null || true; then
-            info "Removed broken curl/openssl3"
-        fi
+        # Force uninstall curl and openssl3
+        info "Force uninstalling openssl3 and curl..."
+        sudo port -f uninstall curl openssl3 2>/dev/null || true
+        info "Removed broken curl/openssl3 from registry"
+        
+        # Directly remove broken library files that may still exist
+        info "Removing broken library files..."
+        sudo rm -f /opt/local/lib/libcurl.* 2>/dev/null || true
+        sudo rm -rf /opt/local/libexec/openssl3 2>/dev/null || true
+        sudo rm -f /opt/local/bin/curl 2>/dev/null || true
+        info "Broken files removed"
         
         # Check for pre-fetched distfiles
         if [ -f "${MACPORTS_PREFIX}/var/macports/distfiles/curl/curl-8.13.0.tar.xz" ]; then
@@ -173,6 +178,7 @@ if [[ "$FRESH_INSTALL" == "false" ]]; then
         fi
         
         # Reinstall with minimal variants
+        info "Reinstalling curl with +ssl variant..."
         if sudo port install curl -brotli -http2 -idn -psl -zstd +ssl; then
             info "✅ curl repaired successfully"
             ${MACPORTS_PREFIX}/bin/curl --version | head -1
