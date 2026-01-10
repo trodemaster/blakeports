@@ -223,7 +223,7 @@ jobs:
           source ./setupenv.bash
           if port installed nrsc5 | grep -q nrsc5; then
             echo "Removing existing nrsc5 installation..."
-            sudo port -f uninstall nrsc5
+            sudo port uninstall nrsc5
             sudo port clean --dist nrsc5
           else
             echo "No existing nrsc5 installation found"
@@ -457,7 +457,7 @@ jobs:
             fi
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
-            sudo port -f uninstall nrsc5 || true
+            sudo port uninstall nrsc5 || true
             sudo port clean --dist nrsc5
             echo "✅ Clean complete"
           EOF

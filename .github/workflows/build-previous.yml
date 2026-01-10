@@ -221,7 +221,7 @@ jobs:
         if: matrix.type == 'modern'
         run: |
           source ./setupenv.bash
-          sudo port -f uninstall previous
+          sudo port uninstall previous
           sudo port clean --dist previous
 
       - name: Install dependencies
@@ -459,7 +459,7 @@ jobs:
             fi
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
-            sudo port -f uninstall previous || true
+            sudo port uninstall previous || true
             sudo port clean --dist previous
             echo "✅ Clean complete"
           EOF

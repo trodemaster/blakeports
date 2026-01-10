@@ -223,7 +223,7 @@ jobs:
           source ./setupenv.bash
           if port installed libfido2 | grep -q libfido2; then
             echo "Removing existing libfido2 installation..."
-            sudo port -f uninstall libfido2 libcbor openssl3
+            sudo port uninstall libfido2 libcbor openssl3
             sudo port clean --dist libfido2 libcbor openssl3
           else
             echo "No existing libfido2 installation found"
@@ -458,7 +458,7 @@ jobs:
             fi
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
-            sudo port -f uninstall libfido2 libcbor openssl3 || true
+            sudo port uninstall libfido2 libcbor openssl3 || true
             sudo port clean --dist libfido2 libcbor openssl3
             echo "✅ Clean complete"
           EOF

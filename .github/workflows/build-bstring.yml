@@ -226,7 +226,7 @@ jobs:
             # Uninstall all installed versions (including variants)
             port installed bstring | grep -E "^  bstring @" | awk '{print $1 " " $2}' | while read -r version_spec; do
               echo "Uninstalling $version_spec..."
-              sudo port -f uninstall "$version_spec" || true
+              sudo port uninstall "$version_spec" || true
             done
             sudo port clean --dist bstring || true
             echo "✅ Clean complete"
@@ -471,7 +471,7 @@ jobs:
               echo "Removing existing bstring installation..."
               port installed bstring | grep -E "^  bstring @" | awk '{print $1 " " $2}' | while read -r version_spec; do
                 echo "Uninstalling $version_spec..."
-                sudo port -f uninstall "$version_spec" || true
+                sudo port uninstall "$version_spec" || true
               done
               sudo port clean --dist bstring || true
             fi
