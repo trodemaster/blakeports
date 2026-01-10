@@ -223,7 +223,7 @@ jobs:
           source ./setupenv.bash
           if port installed netatalk | grep -q netatalk; then
             echo "Removing existing netatalk installation..."
-            sudo port -f uninstall netatalk
+            sudo port uninstall netatalk
             sudo port clean --dist netatalk
           else
             echo "No existing netatalk installation found"
@@ -486,7 +486,7 @@ jobs:
             fi
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
-            sudo port -f uninstall netatalk || true
+            sudo port uninstall netatalk || true
             sudo port clean --dist netatalk
             echo "✅ Clean complete"
           EOF
