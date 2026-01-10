@@ -136,18 +136,51 @@ export PATH="${MACPORTS_PREFIX}/bin:${MACPORTS_PREFIX}/sbin:$PATH"
 
 # Determine if this is a fresh MacPorts install or needs two-stage build
 FRESH_INSTALL=false
+BROKEN_CURL=false
+
 if [ ! -f "${MACPORTS_PREFIX}/bin/port" ]; then
     FRESH_INSTALL=true
     info "Fresh MacPorts install detected - will use two-stage build process"
 elif [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
     FRESH_INSTALL=true
     info "MacPorts curl missing - will use two-stage build process"
+else
+    # Check if curl is broken (missing libraries)
+    if ! "${MACPORTS_PREFIX}/bin/curl" --version >/dev/null 2>&1; then
+        BROKEN_CURL=true
+        warn "MacPorts curl exists but is broken (missing libraries)"
+        info "Will reinstall curl and its dependencies"
+    fi
 fi
 
 # Step 1: Ensure MacPorts curl is installed (or prepare for two-stage build)
 if [[ "$FRESH_INSTALL" == "false" ]]; then
-    info "Checking for MacPorts curl..."
-    if [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
+    # First, handle broken curl if detected
+    if [[ "$BROKEN_CURL" == "true" ]]; then
+        warn "Repairing broken curl installation..."
+        info "This happens when openssl3 was removed but curl still references it"
+        
+        # Force reinstall curl and openssl3 to fix broken state
+        # Use -f here because we KNOW it's broken and need to fix it
+        info "Force reinstalling openssl3 and curl..."
+        if sudo port -f uninstall curl openssl3 2>/dev/null || true; then
+            info "Removed broken curl/openssl3"
+        fi
+        
+        # Check for pre-fetched distfiles
+        if [ -f "${MACPORTS_PREFIX}/var/macports/distfiles/curl/curl-8.13.0.tar.xz" ]; then
+            info "Pre-fetched distfiles found, using local sources..."
+        fi
+        
+        # Reinstall with minimal variants
+        if sudo port install curl -brotli -http2 -idn -psl -zstd +ssl; then
+            info "✅ curl repaired successfully"
+            ${MACPORTS_PREFIX}/bin/curl --version | head -1
+        else
+            error "Failed to repair curl"
+            exit 1
+        fi
+    elif [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
         info "MacPorts curl not found, installing with minimal variants (+ssl only)..."
         
         # Check if distfiles were pre-fetched (for legacy systems with SSL issues)
