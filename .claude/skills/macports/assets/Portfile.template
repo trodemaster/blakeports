@@ -1,0 +1,40 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           github 1.0
+
+github.setup        OWNER REPO VERSION
+revision            0
+
+categories          CATEGORY
+maintainers         {@USERNAME PROVIDER} openmaintainer
+license             LICENSE
+
+description         Short one-line description of the software
+
+long_description    {*}${description}. Extended description providing \
+                    more detail about what the software does, its key \
+                    features, and use cases.
+
+checksums           rmd160  REPLACE_WITH_ACTUAL_CHECKSUM \
+                    sha256  REPLACE_WITH_ACTUAL_CHECKSUM \
+                    size    REPLACE_WITH_ACTUAL_SIZE
+
+depends_build-append \
+                    port:pkgconfig
+
+depends_lib-append  port:DEPENDENCY1 \
+                    port:DEPENDENCY2
+
+configure.args      --prefix=${prefix}
+
+# Optional: Add variants as needed
+# variant VARIANT_NAME description {
+#     configure.args-append --with-feature
+#     depends_lib-append port:feature-lib
+# }
+
+# Optional: Post-installation notes
+# notes "
+# Usage instructions or configuration notes for users.
+# "
