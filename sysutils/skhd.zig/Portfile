@@ -28,8 +28,47 @@ checksums           rmd160  04811bbcd62cc17c41a178affb1f439a5225f925 \
 
 patchfiles          patch-build.zig-0.15.1.diff \
                     patch-src-c.zig-0.15.1.diff \
-                    patch-imports-0.15.1.diff
+                    patch-imports-0.15.1.diff \
+                    patch-ParseError.zig-0.15.1.diff
 patch.args          -p0
+
+# Fix Zig 0.15 API changes:
+# - std.ArrayList became unmanaged; use std.array_list.Managed (deprecated but compatible)
+# - std.time.sleep was moved to std.Thread.sleep
+post-patch {
+    foreach f {Hotload.zig ParseError.zig Parser.zig \
+               service.zig skhd.zig Tokenizer.zig utils.zig} {
+        reinplace "s|std\\.ArrayList(|std.array_list.Managed(|g" \
+            ${worksrcpath}/src/${f}
+    }
+    foreach f {service.zig synthesize.zig} {
+        reinplace "s|std\\.time\\.sleep|std.Thread.sleep|g" \
+            ${worksrcpath}/src/${f}
+    }
+    # File.reader() now requires a buffer; use deprecatedReader() for readAllArrayList compat
+    reinplace "s|stderr\\.reader()|stderr.deprecatedReader()|g" \
+        ${worksrcpath}/src/service.zig
+    # callconv(.C) renamed to callconv(.c) in Zig 0.15
+    foreach f {Hotload.zig skhd.zig} {
+        reinplace "s|callconv(\\.C)|callconv(.c)|g" \
+            ${worksrcpath}/src/${f}
+    }
+    # ParseError has a format method; {} is now ambiguous in Zig 0.15, use {f}
+    reinplace "s|\"skhd: {}\"|\"skhd: {f}\"|g" ${worksrcpath}/src/skhd.zig
+    # std.posix.empty_sigset renamed to std.posix.sigemptyset() in Zig 0.15
+    reinplace "s|std\\.posix\\.empty_sigset|std.posix.sigemptyset()|g" \
+        ${worksrcpath}/src/skhd.zig
+    # NSApplicationLoad is a module-level export in c.zig, not in c_impl
+    reinplace {s|c\.NSApplicationLoad()|@import("c.zig").NSApplicationLoad()|g} \
+        ${worksrcpath}/src/skhd.zig
+    # std.io.getStdErr/Out().writer() removed; use std.fs.File.stderr/stdout().deprecatedWriter()
+    foreach f {main.zig skhd.zig TrackingAllocator.zig} {
+        reinplace {s|std.io.getStdErr().writer()|std.fs.File.stderr().deprecatedWriter()|g} \
+            ${worksrcpath}/src/${f}
+        reinplace {s|std.io.getStdOut().writer()|std.fs.File.stdout().deprecatedWriter()|g} \
+            ${worksrcpath}/src/${f}
+    }
+}
 
 depends_build-append port:zig
 
