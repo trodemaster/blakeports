@@ -86,7 +86,8 @@ sudo port install -sv portname
 ### 5. Submitting to MacPorts (Creating PRs)
 
 **CRITICAL REQUIREMENTS**:
-- Always show commit messages and PR descriptions to user for review BEFORE submitting
+- **STOP AND WAIT** before running `gh pr create` — always show the full PR description to the user and wait for explicit approval. This is a strict rule with no exceptions.
+- **STOP AND WAIT** before committing — always show the commit message to the user and wait for explicit approval.
 - MacPorts PRs must contain **exactly ONE commit** - squash/amend if needed
 - Port lint must pass with **0 errors and 0 warnings** (use `--nitpick`)
 - **GitHub pull requests are STRONGLY PREFERRED** over Trac tickets (faster workflow)
@@ -164,12 +165,12 @@ Closes: https://trac.macports.org/ticket/12345
 4. Copy/modify files from blakeports to macports-ports
 5. Stage changes: `git add category/portname/`
 6. Draft commit message (following guidelines above)
-7. **SHOW commit message to user for review**
+7. **SHOW commit message to user — STOP and wait for explicit approval before proceeding**
 8. Commit after approval: `git commit -m "message"`
 9. Push to fork: `git push -u origin branch-name`
-10. Draft PR description
-11. **SHOW PR description to user for review**
-12. Create PR after approval: `gh pr create --repo macports/macports-ports`
+10. Draft PR description using the official template
+11. **SHOW PR description to user — STOP and wait for explicit approval before proceeding**
+12. Create PR only after approval: `gh pr create --repo macports/macports-ports`
 13. If changes needed: amend commit, force push with `--force-with-lease`
 14. If PR doesn't receive attention within a few days, email macports-dev@lists.macports.org
 
@@ -457,7 +458,7 @@ Execute without reading into context for efficiency.
 8. **Test individual phases** to isolate failures
 9. **Use 4 spaces** for indentation in Portfiles (no tabs)
 10. **Align continuation lines** for readability
-11. **Always show commit messages and PR descriptions for review** before submitting
+11. **ALWAYS stop and show commit messages and PR descriptions for explicit user approval** — never commit or create a PR without approval
 12. **Follow official commit message format** - see https://trac.macports.org/wiki/CommitMessages
 13. **Subject line: 50-55 characters, max 60** - list ports first with colon
 14. **Body: wrap at 72 characters** - provide context, not implementation details
