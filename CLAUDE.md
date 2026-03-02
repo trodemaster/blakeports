@@ -17,9 +17,7 @@ blakeports/
 │   └── port1.0/          # Port groups, compilers, fetch settings
 ├── audio/                 # Audio category ports
 │   └── nrsc5/            # HD Radio software-defined radio
-├── .beads/                # Beads task tracker (git-backed; issues.jsonl committed)
 ├── devel/                 # Development category ports
-│   ├── beads/            # Beads CLI port (bd)
 │   └── libcbor/          # CBOR protocol library
 ├── emulators/            # Emulator category ports
 │   └── previous/         # NeXT computer emulator
@@ -46,8 +44,7 @@ blakeports/
 | `PortIndex` | Generated port index - run `portindex` to regenerate |
 | `.cursorrules` | Comprehensive MacPorts development rules and conventions |
 | `README.md` | User-facing documentation with quick reference |
-| `AGENTS.md` | Agent instructions; task tracking via Beads (`bd`) |
-| `.beads/` | Beads task state (issues, config); normal init, committed |
+| `AGENTS.md` | Agent instructions for session workflow |
 
 ## Scripts Reference
 
@@ -262,7 +259,6 @@ cd ../jibb-runners
 6. **The `_resources` directory is synced from upstream** - don't modify directly
 7. **Check `.cursorrules`** for comprehensive MacPorts development standards
 8. **URLs must be formatted as clickable links** in all documentation and PR descriptions
-9. **Task tracking:** This repo uses [Beads](https://github.com/steveyegge/beads) (`bd`). Run `bd ready` for unblocked work; use the Beads skill (`.claude/skills/beads/`) for the full workflow. Init mode: normal (`.beads/` committed; SQLite cache and daemon files gitignored in `.beads/.gitignore`).
 
 ## Troubleshooting
 
