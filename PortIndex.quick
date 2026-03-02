@@ -5,6 +5,6 @@ netatalk 1799
 openssh9-client 2555
 libfido2 3428
 vault 4075
-skhd.zig 4903
-bstring 5597
-netatalk4 6287
+bstring 4903
+netatalk4 5593
+skhd.zig 6146
