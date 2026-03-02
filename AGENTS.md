@@ -1,7 +1,5 @@
 # Agent instructions
 
-- **Task tracking:** Use Beads (`bd`) for planning and what to do next. Run `bd ready` for unblocked work; use the Beads skill (`.claude/skills/beads/`) for the full workflow.
-
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
@@ -14,7 +12,6 @@
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
