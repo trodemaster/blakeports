@@ -30,6 +30,8 @@ checksums           rmd160  2140277513636c25a3365482dc4a25624433f17d \
                     sha256  9c28a5c2932ffbed435890a0165ca21c5bc081b3c0d118f8e0bf07dd894c0b04 \
                     size    97715
 
+conflicts           skhd
+
 depends_build-append port:zig
 
 platforms           {darwin >= 22}
