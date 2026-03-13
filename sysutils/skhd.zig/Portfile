@@ -1,11 +1,9 @@
 # -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
 
 PortSystem          1.0
-PortGroup           github 1.0
 
-github.setup        jackielii skhd.zig 0.0.17 v
-github.tarball_from archive
-
+name                skhd.zig
+version             0.0.17
 revision            0
 
 categories          sysutils
@@ -13,7 +11,7 @@ license             MIT
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
 
 description         Simple hotkey daemon for macOS (Zig implementation)
-long_description    skhd.zig is a Zig rewrite of skhd, a simple hotkey \
+long_description   skhd.zig is a Zig rewrite of skhd, a simple hotkey \
                     daemon for macOS. It provides system-wide keyboard \
                     event interception and hotkey mapping with full \
                     modifier support, process-specific bindings, modal \
@@ -22,53 +20,15 @@ long_description    skhd.zig is a Zig rewrite of skhd, a simple hotkey \
 
 homepage            https://github.com/jackielii/skhd.zig
 
-checksums           rmd160  04811bbcd62cc17c41a178affb1f439a5225f925 \
-                    sha256  2e273612fbdd17c95ba0f8bc005e3f32fa085b24e892a738a912788333b39910 \
-                    size    97047
+# Fetch from maintainer fork (zig-0.15 branch). Requires Zig 0.15.
+# Switch back to jackielii tarball when upstream releases with Zig 0.15.
+master_sites        https://github.com/trodemaster/skhd.zig/archive
+distfiles           b8f06cf470ccbe17021a3fef71f68770ccc6d662.tar.gz
+worksrcdir          skhd.zig-b8f06cf470ccbe17021a3fef71f68770ccc6d662
 
-patchfiles          patch-build.zig-0.15.1.diff \
-                    patch-src-c.zig-0.15.1.diff \
-                    patch-imports-0.15.1.diff \
-                    patch-ParseError.zig-0.15.1.diff
-patch.args          -p0
-
-# Fix Zig 0.15 API changes:
-# - std.ArrayList became unmanaged; use std.array_list.Managed (deprecated but compatible)
-# - std.time.sleep was moved to std.Thread.sleep
-post-patch {
-    foreach f {Hotload.zig ParseError.zig Parser.zig \
-               service.zig skhd.zig Tokenizer.zig utils.zig} {
-        reinplace "s|std\\.ArrayList(|std.array_list.Managed(|g" \
-            ${worksrcpath}/src/${f}
-    }
-    foreach f {service.zig synthesize.zig} {
-        reinplace "s|std\\.time\\.sleep|std.Thread.sleep|g" \
-            ${worksrcpath}/src/${f}
-    }
-    # File.reader() now requires a buffer; use deprecatedReader() for readAllArrayList compat
-    reinplace "s|stderr\\.reader()|stderr.deprecatedReader()|g" \
-        ${worksrcpath}/src/service.zig
-    # callconv(.C) renamed to callconv(.c) in Zig 0.15
-    foreach f {Hotload.zig skhd.zig} {
-        reinplace "s|callconv(\\.C)|callconv(.c)|g" \
-            ${worksrcpath}/src/${f}
-    }
-    # ParseError has a format method; {} is now ambiguous in Zig 0.15, use {f}
-    reinplace "s|\"skhd: {}\"|\"skhd: {f}\"|g" ${worksrcpath}/src/skhd.zig
-    # std.posix.empty_sigset renamed to std.posix.sigemptyset() in Zig 0.15
-    reinplace "s|std\\.posix\\.empty_sigset|std.posix.sigemptyset()|g" \
-        ${worksrcpath}/src/skhd.zig
-    # NSApplicationLoad is a module-level export in c.zig, not in c_impl
-    reinplace {s|c\.NSApplicationLoad()|@import("c.zig").NSApplicationLoad()|g} \
-        ${worksrcpath}/src/skhd.zig
-    # std.io.getStdErr/Out().writer() removed; use std.fs.File.stderr/stdout().deprecatedWriter()
-    foreach f {main.zig skhd.zig TrackingAllocator.zig} {
-        reinplace {s|std.io.getStdErr().writer()|std.fs.File.stderr().deprecatedWriter()|g} \
-            ${worksrcpath}/src/${f}
-        reinplace {s|std.io.getStdOut().writer()|std.fs.File.stdout().deprecatedWriter()|g} \
-            ${worksrcpath}/src/${f}
-    }
-}
+checksums           rmd160  2140277513636c25a3365482dc4a25624433f17d \
+                    sha256  9c28a5c2932ffbed435890a0165ca21c5bc081b3c0d118f8e0bf07dd894c0b04 \
+                    size    97715
 
 depends_build-append port:zig
 
@@ -85,7 +45,7 @@ build {
 destroot {
     xinstall -d ${destroot}${prefix}/bin
     xinstall -m 755 ${worksrcpath}/zig-out/bin/skhd ${destroot}${prefix}/bin/skhd
-    
+
     # Install documentation
     xinstall -d -m 0755 ${destroot}${prefix}/share/doc/${name}
     xinstall -m 644 ${worksrcpath}/README.md \
