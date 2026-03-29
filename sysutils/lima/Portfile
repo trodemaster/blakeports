@@ -1,0 +1,96 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           golang 1.0
+
+# This port builds lima from trodemaster/lima feature branch with macOS app bundle support
+# for GUI display on macOS 26+
+# Source: https://github.com/trodemaster/lima/tree/feat/macos-vz-gui-appbundle
+
+go.setup            github.com/trodemaster/lima e8a6f70181462b7b77bd8f43e8128c9b8759b36c
+go.offline_build    no
+version             2.1.0-dev.1
+revision            0
+
+homepage            https://lima-vm.io
+
+description         Linux virtual machines
+
+long_description    {*}{
+    Lima launches Linux virtual machines with automatic file sharing
+    and port forwarding (similar to WSL2). The original goal of Lima
+    was to promote containerd including nerdctl (contaiNERD ctl) to
+    Mac users, but Lima can be used for non-container applications as
+    well. Lima also supports other container engines, such as Docker,
+    Podman, Kubernetes, etc. Lima can also emulate other architectures
+    if QEMU is installed.
+
+    This version includes experimental macOS app bundle support for GUI
+    display on macOS 26+.
+}
+
+categories          sysutils
+installs_libs       no
+license             Apache-2
+maintainers         {macports.halostatue.ca:austin @halostatue} \
+                    openmaintainer
+
+checksums           rmd160  75edba3a45b2f81b2e330d6f7520f9bb1fc95cf8 \
+                    sha256  33ee9cb427fdd032227e12f97b2952e1126741c9559228589ea3376d8e9e3083 \
+                    size    7800007
+
+build.cmd           make
+# APP_BUNDLE_DIR controls where Lima.app is built within _output/
+# Default: _output/share/lima (recommended for all installation methods)
+# The app bundle is later installed by "make install DEST=$(destroot)$(prefix)"
+build.args-append   native \
+                    APP_BUNDLE_DIR=_output/share/lima
+
+patchfiles          patch-Makefile.diff \
+                    patch-usrlocalgo.diff
+
+platform darwin {
+    # Lima defaults to VZ with macOS 13.5 and later; drop dependency from 14 onwards
+    if {${os.major} < 23} {
+        depends_run-append port:qemu
+    }
+}
+
+variant additional_guestagents description {Guest agents for all architectures} {
+  build.args-append  additional-guestagents
+  depends_run-append port:qemu
+}
+
+notes {
+    Lima has a variant (+additional_guestagents, disabled by default),\
+    that builds guest agents for all supported architectures, requiring\
+    qemu.
+    
+    This build includes experimental macOS app bundle support for GUI\
+    display on macOS 26+. When starting a Lima VM with --run-gui on macOS\
+    26+, the hostagent launches inside Lima.app for proper GUI context.
+}
+
+post-patch {
+    reinplace "s|@@VERSION@@|${version}|g" ${worksrcpath}/Makefile
+}
+
+post-build {
+    set limactl ${worksrcpath}/_output/bin/limactl
+
+    set bash_completions_dir ${worksrcpath}/_output/share/bash-completion/completions
+    set fish_completions_dir ${worksrcpath}/_output/share/fish/vendor_completions.d
+    set zsh_completions_dir ${worksrcpath}/_output/share/zsh/site-functions
+
+    xinstall -d ${bash_completions_dir} ${fish_completions_dir} ${zsh_completions_dir}
+
+    system "${limactl} completion bash > ${bash_completions_dir}/${name}"
+    system "${limactl} completion fish > ${fish_completions_dir}/${name}.fish"
+    system "${limactl} completion zsh > ${zsh_completions_dir}/_${name}"
+}
+
+destroot {
+    system -W ${worksrcpath} "make install DEST=${destroot}${prefix}"
+}
+
+github.livecheck.regex {([0-9.]+)}
