@@ -7,7 +7,7 @@ PortGroup           golang 1.0
 # for GUI display on macOS 26+
 # Source: https://github.com/trodemaster/lima/tree/feat/macos-vz-gui-appbundle
 
-go.setup            github.com/trodemaster/lima e8a6f70181462b7b77bd8f43e8128c9b8759b36c
+go.setup            github.com/trodemaster/lima 6cd91615a750cbc7bc60dbb7f4c3e84809f31357
 go.offline_build    no
 version             2.1.0-dev.1
 revision            0
@@ -35,9 +35,9 @@ license             Apache-2
 maintainers         {macports.halostatue.ca:austin @halostatue} \
                     openmaintainer
 
-checksums           rmd160  75edba3a45b2f81b2e330d6f7520f9bb1fc95cf8 \
-                    sha256  33ee9cb427fdd032227e12f97b2952e1126741c9559228589ea3376d8e9e3083 \
-                    size    7800007
+checksums           rmd160  23462cfca9960bd8075dac349dbc1c71f1a4e8e9 \
+                    sha256  f7431b9d13e6b206fd9630c732ce5f06fe161b3cb42fff2fdeefa4ef0c4ddd67 \
+                    size    7800034
 
 build.cmd           make
 # APP_BUNDLE_DIR controls where Lima.app is built within _output/
@@ -91,6 +91,15 @@ post-build {
 
 destroot {
     system -W ${worksrcpath} "make install DEST=${destroot}${prefix}"
+
+    # Install Lima.app to the standard MacPorts Applications directory
+    # so it appears alongside other MacPorts GUI apps at /Applications/MacPorts/
+    platform darwin {
+        xinstall -d ${destroot}/Applications/MacPorts
+        file rename \
+            ${destroot}${prefix}/share/lima/Lima.app \
+            ${destroot}/Applications/MacPorts/Lima.app
+    }
 }
 
 github.livecheck.regex {([0-9.]+)}
