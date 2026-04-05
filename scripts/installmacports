@@ -14,7 +14,14 @@ NEED_SYNC=false
 
 # Verify MacPorts is installed
 if [ ! -f /opt/local/bin/port ]; then
-  echo "Error: MacPorts is not installed. Please use a VM image with MacPorts pre-installed."
+  echo "Error: MacPorts is not installed."
+  echo ""
+  echo "For Lima runners, install MacPorts before registering the runner:"
+  echo "  make run-<instance>       # start the VM (e.g. make run-26)"
+  echo "  make macports-<instance>  # install MacPorts (e.g. make macports-26)"
+  echo "  make register-<instance>  # then register the runner"
+  echo ""
+  echo "macports.sh is at /Volumes/lima_mac/macports.sh inside the VM."
   exit 1
 fi
 
