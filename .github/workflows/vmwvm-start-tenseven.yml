@@ -15,7 +15,7 @@ jobs:
       vm_ip: ${{ steps.set-vm-ip.outputs.vm_ip }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       
       - name: Start VMware VM
         uses: appleboy/ssh-action@v1

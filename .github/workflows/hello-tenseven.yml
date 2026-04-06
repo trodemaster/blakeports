@@ -42,7 +42,7 @@ jobs:
     runs-on: [self-hosted, docker, ssh-capable]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       
       - name: Verify VM configuration
         run: |

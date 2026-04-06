@@ -24,6 +24,11 @@ on:
         required: false
         default: true
         type: boolean
+      run_macos26_beta:
+        description: 'macOS 26 Beta (Tahoe Beta)'
+        required: false
+        default: false
+        type: boolean
       run_tenfive:
         description: 'Mac OS X 10.5 (Leopard)'
         required: false
@@ -95,6 +100,13 @@ jobs:
             if [[ "${{ inputs.run_macos26 }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
               MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"security/libfido2"}'
+              FIRST=false
+            fi
+
+            # macOS 26 Beta
+            if [[ "${{ inputs.run_macos26_beta }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_26_beta","runner":"macOS_26_beta","type":"modern","port":"security/libfido2"}'
               FIRST=false
             fi
 
@@ -203,7 +215,7 @@ jobs:
 
       - name: Checkout repository
         if: matrix.type == 'modern'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.branch || github.ref }}
 
@@ -252,7 +264,7 @@ jobs:
       #
       - name: Checkout repository (for tarball)
         if: matrix.type == 'legacy'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.branch || github.ref }}
 
