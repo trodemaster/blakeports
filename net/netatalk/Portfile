@@ -6,38 +6,35 @@ PortGroup           meson 1.0
 PortGroup           legacysupport 1.1
 
 name                netatalk
-version             4.4.1
-revision            0
 categories          net
 description         Netatalk is a freely-available Open Source AFP fileserver.
 long_description    Netatalk is a freely-available Open Source AFP fileserver. \
                     It allows Unix-like operating systems to serve as file \
-                    servers for Macintosh computers.
+                    servers for Macintosh computers. This port follows the \
+                    upstream main branch for pre-release testing.
 
 if {${subport} eq ${name}} {
-    github.setup        Netatalk netatalk 4-4-1 netatalk-
-    version             4.4.1
+    github.setup        Netatalk netatalk 4.5.0-devel
     revision            0
-    github.tarball_from releases
-    distname            netatalk-${version}
-    use_xz              yes
+    git.branch          main
+    fetch.type          git
+    github.tarball_from archive
 
     compiler.c_standard 2011
 
-    checksums       rmd160  efbb51075f9cff30bbaeac64cc380d088c74eff8 \
-                    sha256  8fcab0bf3b39cd8a94fe3ee7a8264c6000515a3af377da3416696609ab13316d \
-                    size    1125588
-    
     license             GPL-2+
     maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
-    
+
     homepage            https://netatalk.io
-    
+
+    # Moving branch; bump revision when you need to force a clean rebuild
+    livecheck.type      none
+
     depends_build-append       path:bin/pkg-config:pkgconfig \
                                port:cmark-gfm \
                                port:bison \
                                port:flex
-    
+
     depends_lib         port:sqlite3 \
                         port:libevent \
                         port:libgcrypt \
@@ -46,47 +43,57 @@ if {${subport} eq ${name}} {
                         port:dbus \
                         port:talloc \
                         port:bstring
-    
+
     configure.args-append -Dwith-init-style=none \
                           -Dwith-pam-config-path=${prefix}/etc/pam.d \
                           -Dwith-lockfile-path=${prefix}/var/run \
                           -Dwith-cnid-backends=sqlite,dbd,mysql \
                           -Dwith-cnid-default-backend=sqlite \
                           -Dwith-spotlight=true
-    
+
+    # PPC and OS X 10.5 (os.major 9) cannot build tracker3/dbus or MySQL
+    if {${os.major} < 10 || ${configure.build_arch} eq "ppc"} {
+        configure.args-replace  -Dwith-spotlight=true         -Dwith-spotlight=false
+        configure.args-replace  -Dwith-cnid-backends=sqlite,dbd,mysql \
+                                 -Dwith-cnid-backends=sqlite,dbd
+        depends_lib-delete      port:tracker3 \
+                                port:dbus
+    }
+
     startupitem.create  yes
     startupitem.executable  ${prefix}/sbin/netatalk -d -F ${prefix}/etc/afp.conf
     startupitem.logfile ${prefix}/var/log/${name}.log
     startupitem.logfile.stderr ${prefix}/var/log/${name}-stderr.log
     startupitem.logevents yes
     startupitem.debug          yes
-    
-    notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/."
+
+    notes "This port tracks the upstream main branch (pre-beta). Upgrade details: \
+https://netatalk.io/manual/en/Upgrading. Configuration files: ${prefix}/etc/. \
+Logs: ${prefix}/var/log/."
 }
 
 # Netatalk 4.x stub port
 subport netatalk4 {
     PortGroup           stub 1.0
 
-    version             4.4.1
+    version             4.5.0-devel
     revision            0
-    
+
     categories          net
     license             GPL-2+
     maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
-    
+
     description         Netatalk is a freely-available Open Source AFP fileserver.
     long_description    Netatalk is a freely-available Open Source AFP fileserver. \
                         It allows Unix-like operating systems to serve as file \
                         servers for Macintosh computers.
-    
+
     homepage            https://netatalk.io
-    
+
     # This is a stub port that depends on the main netatalk port
     depends_run         port:netatalk
-    
+
     notes "This is a stub port that provides netatalk4 as an alias for netatalk. \
            The main netatalk port will automatically select the appropriate version \
            based on your macOS version."
 }
-
