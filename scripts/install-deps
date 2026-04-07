@@ -127,12 +127,21 @@ if [ -z "$DEPS" ]; then
     exit 0
 fi
 
+# Ports satisfied by Xcode CLT or the macOS base system that are not
+# installable as standalone MacPorts ports (fetch.type git adds "git" here).
+SYSTEM_TOOLS="git svn"
+
 echo "Dependencies to install: $DEPS"
 echo ""
 
 # Install each dependency quietly
 echo "Installing dependencies..."
 for dep in $DEPS; do
+    # Skip deps that are provided by Xcode CLT / base system
+    if echo "$SYSTEM_TOOLS" | grep -qw "$dep"; then
+        echo "  ⏭️  Skipping $dep (provided by Xcode CLT / system)"
+        continue
+    fi
     echo "  Installing $dep..."
     
     # Capture output to temp file to avoid subshell issues
