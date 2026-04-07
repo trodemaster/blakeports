@@ -33,7 +33,7 @@ if ! grep -q "blakeports" /opt/local/etc/macports/sources.conf; then
   echo "Configuring macports /opt/local/etc/macports/sources.conf"
   sudo tee /opt/local/etc/macports/sources.conf <<EOF
 file:///opt/actions-runner/_work/blakeports/blakeports [default]
-https://mirror.fcix.net/macports/release/tarballs/ports.tar
+rsync://rsync.macports.org/macports/release/tarballs/ports.tar
 EOF
   NEED_SYNC=true
 else
