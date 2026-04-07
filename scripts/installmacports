@@ -44,6 +44,14 @@ fi
 export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
 export MANPATH="/opt/local/share/man:${MANPATH:-}"
 
+# Always regenerate the blakeports PortIndex from what is actually checked out.
+# This ensures stale entries from the developer's local machine are never used.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+echo "Regenerating blakeports port index..."
+(cd "$REPO_ROOT" && portindex >/dev/null 2>&1)
+echo "✓ Port index regenerated"
+
 # sync macports to update port index (only if needed)
 # Note: -v flag is required due to MacPorts bug "can't read verboseflag: no such variable"
 # Output suppressed as it produces tens of thousands of lines
