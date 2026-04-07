@@ -48,7 +48,6 @@ if {${subport} eq ${name}} {
                           -Dwith-pam-config-path=${prefix}/etc/pam.d \
                           -Dwith-lockfile-path=${prefix}/var/run \
                           -Dwith-cnid-backends=sqlite,dbd,mysql \
-                          -Dwith-cnid-default-backend=sqlite \
                           -Dwith-spotlight=true
 
     # PPC and OS X 10.5 (os.major 9) cannot build tracker3/dbus or MySQL
