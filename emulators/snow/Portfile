@@ -4,8 +4,9 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           cargo 1.0
 
-github.setup        twvd snow 1.3.1 v
+github.setup        twvd snow 804945691a3f3370a1192202969cbe49367dad5a
 github.tarball_from archive
+version             20260411
 revision            0
 
 categories          emulators
@@ -22,9 +23,9 @@ long_description    Snow emulates classic (Motorola 68k-based) Macintosh \
                     audio, and networking.
 
 checksums           ${distname}${extract.suffix} \
-                    rmd160  e983644858bf8a2c44260dc8f2898f93ec29b035 \
-                    sha256  db733fc8948e30c8b8b4d78ae60991d84c7df63003d6bb8d3630379338dae3a5 \
-                    size    11892175
+                    rmd160  b449a3102cf38008830641e1c3c485c32288bd59 \
+                    sha256  2a4d87855b2a9c6771b9fa0b5292406358a7744f6d4859e706055305270b0c6c \
+                    size    11925911
 
 depends_lib-append  port:libsdl2
 
