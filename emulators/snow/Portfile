@@ -31,6 +31,34 @@ depends_lib-append  port:libsdl2
 depends_build-append \
                     path:bin/pkg-config:pkgconfig
 
+# All four git-sourced repos are Cargo workspaces whose member crates live
+# in a crates/ subdirectory. Cargo's directory source only scans one level
+# deep in ${cargo.home}/macports, so those members are invisible without
+# promotion. After the PortGroup extracts the repo archives, move each
+# needed member crate to the top level and write .cargo-checksum.json
+# (package: null is correct for git-sourced crates).
+post-extract {
+    set mp "${cargo.home}/macports"
+
+    # snow-egui workspace — crates/ members used by snow
+    set base "${mp}/snow-egui-628a7a4b455f355fafb1d47c9e6870effab96eb5"
+    foreach crate {ecolor emath epaint epaint_default_fonts egui egui-winit} {
+        file rename "${base}/crates/${crate}" "${mp}/${crate}"
+        set f [open "${mp}/${crate}/.cargo-checksum.json" w]
+        puts $f "{\n    \"package\": null,\n    \"files\": {}\n}"
+        close $f
+    }
+
+    # hadris workspace — crates/ members used by snow
+    set base "${mp}/hadris-8bf2df25d7bfb2aab0b068bfa13d6ad1a244df5e"
+    foreach crate {hadris-common hadris-io hadris-iso} {
+        file rename "${base}/crates/${crate}" "${mp}/${crate}"
+        set f [open "${mp}/${crate}/.cargo-checksum.json" w]
+        puts $f "{\n    \"package\": null,\n    \"files\": {}\n}"
+        close $f
+    }
+}
+
 # Remove the rust-toolchain.toml to avoid rustup toolchain download attempts.
 # MacPorts provides its own Rust toolchain via the rust PortGroup.
 #
