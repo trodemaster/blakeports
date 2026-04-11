@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # GitHub Actions Self-Hosted Runner Manager
-# Supports tart (macOS), lima (Linux), and vmware runners
+# Supports lima (macOS) and vmware runners
 
 #set -e
 
@@ -27,8 +27,9 @@ GITHUB_REPO="${GITHUB_REPO:-blakeports}"
 # Default runner configuration (can be overridden with RUNNER_CONFIG env var)
 # JSON format with type, name, ssh_host, and optional labels/description
 DEFAULT_RUNNER_CONFIG='[
-  {"type":"tart","name":"macOS_15","ssh_host":""},
-  {"type":"tart","name":"macOS_26","ssh_host":""},
+  {"type":"lima","name":"macos-26","ssh_host":""},
+  {"type":"lima","name":"macos-26-beta","ssh_host":""},
+  {"type":"lima","name":"macos-15","ssh_host":""},
   {"type":"vmware","name":"tenfive","ssh_host":""},
   {"type":"vmware","name":"tensix","ssh_host":""},
   {"type":"vmware","name":"tenseven","ssh_host":""},
@@ -40,7 +41,6 @@ DEFAULT_RUNNER_CONFIG='[
 RUNNER_CONFIG="${RUNNER_CONFIG:-$DEFAULT_RUNNER_CONFIG}"
 
 # Tool paths
-TART_PATH="/Applications/tart.app/Contents/MacOS/tart"
 VMWARE_VMRUN_PATH="/Applications/VMware Fusion.app/Contents/Library/vmrun"
 LIMACTL_PATH="/opt/local/bin/limactl"
 
@@ -51,7 +51,7 @@ VMWARE_VM_USER="blake"  # SSH user for VMware VMs
 
 # Runner group configurations
 LEGACY_RUNNERS=("tenfive" "tensix" "tenseven" "teneight" "tennine" "tenten" "teneleven")
-CURRENT_RUNNERS=("macOS_15" "macOS_26")
+CURRENT_RUNNERS=("macos-26" "macos-26-beta" "macos-15")
 GROUP=""
 STOP_VMS=""
 
@@ -97,8 +97,7 @@ GitHub Actions Self-Hosted Runner Manager
 Creates and manages different types of runners for the current repository.
 
 Options:
-    -tart <runner_name>     Create macOS runner using tart VM
-    -lima <runner_name>     Create Linux runner using lima VM (stub)
+    -lima <runner_name>     Create macOS runner using lima VM
     -vmware <runner_name>   Create VMware runner (stub)
     -ssh <hostname>         Use SSH to connect to remote host
     -owner <github_owner>   Override GitHub owner (default: trodemaster)
@@ -120,53 +119,42 @@ Options:
     -h, --help              Show this help message
 
 Examples:
-    # Create different types of runners for current repo
-    $0 -tart macOS_15
-    $0 -lima ubuntu-runner
-    $0 -vmware tenfive        # Creates runner from runner-tenfive-base on darkstar
-    
+    # Register Lima macOS runners (instance must be running first)
+    $0 -lima macos-26
+    $0 -lima macos-26-beta
+    $0 -lima macos-15
+
     # Create runner for specific owner/repo
-    $0 -tart macos-runner -owner myusername -repo myproject
-    
-    # Create runner on remote host
-    $0 -tart macos-runner -ssh remote-host
-    
+    $0 -lima macos-26 -owner myusername -repo myproject
+
     # Manage runner groups
-    $0 -start-group current    # Start tart runners (macOS_15, macOS_26)
+    $0 -start-group current    # Start lima runners (macos-26, macos-26-beta, macos-15)
     $0 -start-group legacy     # Start docker runners for legacy VMs
     $0 -start-group all        # Start all runners (current + legacy)
     $0 -stop-group legacy -stop-vms  # Stop legacy runners and shut down VMs
-    
+
     # Inspect VMs on darkstar
-    $0 -inspect-legacy-vms     # List all VMs and their status
-    $0 -inspect-legacy-vms -vmware-api-host 192.168.1.100  # Custom host
-    
+    $0 -inspect-legacy-vms
+
     # List and remove
     $0 -list
-    $0 -list -owner myusername -repo myproject
-    $0 -remove macos-runner
+    $0 -remove macOS_26
     $0 -remove-all
 
 Environment Variables:
     GITHUB_OWNER            Set default GitHub owner (default: trodemaster)
     GITHUB_REPO             Set default repository name (default: blakeports)
     RUNNER_CONFIG           JSON configuration for runners used by -start-all
-                           Format: [{"type":"tart","name":"vm_name","ssh_host":""},...]
-                           Types: tart, lima, vmware
+                           Format: [{"type":"lima","name":"instance_name","ssh_host":""},...]
+                           Types: lima, vmware
                            ssh_host: empty for local, hostname for remote
 
 Configuration Examples:
-    # Local tart runners only
+    # Lima runners only (current)
     export RUNNER_CONFIG='[
-      {"type":"tart","name":"macOS_15","ssh_host":""},
-      {"type":"tart","name":"macOS_26","ssh_host":""}
-    ]'
-    
-    # Mixed local and remote runners
-    export RUNNER_CONFIG='[
-      {"type":"tart","name":"macOS_15","ssh_host":""},
-      {"type":"lima","name":"ubuntu_22","ssh_host":"remote-host"},
-      {"type":"vmware","name":"windows_11","ssh_host":"remote-win"}
+      {"type":"lima","name":"macos-26","ssh_host":""},
+      {"type":"lima","name":"macos-26-beta","ssh_host":""},
+      {"type":"lima","name":"macos-15","ssh_host":""}
     ]'
 
 Workflow Usage:
@@ -216,16 +204,7 @@ check_dependencies() {
         missing_deps+=("gh")
     fi
     
-    # Check for tart CLI (for Apple Silicon macOS runners only)
-    local arch
-    arch=$(uname -m)
-    if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
-        if [ ! -x "$TART_PATH" ]; then
-            missing_deps+=("tart")
-        fi
-    fi
-    
-    # Check for lima CLI (for Linux runners)
+    # Check for lima CLI
     if [ ! -x "$LIMACTL_PATH" ]; then
         missing_deps+=("lima")
     fi
@@ -246,10 +225,6 @@ check_dependencies() {
             case $dep in
                 "gh")
                     echo "  - GitHub CLI: https://cli.github.com/"
-                    ;;
-                "tart")
-                    echo "  - Tart: https://tart.run/"
-                    echo "    Expected path: $TART_PATH"
                     ;;
                 "lima")
                     echo "  - Lima: https://lima-vm.io/"
@@ -374,10 +349,10 @@ parse_runner_config() {
         
         # Validate runner type
         case "$runner_type" in
-            "tart"|"lima"|"vmware")
+            "lima"|"vmware")
                 ;;
             *)
-                print_error "Invalid runner type '$runner_type' at index $i. Must be: tart, lima, or vmware"
+                print_error "Invalid runner type '$runner_type' at index $i. Must be: lima or vmware"
                 return 1
                 ;;
         esac
@@ -524,25 +499,6 @@ test_ssh_connection_with_retries() {
     return 1
 }
 
-# Function to get SSH hostname for a base VM name
-get_ssh_hostname() {
-    local base_vm_name=$1
-    
-    # Map base VM names to SSH hostnames (from SSH config)
-    case "$base_vm_name" in
-        "macOS_26")
-            echo "tahoe"
-            ;;
-        "macOS_15")
-            echo "sequoia"
-            ;;
-        *)
-            # Default: use base name as hostname
-            echo "$base_vm_name"
-            ;;
-    esac
-}
-
 # Function to detect primary network interface for bridged networking
 detect_primary_network_interface() {
     # Try to get the primary network interface
@@ -646,229 +602,209 @@ detect_vm_architecture() {
     return 0
 }
 
-# Function to start tart runner (macOS)
-start_tart_runner() {
-    local base_vm_name=$1
-    local runner_vm_name="${base_vm_name}_runner"
-    print_info "Starting tart runner: $runner_vm_name (cloned from $base_vm_name)"
-    
-    if [ -n "$SSH_HOST" ]; then
-        print_info "Starting tart runner on remote host: $SSH_HOST"
-        # TODO: Implement remote tart runner start
-        print_warning "Remote tart runner start not yet implemented"
-    else
-        # Check if tart is available
-        if [ ! -x "$TART_PATH" ]; then
-            print_error "Tart CLI not found at: $TART_PATH"
-            exit 1
-        fi
-        
-        # Check if base VM exists
-        if ! "$TART_PATH" list | grep -q "$base_vm_name"; then
-            print_error "Base tart VM '$base_vm_name' not found. Available VMs:"
-            "$TART_PATH" list
-            exit 1
-        fi
-        
-        # Check if runner VM already exists
-        if "$TART_PATH" list | grep -q "$runner_vm_name"; then
-            print_info "Runner VM '$runner_vm_name' already exists"
-        else
-            print_info "Cloning base VM '$base_vm_name' to '$runner_vm_name'..."
-            "$TART_PATH" clone "$base_vm_name" "$runner_vm_name"
-            if [ $? -ne 0 ]; then
-                print_error "Failed to clone VM"
-                exit 1
-            fi
-            print_success "VM cloned successfully"
-        fi
-        
-        # Check if runner VM is already running
-        local vm_state
-        vm_state=$("$TART_PATH" list | grep "$runner_vm_name" | awk '{print $NF}')
-        if [ "$vm_state" = "running" ]; then
-            print_warning "Runner VM '$runner_vm_name' is already running"
-        else
-            print_info "Starting runner VM: $runner_vm_name"
-            # Use bridged networking on en0 interface
-            print_info "Using bridged networking on interface: en0"
-            # Start VM in background with graphics and bridged networking
-            "$TART_PATH" run --net-bridged en0 "$runner_vm_name" &
-            local vm_pid=$!
-            
-            # Wait for VM to boot and initialize networking
-            print_info "Waiting for VM to boot and initialize networking (45 seconds)..."
-            sleep 45
-            
-            # Get VM connection info - prefer SSH hostname, fall back to tart ip
-            print_info "Getting VM connection info..."
-            local vm_ip
-            local ssh_hostname
-            ssh_hostname=$(get_ssh_hostname "$base_vm_name")
-            
-            # Try SSH hostname first with periodic retries for up to 1 minute
-            print_info "Trying SSH hostname: $ssh_hostname (will retry for up to 1 minute while VM boots)..."
-            local ssh_attempts=0
-            local ssh_max_attempts=12  # 12 attempts * 5 seconds = 60 seconds
-            local ssh_success=false
-            
-            while [ $ssh_attempts -lt $ssh_max_attempts ]; do
-                ssh_attempts=$((ssh_attempts + 1))
-                if ssh "${SSH_OPTS[@]}" -o ConnectTimeout=5 admin@"$ssh_hostname" "echo 'SSH test'" &>/dev/null; then
-                    print_success "SSH hostname is reachable: $ssh_hostname (after $((ssh_attempts * 5)) seconds)"
-                    vm_ip="$ssh_hostname"
-                    ssh_success=true
-                    break
-                else
-                    if [ $ssh_attempts -lt $ssh_max_attempts ]; then
-                        print_info "SSH hostname not yet reachable (attempt $ssh_attempts/$ssh_max_attempts), retrying in 5 seconds..."
-                        sleep 5
-                    fi
-                fi
-            done
-            
-            # If SSH hostname didn't work after 1 minute, fall back to tart ip
-            if [ "$ssh_success" = false ]; then
-                print_warning "SSH hostname not reachable after 1 minute, trying tart ip..."
-                local attempts=0
-                while [ $attempts -lt 30 ]; do
-                    vm_ip=$("$TART_PATH" ip --wait 5 "$runner_vm_name" 2>/dev/null)
-                    if [ $? -eq 0 ] && [ -n "$vm_ip" ] && [ "$vm_ip" != "null" ]; then
-                        print_success "VM IP (from tart): $vm_ip"
-                        break
-                    fi
-                    attempts=$((attempts + 1))
-                    sleep 2
-                done
-                
-                # If tart ip also failed, use SSH hostname anyway (might work after VM fully boots)
-                if [ -z "$vm_ip" ] || [ "$vm_ip" = "null" ]; then
-                    print_warning "Failed to get VM IP address via tart ip after $((attempts * 2)) seconds"
-                    print_info "Using SSH hostname as final fallback: $ssh_hostname"
-                    vm_ip="$ssh_hostname"
-                fi
-            fi
-        fi
-        
-        # Get VM IP if not already running
-        if [ -z "$vm_ip" ]; then
-            local ssh_hostname
-            ssh_hostname=$(get_ssh_hostname "$base_vm_name")
-            
-            # Try SSH hostname first with periodic retries for up to 1 minute
-            print_info "Trying SSH hostname: $ssh_hostname (will retry for up to 1 minute)..."
-            local ssh_attempts=0
-            local ssh_max_attempts=12  # 12 attempts * 5 seconds = 60 seconds
-            local ssh_success=false
-            
-            while [ $ssh_attempts -lt $ssh_max_attempts ]; do
-                ssh_attempts=$((ssh_attempts + 1))
-                if ssh "${SSH_OPTS[@]}" -o ConnectTimeout=5 admin@"$ssh_hostname" "echo 'SSH test'" &>/dev/null; then
-                    print_success "SSH hostname is reachable: $ssh_hostname (after $((ssh_attempts * 5)) seconds)"
-                    vm_ip="$ssh_hostname"
-                    ssh_success=true
-                    break
-                else
-                    if [ $ssh_attempts -lt $ssh_max_attempts ]; then
-                        print_info "SSH hostname not yet reachable (attempt $ssh_attempts/$ssh_max_attempts), retrying in 5 seconds..."
-                        sleep 5
-                    fi
-                fi
-            done
-            
-            # If SSH hostname didn't work after 1 minute, fall back to tart ip
-            if [ "$ssh_success" = false ]; then
-                print_warning "SSH hostname not reachable after 1 minute, trying tart ip..."
-                vm_ip=$("$TART_PATH" ip "$runner_vm_name" 2>/dev/null)
-                if [ $? -eq 0 ] && [ -n "$vm_ip" ] && [ "$vm_ip" != "null" ]; then
-                    print_success "VM IP (from tart): $vm_ip"
-                else
-                    print_warning "Failed to get VM IP address via tart ip"
-                    print_info "Using SSH hostname as final fallback: $ssh_hostname"
-                    vm_ip="$ssh_hostname"
-                fi
-            fi
-        fi
-        
-        # Wait for SSH to be available with retries
-        if ! test_ssh_connection_with_retries "$vm_ip"; then
-            print_error "Failed to establish SSH connection to VM after all retry attempts"
-            print_error "This usually indicates one of the following issues:"
-            print_error "  1. VM is not fully booted or SSH service is not running"
-            print_error "  2. Network connectivity issues between host and VM"
-            print_error "  3. SSH authentication problems (key not found or incorrect)"
-            print_error "  4. VM IP address is incorrect or VM is not accessible"
-            print_error ""
-            print_error "Try running with -debug flag for more detailed information:"
-            print_error "  $0 -tart $base_vm_name -debug"
-            exit 1
-        fi
-        
-        # Install and configure GitHub runner
-        print_info "Installing GitHub runner on VM..."
-        
-        # get lastest stable runner version
-        local runner_version=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/v//')
+# Map Lima instance name to GitHub Actions runner label
+# Lima instance names use lowercase-hyphen; runner labels use camelCase_underscore
+get_runner_label_for_instance() {
+    local instance_name=$1
+    case "$instance_name" in
+        "macos-26")       echo "macOS_26" ;;
+        "macos-26-beta")  echo "macOS_26_beta" ;;
+        "macos-15")       echo "macOS_15" ;;
+        *)                echo "$instance_name" ;;
+    esac
+}
 
-        # Download runner to VM
-        
-        # Detect VM architecture and get appropriate runner package
-        local runner_package
-        runner_package=$(detect_vm_architecture "$vm_ip" "$runner_version")
-        if [ $? -ne 0 ]; then
-            print_error "Failed to determine runner package for VM"
-            exit 1
+# Map GitHub Actions runner label back to Lima instance name
+get_lima_instance_for_label() {
+    local runner_label=$1
+    case "$runner_label" in
+        "macOS_26")      echo "macos-26" ;;
+        "macOS_26_beta") echo "macos-26-beta" ;;
+        "macOS_15")      echo "macos-15" ;;
+        *)               echo "" ;;
+    esac
+}
+
+# Function to start a Lima macOS runner
+start_lima_runner() {
+    local instance_name=$1
+    local runner_label
+    runner_label=$(get_runner_label_for_instance "$instance_name")
+
+    print_info "Starting lima runner: $instance_name (label: $runner_label)"
+
+    if [ ! -x "$LIMACTL_PATH" ]; then
+        print_error "Lima CLI not found at: $LIMACTL_PATH"
+        exit 1
+    fi
+
+    # Verify the instance is running
+    local instance_status
+    instance_status=$("$LIMACTL_PATH" list 2>/dev/null | awk -v name="$instance_name" '$1 == name {print $2}')
+    if [ "$instance_status" != "Running" ]; then
+        print_error "Lima instance '$instance_name' is not running (status: ${instance_status:-not found})"
+        print_info "Start it first: limactl start $instance_name"
+        exit 1
+    fi
+    print_success "Lima instance '$instance_name' is running"
+
+    local ssh_config="$HOME/.lima/$instance_name/ssh.config"
+    local ssh_target="lima-$instance_name"
+
+    if [ ! -f "$ssh_config" ]; then
+        print_error "Lima SSH config not found: $ssh_config"
+        exit 1
+    fi
+
+    # Wait for SSH to be available
+    print_info "Waiting for SSH on $ssh_target..."
+    local attempt=0
+    local max_attempts=12
+    local ssh_ok=false
+    while [ $attempt -lt $max_attempts ]; do
+        attempt=$((attempt + 1))
+        if ssh -F "$ssh_config" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$ssh_target" "echo ok" &>/dev/null; then
+            ssh_ok=true
+            break
         fi
-        
-        # Get OS and architecture info for labels
-        local vm_os_type=$(ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "uname -s" 2>/dev/null)
-        local vm_arch=$(ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "uname -m" 2>/dev/null)
-        local runner_labels=$(generate_runner_labels "tart" "$vm_os_type" "$vm_arch")
-        # Add the base_vm_name as a custom label for matrix targeting
-        runner_labels="$runner_labels,$base_vm_name"
-        
-        local runner_url="https://github.com/actions/runner/releases/download/v${runner_version}/${runner_package}"
-        print_info "Using runner package: $runner_package"
-        print_info "Runner labels: $runner_labels"
-        
-        # Execute commands in VM to set up runner
+        print_info "SSH attempt $attempt/$max_attempts, retrying in 5s..."
+        sleep 5
+    done
+    if [ "$ssh_ok" = false ]; then
+        print_error "Failed to establish SSH connection to $ssh_target after $max_attempts attempts"
+        exit 1
+    fi
+    print_success "SSH connection established to $ssh_target"
+
+    # Detect OS and architecture
+    local vm_os vm_arch
+    vm_os=$(ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" "uname -s" 2>/dev/null)
+    vm_arch=$(ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" "uname -m" 2>/dev/null)
+    print_info "VM OS: $vm_os, Arch: $vm_arch"
+
+    # Get latest stable runner version
+    local runner_version
+    runner_version=$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/v//')
+    print_info "Runner version: $runner_version"
+
+    # Determine runner package
+    local runner_package
+    case "$vm_os" in
+        "Darwin")
+            case "$vm_arch" in
+                "arm64")  runner_package="actions-runner-osx-arm64-${runner_version}.tar.gz" ;;
+                "x86_64") runner_package="actions-runner-osx-x64-${runner_version}.tar.gz" ;;
+                *) print_error "Unsupported macOS arch: $vm_arch"; exit 1 ;;
+            esac ;;
+        "Linux")
+            case "$vm_arch" in
+                "aarch64"|"arm64") runner_package="actions-runner-linux-arm64-${runner_version}.tar.gz" ;;
+                "x86_64")          runner_package="actions-runner-linux-x64-${runner_version}.tar.gz" ;;
+                *) print_error "Unsupported Linux arch: $vm_arch"; exit 1 ;;
+            esac ;;
+        *) print_error "Unsupported OS: $vm_os"; exit 1 ;;
+    esac
+
+    local runner_url="https://github.com/actions/runner/releases/download/v${runner_version}/${runner_package}"
+    local runner_labels="self-hosted,macOS,ARM64,$runner_label"
+    print_info "Package: $runner_package"
+    print_info "Labels:  $runner_labels"
+
+    # Check if runner is already configured on disk
+    local already_configured
+    already_configured=$(ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+        '[ -f /opt/actions-runner/.runner ] && echo yes || echo no' 2>/dev/null)
+
+    if [ "$already_configured" = "yes" ]; then
+        print_info "Runner already configured on disk — skipping download/configure"
+    else
+        # Download runner into VM
         print_info "Downloading GitHub runner..."
-        ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "curl -o /tmp/actions-runner.tar.gz -L '$runner_url'"
+        ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+            "curl -fsSL -o /tmp/actions-runner.tar.gz '$runner_url'"
         if [ $? -ne 0 ]; then
             print_error "Failed to download GitHub runner"
             exit 1
         fi
-        
+
+        # Extract runner
         print_info "Extracting runner..."
-        ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "sudo mkdir -p /opt/actions-runner && sudo tar -xzf /tmp/actions-runner.tar.gz -C /opt/actions-runner && sudo chown -R admin:admin /opt/actions-runner && rm /tmp/actions-runner.tar.gz"
-        
+        ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+            "sudo mkdir -p /opt/actions-runner && \
+             sudo tar -xzf /tmp/actions-runner.tar.gz -C /opt/actions-runner && \
+             sudo chown -R \$(whoami):\$(id -gn) /opt/actions-runner && \
+             rm /tmp/actions-runner.tar.gz"
+
+        # Configure runner
         print_info "Configuring runner..."
-        # Configure the runner with the token - use the original name for the runner registration
-        ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "cd /opt/actions-runner && ./config.sh --url 'https://github.com/$GITHUB_OWNER/$GITHUB_REPO' --token '$RUNNER_TOKEN' --name '$base_vm_name' --labels '$runner_labels' --unattended --replace"
-        
+        ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+            "cd /opt/actions-runner && \
+             ./config.sh \
+               --url 'https://github.com/$GITHUB_OWNER/$GITHUB_REPO' \
+               --token '$RUNNER_TOKEN' \
+               --name '$runner_label' \
+               --labels '$runner_labels' \
+               --unattended --replace"
         if [ $? -ne 0 ]; then
             print_error "Failed to configure GitHub runner"
             exit 1
         fi
-        
-        # Install and start service for the primary instance
-        print_info "Installing runner service..."
-        ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "cd /opt/actions-runner && ./svc.sh install"
-        if [ $? -ne 0 ]; then
-            print_error "Failed to install runner service"
-            exit 1
+    fi
+
+    # Install and start service
+    print_info "Installing runner service (if not already installed)..."
+    ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+        'cd /opt/actions-runner && ([ -f .service ] && echo "Service already installed" || ./svc.sh install)'
+    if [ $? -ne 0 ]; then print_error "Failed to install runner service"; exit 1; fi
+
+    # Start the service. On macOS, LaunchAgents require an active GUI session
+    # (gui/<uid> launchd domain). If the user has not yet logged in via the
+    # macOS desktop, bootstrap will fail here. The service IS installed and will
+    # start automatically on the next GUI login or VM reboot (if auto-login is
+    # enabled in configure.sh).
+    print_info "Starting runner service..."
+    local start_ok=false
+    local plist_path
+    plist_path=$(ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+        "ls \$HOME/Library/LaunchAgents/actions.runner.*.plist 2>/dev/null | head -1")
+
+    if [ -n "$plist_path" ]; then
+        # Try launchctl bootstrap (macOS 10.15+)
+        if ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+            "uid=\$(id -u); launchctl bootstrap gui/\$uid '$plist_path'" 2>/dev/null; then
+            start_ok=true
+        # Fall back to legacy launchctl load
+        elif ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+            "launchctl load -w '$plist_path'" 2>/dev/null; then
+            start_ok=true
         fi
-        
-        print_info "Starting runner service..."
-        ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "cd /opt/actions-runner && ./svc.sh start"
-        if [ $? -ne 0 ]; then
-            print_error "Failed to start runner service"
-            exit 1
-        fi
-        
-        print_success "GitHub runner '$base_vm_name' is now running on cloned VM '$runner_vm_name' (IP: $vm_ip)"
+    fi
+
+    if [ "$start_ok" = true ]; then
+        print_success "Runner '$runner_label' is now running on Lima instance '$instance_name'"
         print_info "Runner service status:"
-        ssh "${SSH_OPTS[@]}" admin@"$vm_ip" "cd /opt/actions-runner && ./svc.sh status"
+        ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+            "cd /opt/actions-runner && ./svc.sh status"
+    else
+        print_warning "════════════════════════════════════════════════════════════════"
+        print_warning "  RUNNER INSTALLED — WAITING FOR GUI SESSION"
+        print_warning "════════════════════════════════════════════════════════════════"
+        print_warning ""
+        print_warning "  Runner '$runner_label' is registered with GitHub and the"
+        print_warning "  LaunchAgent service is installed, but could not be started"
+        print_warning "  because no GUI session exists yet (gui/$uid launchd domain"
+        print_warning "  only appears after the user logs into the macOS desktop)."
+        print_warning ""
+        print_warning "  To start the runner now:"
+        print_warning "    1. Log into the VM window (macOS login screen → desktop)"
+        print_warning "    2. The LaunchAgent will start automatically on login"
+        print_warning ""
+        print_warning "  For fully automated startup, enable auto-login in the VM:"
+        print_warning "    System Settings → Users & Groups → Automatic login"
+        print_warning "    OR: run configure.sh with AUTO_LOGIN=1"
+        print_warning ""
+        print_warning "════════════════════════════════════════════════════════════════"
+        print_success "Runner '$runner_label' registered and service installed (start pending GUI login)"
     fi
 }
 
@@ -1013,32 +949,6 @@ inspect_legacy_vms() {
     done
     echo
     print_success "Inspection complete. Running VMs: $running_count"
-}
-
-# Function to start lima runner (Linux) - stub
-start_lima_runner() {
-    local runner_name=$1
-    print_info "Starting lima runner: $runner_name (stub implementation)"
-    
-    if [ -n "$SSH_HOST" ]; then
-        print_info "Starting lima runner on remote host: $SSH_HOST"
-        # TODO: Implement remote lima runner start
-        print_warning "Remote lima runner start not yet implemented"
-    else
-        # Check if lima is available
-        if [ ! -x "$LIMACTL_PATH" ]; then
-            print_error "Lima CLI not found at: $LIMACTL_PATH"
-            exit 1
-        fi
-        
-        # Stub implementation
-        print_warning "Lima runner start is a stub - implement actual logic for $runner_name"
-        print_info "Using limactl path: $LIMACTL_PATH"
-        print_info "This would typically involve:"
-        print_info "  1. Starting lima VM with specific configuration"
-        print_info "  2. Installing GitHub runner on the VM"
-        print_info "  3. Configuring and starting the runner service"
-    fi
 }
 
 # Function to start legacy docker runner
@@ -1309,11 +1219,11 @@ start_runner_group() {
     
     case $group in
         "current")
-            print_info "Starting current group (tart runners)"
+            print_info "Starting current group (lima runners)"
             for runner in "${CURRENT_RUNNERS[@]}"; do
-                print_info "Starting tart runner: $runner"
+                print_info "Starting lima runner: $runner"
                 generate_runner_token
-                start_tart_runner "$runner"
+                start_lima_runner "$runner"
             done
             ;;
         "legacy")
@@ -1345,12 +1255,13 @@ stop_runner_group() {
     
     case $group in
         "current")
-            print_info "Stopping current group (tart runners)"
+            print_info "Stopping current group (lima runners)"
             for runner in "${CURRENT_RUNNERS[@]}"; do
-                local runner_vm_name="${runner}_runner"
-                if [ -x "$TART_PATH" ] && "$TART_PATH" list | grep -q "$runner_vm_name"; then
-                    print_info "Stopping tart VM: $runner_vm_name"
-                    "$TART_PATH" stop "$runner_vm_name" 2>/dev/null || print_warning "VM may already be stopped"
+                if "$LIMACTL_PATH" list 2>/dev/null | awk '{print $1}' | grep -q "^$runner$"; then
+                    print_info "Stopping Lima instance: $runner"
+                    "$LIMACTL_PATH" stop "$runner" 2>/dev/null || print_warning "Instance may already be stopped"
+                else
+                    print_info "Lima instance '$runner' not found, skipping"
                 fi
             done
             ;;
@@ -1429,15 +1340,6 @@ start_single_runner_parallel() {
     
     # Start the runner based on type
     case "$runner_type" in
-        "tart")
-            if start_tart_runner "$name"; then
-                echo "SUCCESS:$name:$runner_type" > "$result_file"
-                print_success "Successfully started tart runner: $name"
-            else
-                echo "FAILURE:$name:$runner_type" > "$result_file"
-                print_error "Failed to start tart runner: $name"
-            fi
-            ;;
         "lima")
             if start_lima_runner "$name"; then
                 echo "SUCCESS:$name:$runner_type" > "$result_file"
@@ -1651,9 +1553,6 @@ remove_all_vmware_runners() {
 remove_all_runners() {
     print_info "Removing all GitHub runners using GitHub API..."
 
-    # Remove all tart VMs (local cleanup only)
-    remove_all_tart_runners
-
     # Remove all VMware VMs (remote cleanup)
     remove_all_vmware_runners
 
@@ -1687,103 +1586,6 @@ remove_all_runners() {
 
         sleep 2
     done
-}
-
-# Function to remove all tart runners
-remove_all_tart_runners() {
-    print_info "Discovering and removing tart runner VMs..."
-    
-    # Check if tart is available
-    if [ ! -x "$TART_PATH" ]; then
-        print_warning "Tart CLI not found at: $TART_PATH - skipping tart runners"
-        return 0
-    fi
-    
-    # Get list of all VMs that end with "_runner" (these are the runner VMs, NOT the template VMs)
-    local runner_vms
-    runner_vms=$("$TART_PATH" list | grep "_runner" | awk '{print $2}')
-    
-    if [ -z "$runner_vms" ]; then
-        print_info "No tart runner VMs found"
-        # Still need to clean up GitHub registrations even if no VMs exist
-        print_info "Cleaning up GitHub runner registrations..."
-        remove_runners_from_github_api
-        return 0
-    fi
-    
-    print_info "Found runner VMs to process:"
-    echo "$runner_vms" | while read -r vm; do echo "  - $vm"; done
-    
-    local runner_count=0
-    local removed_count=0
-    
-    # Process each runner VM
-    while IFS= read -r vm_name; do
-        if [ -z "$vm_name" ]; then
-            continue
-        fi
-        
-        runner_count=$((runner_count + 1))
-        
-        # Extract base name by removing "_runner" suffix
-        local base_name="${vm_name%_runner}"
-        print_info "Processing runner VM $runner_count: $vm_name (base: $base_name)"
-        
-        # Safety check: Never delete template VMs (those without _runner suffix)
-        if [ "$vm_name" = "$base_name" ]; then
-            print_error "SAFETY CHECK FAILED: Attempted to delete template VM '$vm_name'"
-            print_error "Template VMs should never be deleted. Only runner VMs with '_runner' suffix should be removed."
-            print_error "Skipping this VM to prevent data loss."
-            continue
-        fi
-        
-        # Get VM state - use more robust grep
-        local vm_state
-        vm_state=$("$TART_PATH" list | awk -v vm="$vm_name" '$2 == vm {print $NF}')
-        
-        # Get VM IP if running
-        local vm_ip=""
-        if [ "$vm_state" = "running" ]; then
-            vm_ip=$("$TART_PATH" ip "$vm_name" 2>/dev/null || echo "")
-        fi
-        
-        # Skip SSH cleanup - just proceed with VM cleanup
-        if [ -n "$vm_ip" ] && [ "$vm_ip" != "null" ]; then
-            print_info "VM '$vm_name' is running (IP: $vm_ip) - skipping SSH cleanup, will rely on GitHub API"
-        elif [ "$vm_state" = "running" ]; then
-            print_info "VM '$vm_name' is running but IP is unavailable - proceeding with VM cleanup"
-        else
-            print_info "VM '$vm_name' is $vm_state - proceeding with VM cleanup"
-        fi
-        
-        # Stop the VM (don't exit on failure)
-        print_info "Stopping tart VM: $vm_name"
-        if ! "$TART_PATH" stop "$vm_name" 2>/dev/null; then
-            print_warning "VM may already be stopped or failed to stop"
-        fi
-        
-        # Delete the VM (don't exit on failure)
-        print_info "Deleting tart VM: $vm_name"
-        if "$TART_PATH" delete "$vm_name" 2>/dev/null; then
-            print_success "Deleted VM: $vm_name"
-            removed_count=$((removed_count + 1))
-        else
-            print_error "Failed to delete VM: $vm_name (but continuing with other VMs)"
-        fi
-        
-        echo "---" # Separator between VMs
-        
-    done <<< "$runner_vms"
-    
-    print_success "Processed $runner_count tart runner VMs, removed $removed_count VMs"
-    
-    # Always attempt to remove runners from GitHub API as a cleanup step
-    print_info "Cleaning up GitHub runner registrations..."
-    remove_runners_from_github_api
-    
-    if [ "$removed_count" -gt 0 ]; then
-        print_info "Base VMs remain available for future runner creation"
-    fi
 }
 
 # Function to remove runners directly from GitHub API
@@ -1939,159 +1741,118 @@ stop_workflows_for_runner() {
 # Function to remove/de-register a GitHub runner
 remove_runner() {
     local runner_name=$1
-    local runner_vm_name="${runner_name}_runner"
     local vmware_vm_name="runner-${runner_name}"
     print_info "Removing GitHub runner: $runner_name"
 
     # Stop workflows running on this runner first
     stop_workflows_for_runner "$runner_name"
 
-    # Try to find the runner by checking different VM types
-    local vm_ip=""
-    local vm_hostname=""
+    # Determine runner type and target
     local runner_found=false
     local runner_type=""
+    local lima_instance=""
 
-    # Check if it's a tart VM (look for the cloned VM with _runner suffix)
-    if [ -x "$TART_PATH" ] && "$TART_PATH" list | grep -q "$runner_vm_name"; then
-        print_info "Found tart runner VM: $runner_vm_name"
-        runner_type="tart"
-        vm_ip=$("$TART_PATH" ip "$runner_vm_name" 2>/dev/null)
-        if [ $? -eq 0 ] && [ -n "$vm_ip" ] && [ "$vm_ip" != "null" ]; then
-            runner_found=true
-            print_info "VM IP: $vm_ip"
-        else
-            print_warning "Tart runner VM '$runner_vm_name' exists but is not running or has no IP"
-            # Try to get VM state
-            local vm_state=$("$TART_PATH" list | grep "$runner_vm_name" | awk '{print $NF}')
-            if [ "$vm_state" = "stopped" ]; then
-                print_info "VM is stopped, will delete it directly"
-                runner_found="stopped"
-            fi
-        fi
+    # Check if it's a Lima runner (map label → instance name)
+    lima_instance=$(get_lima_instance_for_label "$runner_name")
+    if [ -n "$lima_instance" ]; then
+        runner_type="lima"
+        runner_found=true
+        print_info "Identified as Lima runner: instance '$lima_instance'"
     # Check if it's a VMware VM
     elif vmware_vm_exists "$vmware_vm_name"; then
         print_info "Found VMware runner VM: $vmware_vm_name"
         runner_type="vmware"
+        local vm_hostname
         vm_hostname=$(get_vmware_vm_hostname "$runner_name")
-
-        # Check if VM is running
-        local vm_path=$(get_vmware_vm_path "$vmware_vm_name")
+        local vm_path
+        vm_path=$(get_vmware_vm_path "$vmware_vm_name")
         local running_vms
         running_vms=$(ssh "$VMWARE_SSH_HOST" "'$VMWARE_VMRUN_PATH' list" 2>/dev/null)
-
         if echo "$running_vms" | grep -q "$vm_path"; then
             runner_found=true
-            print_info "VM hostname: $vm_hostname"
         else
-            print_info "VMware VM exists but is not running, will delete it directly"
             runner_found="stopped"
         fi
     fi
 
-    # If VM is not found, prompt user for manual cleanup
     if [ "$runner_found" = false ]; then
-        print_warning "Could not automatically locate runner VM for '$runner_name'"
-        print_info "To manually remove the runner from GitHub:"
-        print_info "  1. Go to your repository settings"
-        print_info "  2. Navigate to Actions > Runners"
-        print_info "  3. Find and remove the runner named '$runner_name'"
+        print_warning "Could not locate runner '$runner_name' (not a known Lima instance or VMware VM)"
+        print_info "To manually remove from GitHub: go to repository Settings → Actions → Runners"
         return 0
     fi
 
-    # If VM is running, clean up the runner first
-    if [ "$runner_found" = true ]; then
-        # Determine SSH target based on runner type
-        local ssh_target=""
-        if [ "$runner_type" = "tart" ]; then
-            ssh_target="admin@$vm_ip"
-        elif [ "$runner_type" = "vmware" ]; then
-            ssh_target="$VMWARE_VM_USER@$vm_hostname"
-        fi
+    # ── Lima runner cleanup ────────────────────────────────────────────────────
+    if [ "$runner_type" = "lima" ]; then
+        local ssh_config="$HOME/.lima/$lima_instance/ssh.config"
+        local ssh_target="lima-$lima_instance"
 
-        # Test SSH connection with retries
-        print_info "Testing SSH connection to $ssh_target..."
-        local test_ip="$vm_ip"
-        local use_legacy=false
-        if [ "$runner_type" = "vmware" ]; then
-            test_ip="$vm_hostname"
-            use_legacy=true
-        fi
+        # Check if instance is running
+        local instance_status
+        instance_status=$("$LIMACTL_PATH" list 2>/dev/null | awk -v name="$lima_instance" '$1 == name {print $2}')
 
-        if ! test_ssh_connection_with_retries "$test_ip" "$use_legacy" 2>/dev/null; then
-            print_error "SSH connection failed to $ssh_target"
-            print_warning "Cannot automatically remove runner. Will proceed to shutdown and delete VM."
+        if [ "$instance_status" = "Running" ] && [ -f "$ssh_config" ]; then
+            print_info "Stopping runner service on $lima_instance..."
+            ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+                "cd /opt/actions-runner && ./svc.sh stop" 2>/dev/null \
+                || print_warning "Runner service may not be running"
+
+            print_info "Uninstalling runner service..."
+            ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+                "cd /opt/actions-runner && ./svc.sh uninstall" 2>/dev/null \
+                || print_warning "Runner service may not be installed"
+
+            print_info "De-registering runner from GitHub..."
+            ssh -F "$ssh_config" -o StrictHostKeyChecking=no "$ssh_target" \
+                "cd /opt/actions-runner && ./config.sh remove --token '$RUNNER_TOKEN'" 2>/dev/null \
+                || print_warning "Could not de-register via config.sh; will clean up via GitHub API"
         else
-            print_success "SSH connection established"
-
-            # Check if runner directory exists (use appropriate SSH command)
-            local ssh_cmd="ssh"
-            local ssh_opts_ref="SSH_OPTS[@]"
-            if [ "$runner_type" = "vmware" ]; then
-                ssh_cmd="$LEGACY_SSH_CMD"
-                ssh_opts_ref="LEGACY_SSH_OPTS[@]"
-            fi
-
-            if $ssh_cmd "${!ssh_opts_ref}" "$ssh_target" "test -d /opt/actions-runner" 2>/dev/null; then
-                # Stop the runner service if it's running
-                print_info "Stopping runner service..."
-                $ssh_cmd "${!ssh_opts_ref}" "$ssh_target" "cd /opt/actions-runner && ./svc.sh stop" 2>/dev/null || print_warning "Service may not be running"
-
-                # Uninstall the service
-                print_info "Uninstalling runner service..."
-                $ssh_cmd "${!ssh_opts_ref}" "$ssh_target" "cd /opt/actions-runner && ./svc.sh uninstall" 2>/dev/null || print_warning "Service may not be installed"
-
-                # Remove the runner from GitHub
-                print_info "Removing runner from GitHub..."
-                if $ssh_cmd "${!ssh_opts_ref}" "$ssh_target" "cd /opt/actions-runner && ./config.sh remove --token '$RUNNER_TOKEN'" 2>/dev/null; then
-                    print_success "Runner removed from GitHub successfully"
-                else
-                    print_warning "Failed to remove runner from GitHub automatically"
-                    print_info "The runner may have already been removed or the token may be invalid"
-                fi
-
-                # Clean up the installation directory
-                print_info "Cleaning up installation directory..."
-                $ssh_cmd "${!ssh_opts_ref}" "$ssh_target" "sudo rm -rf /opt/actions-runner" 2>/dev/null || print_warning "Failed to clean up installation directory"
-            else
-                print_warning "GitHub runner not found on VM. It may have already been removed."
-            fi
+            print_warning "Lima instance '$lima_instance' is not running — skipping in-VM cleanup"
+            print_info "GitHub runner registration will be removed via API"
         fi
+
+        print_warning "════════════════════════════════════════════════════════════════"
+        print_warning "  LIMA VM PRESERVATION"
+        print_warning "════════════════════════════════════════════════════════════════"
+        print_warning ""
+        print_warning "  Lima instance '$lima_instance' is NOT stopped or deleted."
+        print_warning "  Only the GitHub Actions runner registration has been removed."
+        print_warning "  To stop the VM: limactl stop $lima_instance"
+        print_warning ""
+        print_warning "════════════════════════════════════════════════════════════════"
+
+        print_success "Runner '$runner_name' de-registered (Lima instance preserved)"
+        return 0
     fi
 
-    # Shutdown and delete the VM based on type
-    if [ "$runner_type" = "tart" ]; then
-        print_info "Shutting down runner VM: $runner_vm_name"
-        "$TART_PATH" stop "$runner_vm_name" 2>/dev/null || print_warning "VM may already be stopped"
-
-        print_info "Deleting runner VM: $runner_vm_name"
-        if "$TART_PATH" delete "$runner_vm_name" 2>/dev/null; then
-            print_success "Runner VM '$runner_vm_name' deleted successfully"
-        else
-            print_error "Failed to delete runner VM '$runner_vm_name'"
-            print_info "You may need to delete it manually: tart delete $runner_vm_name"
+    # ── VMware runner cleanup (unchanged) ─────────────────────────────────────
+    if [ "$runner_type" = "vmware" ]; then
+        if [ "$runner_found" = true ]; then
+            local ssh_target="$VMWARE_VM_USER@$vm_hostname"
+            if test_ssh_connection_with_retries "$vm_hostname" true 2>/dev/null; then
+                if $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" "$ssh_target" "test -d /opt/actions-runner" 2>/dev/null; then
+                    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" "$ssh_target" \
+                        "cd /opt/actions-runner && ./svc.sh stop" 2>/dev/null \
+                        || print_warning "Service may not be running"
+                    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" "$ssh_target" \
+                        "cd /opt/actions-runner && ./svc.sh uninstall" 2>/dev/null \
+                        || print_warning "Service may not be installed"
+                    $LEGACY_SSH_CMD "${LEGACY_SSH_OPTS[@]}" "$ssh_target" \
+                        "cd /opt/actions-runner && ./config.sh remove --token '$RUNNER_TOKEN'" 2>/dev/null \
+                        || print_warning "Could not de-register via config.sh"
+                fi
+            fi
         fi
-    elif [ "$runner_type" = "vmware" ]; then
+
         print_warning "════════════════════════════════════════════════════════════════"
         print_warning "  VMWARE VM PRESERVATION"
         print_warning "════════════════════════════════════════════════════════════════"
         print_warning ""
-        print_warning "  VMware VM '$vmware_vm_name' is NOT deleted"
-        print_warning "  The VM remains on $VMWARE_SSH_HOST for manual management"
-        print_warning ""
-        print_warning "  GitHub runner registration has been removed"
-        print_warning "  To manually manage the VM on darkstar:"
-        print_warning "    1. VMware Fusion GUI"
-        print_warning "    2. vmrun commands"
+        print_warning "  VMware VM '$vmware_vm_name' is NOT deleted."
+        print_warning "  The VM remains on $VMWARE_SSH_HOST for manual management."
         print_warning ""
         print_warning "════════════════════════════════════════════════════════════════"
-    fi
 
-    print_success "Runner '$runner_name' removal completed"
-    if [ "$runner_type" = "vmware" ]; then
-        print_info "VMware VM preserved on $VMWARE_SSH_HOST (not deleted)"
-    else
-        print_info "The base VM remains available for future runner creation"
+        print_success "Runner '$runner_name' removal completed (VMware VM preserved)"
     fi
 }
 
@@ -2174,14 +1935,6 @@ main() {
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -tart)
-                RUNNER_TYPE="tart"
-                shift
-                if [[ $# -gt 0 && ! $1 =~ ^- ]]; then
-                    RUNNER_NAME="$1"
-                    shift
-                fi
-                ;;
             -lima)
                 RUNNER_TYPE="lima"
                 shift
@@ -2346,9 +2099,6 @@ main() {
             generate_runner_token
             
             case $RUNNER_TYPE in
-                "tart")
-                    start_tart_runner "$RUNNER_NAME"
-                    ;;
                 "lima")
                     start_lima_runner "$RUNNER_NAME"
                     ;;

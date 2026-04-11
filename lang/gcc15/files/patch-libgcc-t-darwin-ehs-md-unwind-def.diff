@@ -1,0 +1,6 @@
+--- libgcc/config/t-darwin-ehs.orig
++++ libgcc/config/t-darwin-ehs
+@@ -6,2 +6,2 @@
+-unwind-dw2_s.o: gthr-default.h md-unwind-support.h unwind.h
++unwind-dw2_s.o: gthr-default.h md-unwind-support.h unwind.h md-unwind-def.h
+ $(LIBEHSOBJS): libgcc_tm.h

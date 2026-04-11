@@ -1,0 +1,15 @@
+--- src/fips.c.orig
++++ src/fips.c
+@@ -75,9 +75,7 @@
+ };
+
+-#ifdef HAVE_GCC_STORAGE_CLASS__THREAD
+-static __thread struct gcry_thread_context the_tc = {
++/* non-TLS fallback: PPC/GCC-4.2 mis-compiles __thread even when configure */
++/* detects HAVE_GCC_STORAGE_CLASS__THREAD. Safe for non-FIPS builds.       */
++static struct gcry_thread_context the_tc = {
+   0, GCRY_FIPS_FLAG_REJECT_DEFAULT
+ };
+-#else
+-#error libgcrypt requires thread-local storage to support FIPS mode
+-#endif
