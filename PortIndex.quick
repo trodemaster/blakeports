@@ -10,6 +10,6 @@ vault 5511
 lima 6339
 skhd.zig 7222
 bstring 7931
-libgcc15 8621
-gcc15-libcxx 9223
-netatalk4 9707
+libgcc15 8647
+gcc15-libcxx 9249
+netatalk4 9733
