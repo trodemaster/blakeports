@@ -27,7 +27,7 @@ checksums           rmd160  cf8098657d90d894e911326891ab46696a174a54 \
                     size    121708
 
 variant tests description {Build and run tests} {
-    depends_lib-append      port:check
+    depends_build-append    port:check
     configure.args-append   -Denable-tests=true
     test.run                yes
 }
