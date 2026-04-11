@@ -31,89 +31,26 @@ depends_lib-append  port:libsdl2
 depends_build-append \
                     path:bin/pkg-config:pkgconfig
 
-# All four git-sourced repos are Cargo workspaces whose member crates live
-# in a crates/ subdirectory. Cargo's directory source only scans one level
-# deep in ${cargo.home}/macports, so those members are invisible without
-# promotion. After the PortGroup extracts the repo archives, move each
-# needed member crate to the top level and write .cargo-checksum.json
-# (package: null is correct for git-sourced crates).
-post-extract {
-    set mp "${cargo.home}/macports"
-
-    # snow-egui workspace — crates/ members used by snow
-    set base "${mp}/snow-egui-628a7a4b455f355fafb1d47c9e6870effab96eb5"
-    foreach crate {ecolor emath epaint epaint_default_fonts egui egui-winit} {
-        file rename "${base}/crates/${crate}" "${mp}/${crate}"
-        set f [open "${mp}/${crate}/.cargo-checksum.json" w]
-        puts $f "{\n    \"package\": null,\n    \"files\": {}\n}"
-        close $f
-    }
-
-    # hadris workspace — crates/ members used by snow
-    set base "${mp}/hadris-8bf2df25d7bfb2aab0b068bfa13d6ad1a244df5e"
-    foreach crate {hadris-common hadris-io hadris-iso} {
-        file rename "${base}/crates/${crate}" "${mp}/${crate}"
-        set f [open "${mp}/${crate}/.cargo-checksum.json" w]
-        puts $f "{\n    \"package\": null,\n    \"files\": {}\n}"
-        close $f
-    }
-}
-
-# Remove the rust-toolchain.toml to avoid rustup toolchain download attempts.
+# Remove rust-toolchain.toml to prevent rustup toolchain download attempts.
 # MacPorts provides its own Rust toolchain via the rust PortGroup.
-#
-# Rewrite git dep references from rev-based (with .git URL suffix) to
-# branch-based so cargo.crates_github source replacement can intercept
-# them. The PortGroup generates [source."url"] branch = "main" in
-# config.toml; Cargo.toml and Cargo.lock must use the same form.
 post-patch {
     file delete ${worksrcpath}/rust-toolchain.toml
-
-    # Cargo.toml [patch.crates-io]: snow-egui fork (egui, ecolor, emath, epaint, egui-winit)
-    reinplace "s|https://github.com/twvd/snow-egui.git\", rev = \"628a7a4b455f355fafb1d47c9e6870effab96eb5\"|https://github.com/twvd/snow-egui\", branch = \"main\"|g" \
-        ${worksrcpath}/Cargo.toml
-
-    # Cargo.toml [patch.crates-io]: snow-egui-file-dialog fork
-    reinplace "s|https://github.com/twvd/snow-egui-file-dialog.git\", rev = \"7504d855c587129b36092cea818fafd2153a311b\"|https://github.com/twvd/snow-egui-file-dialog\", branch = \"main\"|g" \
-        ${worksrcpath}/Cargo.toml
-
-    # frontend_egui/Cargo.toml: hadris-iso (already no .git suffix)
-    reinplace "s|https://github.com/hxyulin/hadris\", rev = \"8bf2df25d7bfb2aab0b068bfa13d6ad1a244df5e\"|https://github.com/hxyulin/hadris\", branch = \"main\"|g" \
-        ${worksrcpath}/frontend_egui/Cargo.toml
-
-    # floppy/Cargo.toml: fluxfox (optional dep)
-    reinplace "s|https://github.com/dbalsom/fluxfox.git\", optional = true, rev = \"6498fe59fd5a5cc4c1f2b7ee5ab795515c52febd\"|https://github.com/dbalsom/fluxfox\", optional = true, branch = \"main\"|g" \
-        ${worksrcpath}/floppy/Cargo.toml
-
-    # Cargo.lock: update source identifiers to match branch-based format
-    reinplace "s|git+https://github.com/twvd/snow-egui.git?rev=628a7a4b455f355fafb1d47c9e6870effab96eb5#628a7a4b455f355fafb1d47c9e6870effab96eb5|git+https://github.com/twvd/snow-egui?branch=main#628a7a4b455f355fafb1d47c9e6870effab96eb5|g" \
-        ${worksrcpath}/Cargo.lock
-    reinplace "s|git+https://github.com/twvd/snow-egui-file-dialog.git?rev=7504d855c587129b36092cea818fafd2153a311b#7504d855c587129b36092cea818fafd2153a311b|git+https://github.com/twvd/snow-egui-file-dialog?branch=main#7504d855c587129b36092cea818fafd2153a311b|g" \
-        ${worksrcpath}/Cargo.lock
-    reinplace "s|git+https://github.com/dbalsom/fluxfox.git?rev=6498fe59fd5a5cc4c1f2b7ee5ab795515c52febd#6498fe59fd5a5cc4c1f2b7ee5ab795515c52febd|git+https://github.com/dbalsom/fluxfox?branch=main#6498fe59fd5a5cc4c1f2b7ee5ab795515c52febd|g" \
-        ${worksrcpath}/Cargo.lock
-    reinplace "s|git+https://github.com/hxyulin/hadris?rev=8bf2df25d7bfb2aab0b068bfa13d6ad1a244df5e#8bf2df25d7bfb2aab0b068bfa13d6ad1a244df5e|git+https://github.com/hxyulin/hadris?branch=main#8bf2df25d7bfb2aab0b068bfa13d6ad1a244df5e|g" \
-        ${worksrcpath}/Cargo.lock
 }
+
+# Snow has git-sourced dependencies (patched egui fork, hadris-iso, fluxfox)
+# that are Cargo workspaces. The cargo.crates_github mechanism cannot fully
+# vendor workspace member crates because their Cargo.toml files use
+# version.workspace = true, which requires workspace context that the
+# MacPorts directory source does not provide. Allow cargo to fetch these
+# git dependencies from the network during the build phase.
+build.pre_args-delete \
+                    --offline --frozen
 
 destroot {
     xinstall -m 0755 \
         ${worksrcpath}/target/[cargo.rust_platform]/release/snowemu \
         ${destroot}${prefix}/bin/
 }
-
-# Git-sourced dependencies pre-fetched via cargo.crates_github.
-# One entry per upstream git repo; each repo may provide multiple crates.
-# snow-egui: patched egui fork (ecolor, emath, epaint, epaint_default_fonts,
-#            egui, egui-winit) — applied via [patch.crates-io] in Cargo.toml
-# snow-egui-file-dialog: patched file dialog widget
-# hadris: disk image library (hadris-common, hadris-io, hadris-iso)
-# fluxfox: floppy disk image library (optional dep)
-cargo.crates_github \
-    egui              twvd/snow-egui              main  628a7a4b455f355fafb1d47c9e6870effab96eb5  5e2827d83d95e2660715e9c47c175d1a2f07755af39f41a23abaf4231b337b51 \
-    egui-file-dialog  twvd/snow-egui-file-dialog  main  7504d855c587129b36092cea818fafd2153a311b  292c60df77f0717d20359e8986e99f238b61370552ed8854c9db00d164ebe713 \
-    hadris-iso        hxyulin/hadris              main  8bf2df25d7bfb2aab0b068bfa13d6ad1a244df5e  0882b841270184ccf12670b5d83ee5c6a771cd9541a1f9cb2f4fbcc414c2dfbc \
-    fluxfox           dbalsom/fluxfox             main  6498fe59fd5a5cc4c1f2b7ee5ab795515c52febd  34e12885f211415b04a27d57b5d822d462e181dcf913710ecd93e668ef041901
 
 cargo.crates \
     ab_glyph                        0.2.31  e074464580a518d16a7126262fffaaa47af89d4099d4cb403f8ed938ba12ee7d \
