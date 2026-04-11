@@ -1,0 +1,11 @@
+--- tests/t-thread-local.c.orig
++++ tests/t-thread-local.c
+@@ -59,7 +59,7 @@
+ #define N_THREADS 19
+
+-static __thread unsigned long t;
++static unsigned long t;  /* __thread removed: not supported on PPC/GCC-4.2 */
+
+ struct thread_arg_s
+ {
+   int no;

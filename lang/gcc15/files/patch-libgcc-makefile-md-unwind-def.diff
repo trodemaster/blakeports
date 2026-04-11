@@ -1,0 +1,11 @@
+--- libgcc/Makefile.in.orig
++++ libgcc/Makefile.in
+@@ -368,6 +368,6 @@
+ unwind.h: $(srcdir)/$(unwind_header)
+ 	-$(LN_S) $< $@
+-md-unwind-def.h: $(srcdir)/config/$(md_unwind_def_header)
+-	-$(LN_S) $< $@
++md-unwind-def.h: $(if $(strip $(md_unwind_def_header)),$(srcdir)/config/$(md_unwind_def_header))
++	$(if $(strip $(md_unwind_def_header)),-$(LN_S) $(srcdir)/config/$(md_unwind_def_header) $@,touch $@)
+ md-unwind-support.h: $(srcdir)/config/$(md_unwind_header)
+ 	-$(LN_S) $< $@

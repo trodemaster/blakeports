@@ -17,7 +17,18 @@
 		},
 		{
 			"path": "../skhd.zig"
+		},
+		{
+			"path": "../lima_mac"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"chat.tools.terminal.autoApprove": {
+			"portindex": true,
+			"gh": true,
+			"git add": true,
+			"git commit": true,
+			"git push": true
+		}
+	}
 }

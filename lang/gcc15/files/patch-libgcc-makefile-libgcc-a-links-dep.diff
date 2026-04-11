@@ -1,0 +1,11 @@
+--- libgcc/Makefile.in.orig
++++ libgcc/Makefile.in
+@@ -946,6 +946,8 @@
+ libgcc.a: $(libgcc-objects)
+ libgcov.a: $(libgcov-objects)
+ libunwind.a: $(libunwind-objects)
+ libgcc_eh.a: $(libgcc-eh-objects)
++# PPC Darwin 9: ensure LIBGCC_LINKS header symlinks exist before any compilation.
++libgcc.a libgcov.a libunwind.a libgcc_eh.a libgcc_s$(SHLIB_EXT) libunwind$(SHLIB_EXT): | $(LIBGCC_LINKS)
+ 
+ libgcc.a libgcov.a libunwind.a libgcc_eh.a:
