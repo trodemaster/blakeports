@@ -1,0 +1,96 @@
+name: MacPorts Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_macos15:
+        description: 'macOS 15 (Sequoia)'
+        required: false
+        default: true
+        type: boolean
+      run_macos26:
+        description: 'macOS 26 (Tahoe)'
+        required: false
+        default: true
+        type: boolean
+      run_macos26_beta:
+        description: 'macOS 26 Beta (Tahoe Beta)'
+        required: false
+        default: false
+        type: boolean
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          MATRIX='{"include":['
+          FIRST=true
+
+          if [[ "${{ inputs.run_macos15 }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"macOS_15","runner":"macOS_15"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ inputs.run_macos26 }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"macOS_26","runner":"macOS_26"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ inputs.run_macos26_beta }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"macOS_26_beta","runner":"macOS_26_beta"}'
+            FIRST=false
+          fi
+
+          # If no platforms selected, default to all modern platforms
+          if [[ "$FIRST" == "true" ]]; then
+            MATRIX+='{"platform":"macOS_15","runner":"macOS_15"},'
+            MATRIX+='{"platform":"macOS_26","runner":"macOS_26"}'
+          fi
+
+          MATRIX+=']}'
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix for trigger: ${{ github.event_name }}"
+          echo "$MATRIX" | jq '.'
+
+  macports-cleanup:
+    needs: setup-matrix
+    name: macports-cleanup (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup MacPorts environment
+        run: source ./setupenv.bash
+
+      - name: Uninstall all installed ports
+        run: |
+          source ./setupenv.bash
+          echo "Installed ports before cleanup:"
+          port installed || true
+          echo ""
+          echo "Uninstalling all installed ports..."
+          sudo port -f uninstall installed || true
+          echo ""
+          echo "Cleaning all port work and dist files..."
+          sudo port clean --all all || true
+          echo ""
+          echo "Installed ports after cleanup:"
+          port installed || echo "No ports installed"
