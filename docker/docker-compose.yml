@@ -11,7 +11,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        RUNNER_VERSION: 2.321.0
+        RUNNER_VERSION: 2.333.1
     container_name: tenfive-runner
     hostname: tenfive-runner
     restart: unless-stopped
@@ -38,7 +38,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        RUNNER_VERSION: 2.321.0
+        RUNNER_VERSION: 2.333.1
     container_name: tensix-runner
     hostname: tensix-runner
     restart: unless-stopped
@@ -63,7 +63,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        RUNNER_VERSION: 2.321.0
+        RUNNER_VERSION: 2.333.1
     container_name: tenseven-runner
     hostname: tenseven-runner
     restart: unless-stopped
@@ -88,7 +88,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        RUNNER_VERSION: 2.321.0
+        RUNNER_VERSION: 2.333.1
     container_name: teneight-runner
     hostname: teneight-runner
     restart: unless-stopped
@@ -113,7 +113,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        RUNNER_VERSION: 2.321.0
+        RUNNER_VERSION: 2.333.1
     container_name: tennine-runner
     hostname: tennine-runner
     restart: unless-stopped
@@ -138,7 +138,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        RUNNER_VERSION: 2.321.0
+        RUNNER_VERSION: 2.333.1
     container_name: tenten-runner
     hostname: tenten-runner
     restart: unless-stopped
@@ -163,7 +163,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        RUNNER_VERSION: 2.321.0
+        RUNNER_VERSION: 2.333.1
     container_name: teneleven-runner
     hostname: teneleven-runner
     restart: unless-stopped
