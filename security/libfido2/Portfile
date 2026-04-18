@@ -39,8 +39,8 @@ platform darwin {
         patchfiles-append \
                     patch-compat-pre1012.diff
     }
-    if {${os.major} < 16 && ${build_arch} in [list ppc ppc64]} {
-        # PPC 10.5: IOHIDDeviceGetService/IORegistryEntryGetRegistryEntryID unavailable
+    if {${os.major} < 11} {
+        # 10.5 and 10.6: F_SETNOSIGPIPE/IOHIDDeviceGetService unavailable
         patchfiles-append \
                     patch-hid_osx.diff
     }
