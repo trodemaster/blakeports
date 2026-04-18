@@ -9,11 +9,8 @@ PortGroup           github 1.0
 # clock_gettime
 legacysupport.newest_darwin_requires_legacy 15
 
-github.setup        Yubico libfido2 1.16.0
-extract.rename      yes 
-# look at removing this one for 1.17.0
-revision            3 
-# zero this out for 1.17.0
+github.setup        Yubico libfido2 1.17.0
+revision            0
 
 homepage            https://developers.yubico.com/libfido2/
 master_sites        https://developers.yubico.com/libfido2/Releases/
@@ -26,9 +23,9 @@ license             bsd
 description         library to communicate with a FIDO device over USB
 long_description    provides library functionality and command-line tools to communicate with a FIDO device over USB, and to verify attestation and assertion signatures.
 
-checksums           rmd160  4adb73f4f695393b92ab32d541f0a9980b2c2586 \
-                    sha256  c9795fff9183eaf111114e8619ff79a4aea9aeac2ddc5935616b1e32dd60e3b2 \
-                    size    682408
+checksums           rmd160  cdb493d47e411f1e5d77bd9f056ee896b3836180 \
+                    sha256  c1012c8871d71b65872fd5ff1a9d6b0838a55683a03e85ba97479ce57129c736 \
+                    size    714675
 
 depends_build-append \
                     port:mandoc \
@@ -38,6 +35,12 @@ depends_lib-append  port:libcbor
 
 platform darwin {
     if {${os.major} < 16} {
+        # kIOHIDManagerOptionNone undefined before macOS 10.12
+        patchfiles-append \
+                    patch-compat-pre1012.diff
+    }
+    if {${os.major} < 16 && ${build_arch} in [list ppc ppc64]} {
+        # PPC 10.5: IOHIDDeviceGetService/IORegistryEntryGetRegistryEntryID unavailable
         patchfiles-append \
                     patch-hid_osx.diff
     }
