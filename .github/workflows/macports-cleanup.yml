@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 name: MacPorts Cleanup
 
 on:
@@ -15,6 +16,41 @@ on:
         type: boolean
       run_macos26_beta:
         description: 'macOS 26 Beta (Tahoe Beta)'
+        required: false
+        default: false
+        type: boolean
+      run_tenfive:
+        description: 'Mac OS X 10.5 (Leopard)'
+        required: false
+        default: false
+        type: boolean
+      run_tensix:
+        description: 'Mac OS X 10.6 (Snow Leopard)'
+        required: false
+        default: false
+        type: boolean
+      run_tenseven:
+        description: 'Mac OS X 10.7 (Lion)'
+        required: false
+        default: false
+        type: boolean
+      run_teneight:
+        description: 'Mac OS X 10.8 (Mountain Lion)'
+        required: false
+        default: false
+        type: boolean
+      run_tennine:
+        description: 'Mac OS X 10.9 (Mavericks)'
+        required: false
+        default: false
+        type: boolean
+      run_tenten:
+        description: 'Mac OS X 10.10 (Yosemite)'
+        required: false
+        default: false
+        type: boolean
+      run_teneleven:
+        description: 'Mac OS X 10.11 (El Capitan)'
         required: false
         default: false
         type: boolean
@@ -37,26 +73,68 @@ jobs:
 
           if [[ "${{ inputs.run_macos15 }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"macOS_15","runner":"macOS_15"}'
+            MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern"}'
             FIRST=false
           fi
 
           if [[ "${{ inputs.run_macos26 }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"macOS_26","runner":"macOS_26"}'
+            MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern"}'
             FIRST=false
           fi
 
           if [[ "${{ inputs.run_macos26_beta }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"macOS_26_beta","runner":"macOS_26_beta"}'
+            MATRIX+='{"platform":"macOS_26_beta","runner":"macOS_26_beta","type":"modern"}'
             FIRST=false
           fi
 
-          # If no platforms selected, default to all modern platforms
+          if [[ "${{ inputs.run_tenfive }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tenfive","runner":["self-hosted","tenfive"],"type":"legacy","vm_name":"TenFive","os_version":"10.5"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ inputs.run_tensix }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tensix","runner":["self-hosted","tensix"],"type":"legacy","vm_name":"TenSix","os_version":"10.6"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ inputs.run_tenseven }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tenseven","runner":["self-hosted","tenseven"],"type":"legacy","vm_name":"TenSeven","os_version":"10.7"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ inputs.run_teneight }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"teneight","runner":["self-hosted","teneight"],"type":"legacy","vm_name":"TenEight","os_version":"10.8"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ inputs.run_tennine }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tennine","runner":["self-hosted","tennine"],"type":"legacy","vm_name":"TenNine","os_version":"10.9"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ inputs.run_tenten }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tenten","runner":["self-hosted","tenten"],"type":"legacy","vm_name":"TenTen","os_version":"10.10"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ inputs.run_teneleven }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"teneleven","runner":["self-hosted","teneleven"],"type":"legacy","vm_name":"TenEleven","os_version":"10.11"}'
+            FIRST=false
+          fi
+
+          # Default to modern platforms if nothing selected
           if [[ "$FIRST" == "true" ]]; then
-            MATRIX+='{"platform":"macOS_15","runner":"macOS_15"},'
-            MATRIX+='{"platform":"macOS_26","runner":"macOS_26"}'
+            MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern"},'
+            MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern"}'
           fi
 
           MATRIX+=']}'
@@ -74,23 +152,109 @@ jobs:
       fail-fast: false
 
     steps:
+      #
+      # MODERN PLATFORM STEPS
+      #
       - name: Checkout repository
+        if: matrix.type == 'modern'
         uses: actions/checkout@v6
 
-      - name: Setup MacPorts environment
-        run: source ./setupenv.bash
-
-      - name: Uninstall all installed ports
+      - name: Uninstall all ports except curl and its dependencies
+        if: matrix.type == 'modern'
         run: |
           source ./setupenv.bash
           echo "Installed ports before cleanup:"
           port installed || true
           echo ""
-          echo "Uninstalling all installed ports..."
-          sudo port -f uninstall installed || true
+          echo "Determining ports to preserve (curl + dependencies)..."
+          PRESERVE=$(port echo curl rdepof:curl 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')
+          echo "Preserving: $PRESERVE"
           echo ""
-          echo "Cleaning all port work and dist files..."
+          echo "Uninstalling all other ports..."
+          for p in $(port echo installed 2>/dev/null | awk '{print $1}' | sort -u); do
+            if ! echo " $PRESERVE " | grep -q " $p "; then
+              echo "Uninstalling: $p"
+              sudo port -f uninstall "$p" || true
+            else
+              echo "Keeping: $p"
+            fi
+          done
+          echo ""
+          echo "Cleaning all dist files..."
           sudo port clean --all all || true
           echo ""
           echo "Installed ports after cleanup:"
           port installed || echo "No ports installed"
+
+      #
+      # LEGACY PLATFORM STEPS
+      #
+      - name: Checkout repository (for SSH config)
+        if: matrix.type == 'legacy'
+        uses: actions/checkout@v6
+
+      - name: Verify VM configuration
+        if: matrix.type == 'legacy'
+        run: |
+          CONFIG_FILE="/config/runners.json"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Error: Config file not found at $CONFIG_FILE"
+            exit 1
+          fi
+          VM_IP=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_ip // empty" "$CONFIG_FILE")
+          VM_USERNAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_user // empty" "$CONFIG_FILE")
+          SSH_KEY_NAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].ssh_key // \"oldmac\"" "$CONFIG_FILE")
+          SSH_KEY_PATH="/config/ssh_keys/${SSH_KEY_NAME}"
+          if [ -z "$VM_IP" ]; then
+            echo "Error: VM IP not set for ${{ matrix.platform }} in config"
+            exit 1
+          fi
+          if [ -z "$VM_USERNAME" ]; then
+            echo "Error: VM username not set for ${{ matrix.platform }} in config"
+            exit 1
+          fi
+          if [ ! -f "$SSH_KEY_PATH" ]; then
+            echo "Error: SSH key not found at $SSH_KEY_PATH"
+            exit 1
+          fi
+          echo "VM_IP=$VM_IP" >> $GITHUB_ENV
+          echo "VM_USERNAME=$VM_USERNAME" >> $GITHUB_ENV
+          echo "SSH_KEY_PATH=$SSH_KEY_PATH" >> $GITHUB_ENV
+          echo "✅ Configuration verified. Will connect to: $VM_USERNAME@$VM_IP"
+
+      - name: Uninstall all ports except curl and its dependencies (legacy)
+        if: matrix.type == 'legacy'
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set +e
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            echo "=================================================="
+            echo "  MacPorts Cleanup on Mac OS X ${{ matrix.os_version }} (${{ matrix.vm_name }})"
+            echo "=================================================="
+            echo ""
+            echo "Installed ports before cleanup:"
+            port installed || true
+            echo ""
+            echo "Determining ports to preserve (curl + dependencies)..."
+            PRESERVE=$(port echo curl rdepof:curl 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')
+            echo "Preserving: $PRESERVE"
+            echo ""
+            echo "Uninstalling all other ports..."
+            for p in $(port echo installed 2>/dev/null | awk '{print $1}' | sort -u); do
+              if ! echo " $PRESERVE " | grep -q " $p "; then
+                echo "Uninstalling: $p"
+                sudo port -f uninstall "$p" || true
+              else
+                echo "Keeping: $p"
+              fi
+            done
+            echo ""
+            echo "Cleaning all dist files..."
+            sudo port clean --all all || true
+            echo ""
+            echo "Installed ports after cleanup:"
+            port installed || echo "No ports installed"
+            echo "✅ Cleanup complete"
+          EOF
