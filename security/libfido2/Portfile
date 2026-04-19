@@ -13,7 +13,7 @@ github.setup        Yubico libfido2 1.17.0
 revision            0
 
 homepage            https://developers.yubico.com/libfido2/
-master_sites        https://developers.yubico.com/libfido2/Releases/
+master_sites        ${homepage}Releases/
 distname            ${name}-${version}
 
 categories          security crypto
