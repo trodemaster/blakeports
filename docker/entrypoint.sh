@@ -192,6 +192,8 @@ Host *
     StrictHostKeyChecking no
     UserKnownHostsFile=/dev/null
     ConnectTimeout 10
+    ServerAliveInterval 60
+    ServerAliveCountMax 10
 
 Host $VM_HOSTNAME
     HostName $SSH_TARGET
