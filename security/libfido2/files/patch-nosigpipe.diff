@@ -1,14 +1,14 @@
 --- src/hid_osx.c.orig
 +++ src/hid_osx.c
-@@ -363,6 +363,7 @@
- 	return (0);
+@@ -347,6 +347,7 @@
+ 	CFRunLoopStop(CFRunLoopGetCurrent());
  }
  
 +#if MAC_OS_X_VERSION_MIN_REQUIRED > 1060
  static int
- disable_sigpipe(int fd)
+ set_nonblock(int fd)
  {
-@@ -392,6 +393,7 @@
+@@ -394,6 +395,7 @@
  	return (IOServiceGetMatchingService(kIOMainPortDefault,
  	    IORegistryEntryIDMatching(id)));
  }
@@ -16,7 +16,7 @@
  
  void *
  fido_hid_open(const char *path)
-@@ -415,6 +417,7 @@
+@@ -417,6 +419,7 @@
  		goto fail;
  	}
  
@@ -24,7 +24,7 @@
  	if (set_nonblock(ctx->report_pipe[0]) < 0 ||
  	    set_nonblock(ctx->report_pipe[1]) < 0) {
  		fido_log_debug("%s: set_nonblock", __func__);
-@@ -430,6 +433,12 @@
+@@ -432,6 +435,12 @@
  		fido_log_debug("%s: get_ioreg_entry: %s", __func__, path);
  		goto fail;
  	}

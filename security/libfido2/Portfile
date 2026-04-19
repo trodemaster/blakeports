@@ -55,9 +55,14 @@ platform darwin {
                     patch-fallthrough.diff
     }
     if {${os.major} < 13} {
-        # 10.8 and below: bzero not declared without <strings.h>
+        # 10.8 and below: bzero hidden by _POSIX_C_SOURCE, needs explicit declaration
         patchfiles-append \
                     patch-bzero.diff
+    }
+    if {${os.major} < 11} {
+        # 10.5 and 10.6: Apple Clang does not recognize FALLTHROUGH comment form
+        patchfiles-append \
+                    patch-cmake-no-fallthrough.diff
     }
     if {[string match *gcc* ${configure.compiler}]} {
         patchfiles-append \
