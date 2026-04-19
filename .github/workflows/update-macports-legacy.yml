@@ -13,6 +13,11 @@ on:
         required: false
         default: 'main'
         type: string
+      run_tenfive_ppc:
+        description: 'Mac OS X 10.5 PPC (Leopard)'
+        required: false
+        default: false
+        type: boolean
       run_tenfive:
         description: 'Mac OS X 10.5 (Leopard)'
         required: false
@@ -69,6 +74,13 @@ jobs:
         run: |
           MATRIX='{"include":['
           FIRST=true
+
+          # Mac OS X 10.5 PPC
+          if [[ "${{ inputs.run_tenfive_ppc }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tenfive-ppc","runner":["self-hosted","tenfive-ppc"],"vm_ip":"192.168.0.141","vm_username":"blake","vm_name":"TenFive-PPC","os_version":"10.5","timeout":"240"}'
+            FIRST=false
+          fi
 
           # Mac OS X 10.5
           if [[ "${{ inputs.run_tenfive }}" == "true" ]]; then
@@ -148,37 +160,39 @@ jobs:
 
       - name: Verify VM configuration
         run: |
-          # Read VM configuration from mounted config file
+          # Read VM configuration from mounted config file if present,
+          # otherwise fall back to values embedded in the matrix (physical runners)
           CONFIG_FILE="/config/runners.json"
-          
-          if [ ! -f "$CONFIG_FILE" ]; then
-            echo "Error: Config file not found at $CONFIG_FILE"
-            ls -la /config/ 2>/dev/null || echo "  /config directory not accessible"
-            exit 1
+
+          if [ -f "$CONFIG_FILE" ]; then
+            VM_IP=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_ip // empty" "$CONFIG_FILE")
+            VM_USERNAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_user // empty" "$CONFIG_FILE")
+            SSH_KEY_NAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].ssh_key // \"oldmac\"" "$CONFIG_FILE")
+            SSH_KEY_PATH="/config/ssh_keys/${SSH_KEY_NAME}"
+          else
+            echo "No config file found — using matrix-embedded values (physical runner)"
+            VM_IP="${{ matrix.vm_ip }}"
+            VM_USERNAME="${{ matrix.vm_username }}"
+            SSH_KEY_PATH="$HOME/.ssh/id_rsa"
           fi
-          
-          VM_IP=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_ip // empty" "$CONFIG_FILE")
-          VM_USERNAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_user // empty" "$CONFIG_FILE")
-          SSH_KEY_NAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].ssh_key // \"oldmac\"" "$CONFIG_FILE")
-          SSH_KEY_PATH="/config/ssh_keys/${SSH_KEY_NAME}"
-          
+
           if [ -z "$VM_IP" ]; then
-            echo "Error: VM IP not set for ${{ matrix.platform }} in config"
+            echo "Error: VM IP not set for ${{ matrix.platform }}"
             exit 1
           fi
           if [ -z "$VM_USERNAME" ]; then
-            echo "Error: VM username not set for ${{ matrix.platform }} in config"
+            echo "Error: VM username not set for ${{ matrix.platform }}"
             exit 1
           fi
           if [ ! -f "$SSH_KEY_PATH" ]; then
             echo "Error: SSH key not found at $SSH_KEY_PATH"
             exit 1
           fi
-          
+
           echo "VM_IP=$VM_IP" >> $GITHUB_ENV
           echo "VM_USERNAME=$VM_USERNAME" >> $GITHUB_ENV
           echo "SSH_KEY_PATH=$SSH_KEY_PATH" >> $GITHUB_ENV
-          
+
           echo "✅ Configuration verified. Will connect to: $VM_USERNAME@$VM_IP"
 
       - name: Display current system information

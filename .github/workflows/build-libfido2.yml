@@ -29,6 +29,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_tenfive_ppc:
+        description: 'Mac OS X 10.5 PPC (Leopard)'
+        required: false
+        default: false
+        type: boolean
       run_tenfive:
         description: 'Mac OS X 10.5 (Leopard)'
         required: false
@@ -107,6 +112,13 @@ jobs:
             if [[ "${{ inputs.run_macos26_beta }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
               MATRIX+='{"platform":"macOS_26_beta","runner":"macOS_26_beta","type":"modern","port":"security/libfido2"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.5 PPC
+            if [[ "${{ inputs.run_tenfive_ppc }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"tenfive-ppc","runner":["self-hosted","tenfive-ppc"],"type":"legacy","port":"security/libfido2","vm_ip":"192.168.0.141","vm_username":"blake","vm_name":"TenFive-PPC","os_version":"10.5","arch":"ppc","timeout":"60"}'
               FIRST=false
             fi
 
@@ -235,8 +247,8 @@ jobs:
           source ./setupenv.bash
           if port installed libfido2 | grep -q libfido2; then
             echo "Removing existing libfido2 installation..."
-            sudo port uninstall libfido2 libcbor openssl3
-            sudo port clean --dist libfido2 libcbor openssl3
+            sudo port uninstall libfido2 libcbor
+            sudo port clean --dist libfido2 libcbor
           else
             echo "No existing libfido2 installation found"
           fi

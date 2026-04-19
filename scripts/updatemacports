@@ -1,7 +1,9 @@
 #!/bin/bash
 # Script to update MacPorts base on legacy VMs
-# Ensures MacPorts curl is installed, then downloads and builds MacPorts base
-# with --with-curlprefix=/opt/local to use MacPorts curl instead of system curl
+# Ensures MacPorts curl and git are installed, then downloads and builds MacPorts
+# base with --with-curlprefix=/opt/local to use MacPorts curl instead of system curl.
+# MacPorts git is required because Apple's system git uses SecureTransport, which
+# cannot verify modern SSL certificate chains (e.g., GitHub) on legacy systems.
 #
 # Usage: updatemacports [--force] [VERSION]
 #   --force, -f: Force rebuild even if version matches and curl is configured
@@ -61,6 +63,64 @@ check_curl_configuration() {
     
     # If we can't determine, assume rebuild needed
     return 1
+}
+
+# Ensure MacPorts git is installed and patch port_autoconf.tcl so MacPorts
+# uses its own git for all git-type port fetches.
+#
+# Background: MacPorts bakes the git binary path into port_autoconf.tcl at
+# compile time (./configure finds /usr/bin/git first).  portfetch.tcl has
+# logic to force /opt/local/bin/git on Darwin <= 13 (macOS <= 10.9) because
+# those systems are known-broken, but Darwin 14-15 (10.10-10.11) still use
+# the autoconf path.  Apple's system git uses SecureTransport which can no
+# longer verify modern GitHub certificate chains, so we must point MacPorts
+# at its own OpenSSL-linked git on all legacy systems.
+ensure_git_configured() {
+    info "========================================"
+    info "  Ensuring MacPorts git is configured"
+    info "========================================"
+
+    # Install MacPorts git if not present
+    if [ ! -f "${MACPORTS_PREFIX}/bin/git" ]; then
+        info "MacPorts git not found - installing git +ssl..."
+        if sudo port install git +ssl; then
+            info "✅ MacPorts git installed: $(${MACPORTS_PREFIX}/bin/git --version)"
+        else
+            warn "Failed to install MacPorts git"
+            warn "git-type port fetches will fail on legacy systems with old SSL certs"
+            return 1
+        fi
+    else
+        info "MacPorts git: $(${MACPORTS_PREFIX}/bin/git --version)"
+    fi
+
+    # Patch port_autoconf.tcl to point git_path at MacPorts git.
+    # This overrides the path baked in at MacPorts build time so portfetch
+    # uses the OpenSSL-linked MacPorts git on Darwin 14-15 (10.10/10.11).
+    local autoconf_tcl="${MACPORTS_PREFIX}/libexec/macports/lib/port1.0/port_autoconf.tcl"
+    if [ -f "$autoconf_tcl" ]; then
+        local current_git
+        current_git=$(grep 'variable git_path' "$autoconf_tcl" | sed 's/.*git_path "\(.*\)".*/\1/')
+        if [ "$current_git" != "${MACPORTS_PREFIX}/bin/git" ]; then
+            sudo sed -i '' "s|variable git_path \"[^\"]*\"|variable git_path \"${MACPORTS_PREFIX}/bin/git\"|" "$autoconf_tcl"
+            info "✅ Patched port_autoconf.tcl: git_path -> ${MACPORTS_PREFIX}/bin/git"
+        else
+            info "port_autoconf.tcl already uses MacPorts git"
+        fi
+    else
+        warn "port_autoconf.tcl not found at $autoconf_tcl"
+    fi
+
+    # Configure MacPorts git system CA bundle so it trusts modern certificates
+    local ca_bundle="${MACPORTS_PREFIX}/share/curl/curl-ca-bundle.crt"
+    if [ -f "$ca_bundle" ]; then
+        sudo "${MACPORTS_PREFIX}/bin/git" config --system http.sslCAInfo "$ca_bundle"
+        info "✅ MacPorts git configured with curl CA bundle"
+    else
+        warn "curl-ca-bundle not found at $ca_bundle - install curl-ca-bundle port"
+    fi
+
+    info "========================================"
 }
 
 # Log the current curl configuration status
@@ -240,6 +300,7 @@ if [[ "$NEEDS_REBUILD" == "false" ]]; then
     info "MacPorts $MACPORTS_VERSION is up to date and properly configured"
     info "No rebuild needed"
     log_curl_configuration
+    ensure_git_configured
     exit 0
 fi
 
@@ -422,6 +483,9 @@ fi
 
 # Log final curl configuration
 log_curl_configuration
+
+# Ensure MacPorts git is installed and configured after every rebuild
+ensure_git_configured
 
 # Cleanup
 info "Cleaning up build directory..."

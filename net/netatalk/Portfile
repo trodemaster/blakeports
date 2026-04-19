@@ -10,13 +10,13 @@ categories          net
 description         Netatalk is a freely-available Open Source AFP fileserver.
 long_description    Netatalk is a freely-available Open Source AFP fileserver. \
                     It allows Unix-like operating systems to serve as file \
-                    servers for Macintosh computers. This port follows the \
-                    upstream main branch for pre-release testing.
+                    servers for Macintosh computers. This port tracks the \
+                    4.5.0 beta tag for pre-release testing.
 
 if {${subport} eq ${name}} {
-    github.setup        Netatalk netatalk 4.5.0-devel
+    github.setup        Netatalk netatalk 4.5.0beta
     revision            0
-    git.branch          main
+    git.branch          netatalk-4-5-0beta
     fetch.type          git
     github.tarball_from archive
 
@@ -27,7 +27,6 @@ if {${subport} eq ${name}} {
 
     homepage            https://netatalk.io
 
-    # Moving branch; bump revision when you need to force a clean rebuild
     livecheck.type      none
 
     depends_build-append       path:bin/pkg-config:pkgconfig \
@@ -66,7 +65,7 @@ if {${subport} eq ${name}} {
     startupitem.logevents yes
     startupitem.debug          yes
 
-    notes "This port tracks the upstream main branch (pre-beta). Upgrade details: \
+    notes "This port tracks the 4.5.0 beta tag (pre-release). Upgrade details: \
 https://netatalk.io/manual/en/Upgrading. Configuration files: ${prefix}/etc/. \
 Logs: ${prefix}/var/log/."
 }
@@ -75,7 +74,7 @@ Logs: ${prefix}/var/log/."
 subport netatalk4 {
     PortGroup           stub 1.0
 
-    version             4.5.0-devel
+    version             4.5.0beta
     revision            0
 
     categories          net
