@@ -1,5 +1,14 @@
 --- src/hid_osx.c.orig	2023-02-20 16:21:28.000000000 +0800
 +++ src/hid_osx.c	2023-06-20 10:42:18.000000000 +0800
+@@ -12,7 +12,7 @@
+ #include <signal.h>
+ #include <unistd.h>
+ 
+-#include <Availability.h>
++#include <AvailabilityMacros.h>
+ #include <CoreFoundation/CoreFoundation.h>
+ #include <IOKit/IOKitLib.h>
+ #include <IOKit/hid/IOHIDKeys.h>
 @@ -169,25 +170,27 @@
  static char *
  get_path(IOHIDDeviceRef dev)
@@ -48,6 +57,8 @@
  }
 +#endif
  
+ void *
+ fido_hid_open(const char *path)
 @@ -414,6 +419,7 @@
  		goto fail;
  	}
