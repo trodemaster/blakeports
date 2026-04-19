@@ -50,7 +50,7 @@ VMWARE_BASE_DIR="/Volumes/JonesFarm/actions-runners"
 VMWARE_VM_USER="blake"  # SSH user for VMware VMs
 
 # Runner group configurations
-LEGACY_RUNNERS=("tenfive" "tensix" "tenseven" "teneight" "tennine" "tenten" "teneleven")
+LEGACY_RUNNERS=("tenfive-ppc" "tenfive" "tensix" "tenseven" "teneight" "tennine" "tenten" "teneleven")
 CURRENT_RUNNERS=("macos-26" "macos-26-beta" "macos-15")
 GROUP=""
 STOP_VMS=""
@@ -977,10 +977,18 @@ start_legacy_docker_runner() {
     local config_dir="$docker_dir/config"
     local config_file="$config_dir/runners.json"
 
-    # Start the VMware VM on darkstar if needed
-    if ! start_vmware_vm_if_needed "$vm_name"; then
-        print_error "Failed to start VMware VM for $runner_name"
-        exit 1
+    # For VMware runners, start the VM on darkstar if needed.
+    # Physical runners are always-on — skip VM lifecycle management.
+    local vm_type
+    vm_type=$(jq -r ".runners[\"${runner_name}\"].vm_type // \"vmware\"" "$config_file" 2>/dev/null)
+
+    if [ "$vm_type" != "physical" ]; then
+        if ! start_vmware_vm_if_needed "$vm_name"; then
+            print_error "Failed to start VMware VM for $runner_name"
+            exit 1
+        fi
+    else
+        print_info "Physical runner — skipping VMware VM start"
     fi
 
     # Resolve VM IP address for Docker container.
