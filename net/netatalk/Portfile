@@ -22,6 +22,21 @@ if {${subport} eq ${name}} {
 
     compiler.c_standard 2011
 
+    # Darwin 12-13 (10.8-10.9): system clang (LLVM 5.1/6.0) lacks stdatomic.h
+    # in the SDK headers. Blacklist it so MacPorts selects a bundled clang
+    # whose toolchain includes proper C11 atomics headers.
+    if {${os.major} >= 12 && ${os.major} <= 13} {
+        compiler.blacklist-append {clang}
+    }
+
+    # clang 16+ treats incompatible function pointer types as a hard error.
+    # netatalk's bin/nad/nad_ls.c:638 passes a dirent** comparator to scandir
+    # where void* is expected (a netatalk upstream bug). Suppress the error on
+    # legacy platforms where clang-mp-16 is the selected compiler.
+    if {${os.major} <= 13} {
+        configure.cflags-append -Wno-incompatible-function-pointer-types
+    }
+
     license             GPL-2+
     maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
 
