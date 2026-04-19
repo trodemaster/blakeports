@@ -9,14 +9,14 @@
 -	char		*path;
 +	io_service_t	s;
 +	io_string_t		path;
-
+ 
 +#if MAC_OS_X_VERSION_MIN_REQUIRED > 1050 && !defined(__ppc__)
  	if ((s = IOHIDDeviceGetService(dev)) == MACH_PORT_NULL) {
  		fido_log_debug("%s: IOHIDDeviceGetService", __func__);
  		return (NULL);
  	}
 +#endif
-
+ 
 -	if (IORegistryEntryGetRegistryEntryID(s, &id) != KERN_SUCCESS) {
 -		fido_log_debug("%s: IORegistryEntryGetRegistryEntryID",
 -		    __func__);
@@ -24,20 +24,20 @@
 +		fido_log_debug("%s: IORegistryEntryGetPath", __func__);
  		return (NULL);
  	}
-
+ 
 +#if MAC_OS_X_VERSION_MIN_REQUIRED > 1050 && !defined(__ppc__)
  	if (asprintf(&path, "%s%llu", IOREG, (unsigned long long)id) == -1) {
  		fido_log_error(errno, "%s: asprintf", __func__);
  		return (NULL);
  	}
 +#endif
-
+ 
  	return (path);
  }
 @@ -362,6 +365,7 @@
  	return (0);
  }
-
+ 
 +#if MAC_OS_X_VERSION_MIN_REQUIRED > 1060
  static int
  disable_sigpipe(int fd)
@@ -47,11 +47,11 @@
  	    IORegistryEntryIDMatching(id)));
  }
 +#endif
-
+ 
 @@ -414,6 +419,7 @@
  		goto fail;
  	}
-
+ 
 +#if MAC_OS_X_VERSION_MIN_REQUIRED > 1060
  	if (set_nonblock(ctx->report_pipe[0]) < 0 ||
  	    set_nonblock(ctx->report_pipe[1]) < 0) {
@@ -66,6 +66,6 @@
 +		goto fail;
 +	}
 +#endif
-
+ 
  	if ((ctx->ref = IOHIDDeviceCreate(kCFAllocatorDefault,
  	    entry)) == NULL) {
