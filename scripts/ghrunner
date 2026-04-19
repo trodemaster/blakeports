@@ -50,7 +50,7 @@ VMWARE_BASE_DIR="/Volumes/JonesFarm/actions-runners"
 VMWARE_VM_USER="blake"  # SSH user for VMware VMs
 
 # Runner group configurations
-LEGACY_RUNNERS=("tenfive" "tensix" "tenseven" "teneight" "tennine" "tenten" "teneleven")
+LEGACY_RUNNERS=("tenfive-ppc" "tenfive" "tensix" "tenseven" "teneight" "tennine" "tenten" "teneleven")
 CURRENT_RUNNERS=("macos-26" "macos-26-beta" "macos-15")
 GROUP=""
 STOP_VMS=""
@@ -972,50 +972,56 @@ start_legacy_docker_runner() {
     local vm_name="${runner_name}"
     local vm_hostname="${runner_name}-runner.local"
     
-    # Start the VMware VM on darkstar if needed
-    if ! start_vmware_vm_if_needed "$vm_name"; then
-        print_error "Failed to start VMware VM for $runner_name"
-        exit 1
+    # Config file paths (defined early — needed for IP fallback below)
+    local docker_dir="/Users/blake/Developer/blakeports/docker"
+    local config_dir="$docker_dir/config"
+    local config_file="$config_dir/runners.json"
+
+    # For VMware runners, start the VM on darkstar if needed.
+    # Physical runners are always-on — skip VM lifecycle management.
+    local vm_type
+    vm_type=$(jq -r ".runners[\"${runner_name}\"].vm_type // \"vmware\"" "$config_file" 2>/dev/null)
+
+    if [ "$vm_type" != "physical" ]; then
+        if ! start_vmware_vm_if_needed "$vm_name"; then
+            print_error "Failed to start VMware VM for $runner_name"
+            exit 1
+        fi
+    else
+        print_info "Physical runner — skipping VMware VM start"
     fi
-    
-    # Verify VM is accessible
-    if ! test_ssh_connection_with_retries "$vm_hostname" true; then
-        print_error "Cannot reach VM at $vm_hostname"
-        exit 1
-    fi
-    
-    # Resolve Bonjour hostname to IP address for Docker container
-    print_info "Resolving Bonjour hostname to IP address..."
+
+    # Resolve VM IP address for Docker container.
+    # The Docker container (not the Mac) handles SSH to the VM, so we don't test
+    # connectivity from here. Prefer IPv4 ping, fall back to existing runners.json IP.
+    print_info "Resolving VM IP address for $vm_hostname..."
     local vm_ip
-    vm_ip=$(ping -c 1 "$vm_hostname" 2>/dev/null | grep -oE '\([0-9.]+\)' | head -1 | tr -d '()')
-    
+    vm_ip=$(ping -4 -c 1 -W 3 "$vm_hostname" 2>/dev/null | grep -oE '\([0-9.]+\)' | head -1 | tr -d '()')
+
     if [ -z "$vm_ip" ]; then
-        print_warning "Could not resolve $vm_hostname to IP, trying alternative method..."
-        # Try using dig if ping doesn't work
-        vm_ip=$(dig +short "$vm_hostname" @224.0.0.251 2>/dev/null | head -1)
+        print_warning "Could not resolve $vm_hostname via ping -4, checking existing config..."
+        vm_ip=$(jq -r ".runners[\"${runner_name}\"].vm_ip // empty" "$config_file" 2>/dev/null)
+        if [ -n "$vm_ip" ]; then
+            print_info "Using existing IP from config: $vm_ip"
+        fi
     fi
-    
+
     if [ -z "$vm_ip" ]; then
-        print_error "Failed to resolve $vm_hostname to IP address"
+        print_error "Failed to resolve IP for $vm_hostname and no existing IP in config"
         exit 1
     fi
-    
-    print_success "Resolved $vm_hostname to IP: $vm_ip"
-    
+
+    print_success "VM IP for $runner_name: $vm_ip"
+
     # Generate runner token
     print_info "Generating runner token..."
     local token
     token=$(gh api repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners/registration-token --method POST --jq '.token')
-    
+
     if [ -z "$token" ]; then
         print_error "Failed to generate runner token"
         exit 1
     fi
-    
-    # Update JSON config file
-    local docker_dir="/Users/blake/Developer/blakeports/docker"
-    local config_dir="$docker_dir/config"
-    local config_file="$config_dir/runners.json"
     
     # Ensure config directory exists
     mkdir -p "$config_dir"

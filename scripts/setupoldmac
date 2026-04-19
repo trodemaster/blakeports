@@ -303,6 +303,77 @@ disable_screensaver() {
     print_success "Screensaver disabled for user and login window"
 }
 
+# Function to install and configure MacPorts git and curl
+# MacPorts git is required because Apple's system git uses SecureTransport,
+# which cannot verify modern certificate chains on legacy macOS systems.
+# MacPorts curl is required to rebuild MacPorts base with SSL support.
+# Both are treated as non-negotiable base prerequisites for legacy VMs.
+#
+# MacPorts bakes the git binary path into port_autoconf.tcl at build time.
+# portfetch.tcl forces /opt/local/bin/git for Darwin <= 13 (macOS <= 10.9),
+# but Darwin 14-15 (10.10-10.11) use the autoconf-baked /usr/bin/git.  We
+# patch port_autoconf.tcl directly to redirect to MacPorts git.
+setup_git_curl() {
+    local hostname="$1"
+    local username="$2"
+
+    print_status "Installing and configuring MacPorts git and curl on $username@$hostname"
+
+    $OLDSSH_CMD -t "$username@$hostname" "
+        set +e
+        source ~/.profile 2>/dev/null
+
+        if ! command -v port >/dev/null 2>&1; then
+            echo 'WARNING: MacPorts port command not found in PATH'
+            echo 'Run the update-macports-legacy workflow first, then re-run setupoldmac'
+            exit 0
+        fi
+
+        echo 'MacPorts found:' \$(port version)
+
+        # Install curl +ssl if not already present
+        if [ ! -f /opt/local/bin/curl ]; then
+            echo 'Installing MacPorts curl +ssl...'
+            sudo port install curl +ssl || echo 'WARNING: curl install failed'
+        else
+            echo 'MacPorts curl already installed:' \$(/opt/local/bin/curl --version | head -1)
+        fi
+
+        # Install git +ssl if not already present
+        if [ ! -f /opt/local/bin/git ]; then
+            echo 'Installing MacPorts git +ssl...'
+            sudo port install git +ssl || echo 'WARNING: git install failed'
+        else
+            echo 'MacPorts git already installed:' \$(/opt/local/bin/git --version)
+        fi
+
+        # Patch port_autoconf.tcl to use MacPorts git.
+        # This overrides the path baked in at MacPorts build time so portfetch
+        # uses the OpenSSL-linked MacPorts git on Darwin 14-15 (10.10/10.11).
+        AUTOCONF_TCL='/opt/local/libexec/macports/lib/port1.0/port_autoconf.tcl'
+        if [ -f \"\$AUTOCONF_TCL\" ]; then
+            CURRENT_GIT=\$(grep 'variable git_path' \"\$AUTOCONF_TCL\" | sed 's/.*git_path \"\\(.*\\)\".*/\\1/')
+            if [ \"\$CURRENT_GIT\" != '/opt/local/bin/git' ]; then
+                sudo sed -i '' 's|variable git_path \"[^\"]*\"|variable git_path \"/opt/local/bin/git\"|' \"\$AUTOCONF_TCL\"
+                echo 'Patched port_autoconf.tcl: git_path -> /opt/local/bin/git'
+            else
+                echo 'port_autoconf.tcl already uses MacPorts git'
+            fi
+        fi
+
+        # Configure MacPorts git to trust modern certificates via curl CA bundle
+        CA_BUNDLE='/opt/local/share/curl/curl-ca-bundle.crt'
+        if [ -f /opt/local/bin/git ] && [ -f \"\$CA_BUNDLE\" ]; then
+            sudo /opt/local/bin/git config --system http.sslCAInfo \"\$CA_BUNDLE\"
+            echo 'MacPorts git configured with CA bundle:' \"\$CA_BUNDLE\"
+        fi
+
+        echo 'Git and curl configuration complete'
+    "
+
+    print_success "MacPorts git and curl configuration completed"
+}
+
 # Function to setup MacPorts environment
 setup_macports() {
     local hostname="$1"
@@ -446,7 +517,10 @@ main() {
     
     # Setup MacPorts environment
     setup_macports "$hostname" "$username"
-    
+
+    # Install and configure MacPorts git and curl (base prerequisites)
+    setup_git_curl "$hostname" "$username"
+
     # Disable screensaver for older macOS versions
     disable_screensaver "$hostname" "$username"
     
