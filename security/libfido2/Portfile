@@ -39,10 +39,25 @@ platform darwin {
         patchfiles-append \
                     patch-compat-pre1012.diff
     }
-    if {${os.major} < 11} {
-        # 10.5 and 10.6: F_SETNOSIGPIPE/IOHIDDeviceGetService unavailable
+    if {${os.major} < 10} {
+        # 10.5 only: IOHIDDeviceGetService/IORegistryEntryGetRegistryEntryID unavailable
         patchfiles-append \
                     patch-hid_osx.diff
+    }
+    if {${os.major} < 11} {
+        # 10.5 and 10.6: F_SETNOSIGPIPE unavailable
+        patchfiles-append \
+                    patch-nosigpipe.diff
+    }
+    if {${os.major} < 14} {
+        # 10.9 and below: old Apple Clang mishandles __attribute__((fallthrough))
+        patchfiles-append \
+                    patch-fallthrough.diff
+    }
+    if {${os.major} < 13} {
+        # 10.8 and below: bzero not declared without <strings.h>
+        patchfiles-append \
+                    patch-bzero.diff
     }
     if {[string match *gcc* ${configure.compiler}]} {
         patchfiles-append \
