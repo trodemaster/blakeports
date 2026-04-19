@@ -39,16 +39,6 @@ platform darwin {
         patchfiles-append \
                     patch-compat-pre1012.diff
     }
-    if {${os.major} < 10} {
-        # 10.5 only: IOHIDDeviceGetService/IORegistryEntryGetRegistryEntryID unavailable
-        patchfiles-append \
-                    patch-hid_osx.diff
-    }
-    if {${os.major} < 11} {
-        # 10.5 and 10.6: F_SETNOSIGPIPE unavailable
-        patchfiles-append \
-                    patch-nosigpipe.diff
-    }
     if {${os.major} < 14} {
         # 10.9 and below: old Apple Clang mishandles __attribute__((fallthrough))
         patchfiles-append \
@@ -60,9 +50,17 @@ platform darwin {
                     patch-bzero.diff
     }
     if {${os.major} < 11} {
+        # 10.5 and 10.6: F_SETNOSIGPIPE unavailable
+        patchfiles-append \
+                    patch-nosigpipe.diff
         # 10.5 and 10.6: Apple Clang does not recognize FALLTHROUGH comment form
         patchfiles-append \
                     patch-cmake-no-fallthrough.diff
+    }
+    if {${os.major} < 10} {
+        # 10.5 only: IOHIDDeviceGetService/IORegistryEntryGetRegistryEntryID unavailable
+        patchfiles-append \
+                    patch-hid_osx.diff
     }
     if {[string match *gcc* ${configure.compiler}]} {
         patchfiles-append \
