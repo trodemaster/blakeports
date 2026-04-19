@@ -19,6 +19,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_tenfive_ppc:
+        description: 'Mac OS X 10.5 PPC (Leopard)'
+        required: false
+        default: false
+        type: boolean
       run_tenfive:
         description: 'Mac OS X 10.5 (Leopard)'
         required: false
@@ -86,6 +91,12 @@ jobs:
           if [[ "${{ inputs.run_macos26_beta }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
             MATRIX+='{"platform":"macOS_26_beta","runner":"macOS_26_beta","type":"modern"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ inputs.run_tenfive_ppc }}" == "true" ]]; then
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+='{"platform":"tenfive-ppc","runner":["self-hosted","tenfive-ppc"],"type":"legacy","vm_name":"TenFive-PPC","os_version":"10.5"}'
             FIRST=false
           fi
 
