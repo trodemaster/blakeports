@@ -1,0 +1,10 @@
+--- openbsd-compat/explicit_bzero.c.orig
++++ openbsd-compat/explicit_bzero.c
+@@ -10,6 +10,7 @@
+ #if !defined(HAVE_EXPLICIT_BZERO) && !defined(_WIN32)
+ 
+ #include <string.h>
++#include <strings.h>
+ 
+ /*
+  * explicit_bzero - don't let the compiler optimize away bzero
