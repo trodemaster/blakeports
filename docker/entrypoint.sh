@@ -39,7 +39,7 @@ cleanup() {
     if [ -f "/home/runner/.runner" ]; then
         # Re-read token from config in case it changed
         local current_token
-        current_token=$(jq -r ".runners.${RUNNER_ID}.token // empty" "$CONFIG_FILE" 2>/dev/null)
+        current_token=$(jq -r --arg id "$RUNNER_ID" '.runners[$id].token // empty' "$CONFIG_FILE" 2>/dev/null)
         if [ -n "$current_token" ]; then
             ./config.sh remove --token "$current_token"
         fi
@@ -91,7 +91,7 @@ print_success "Configuration file found: $CONFIG_FILE"
 read_config() {
     local key=$1
     local value
-    value=$(jq -r ".runners.${RUNNER_ID}.${key} // empty" "$CONFIG_FILE" 2>/dev/null)
+    value=$(jq -r --arg id "$RUNNER_ID" --arg key "$key" '.runners[$id][$key] // empty' "$CONFIG_FILE" 2>/dev/null)
     echo "$value"
 }
 
