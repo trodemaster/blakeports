@@ -29,7 +29,11 @@ git.branch          main
 use_configure       no
 
 build {
-    system "cd ${worksrcpath} && swift build -c release"
+    # MacPorts' macports-user HOME is not writable inside its sandbox, causing SPM to
+    # fall back to re-compiling Package.swift under sandbox-exec — which fails because
+    # nested sandbox-exec is not permitted on macOS. Providing a writable HOME lets
+    # SPM cache the manifest and avoid the nested sandbox path entirely.
+    system "cd ${worksrcpath} && HOME=${workpath} swift build -c release"
 }
 
 destroot {
