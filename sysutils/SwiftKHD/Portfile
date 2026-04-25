@@ -1,9 +1,10 @@
 # -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
 
 PortSystem          1.0
+PortGroup           github 1.0
 
-name                SwiftKHD
-version             0.1.0
+github.setup        trodemaster SwiftKHD 0.1.0 v
+github.tarball_from archive
 revision            0
 
 categories          sysutils
@@ -17,30 +18,30 @@ long_description    SwiftKHD is a Swift port of skhd, a simple hotkey daemon \
                     files. Features modal hotkeys, process-specific bindings, key \
                     forwarding, media key support, and live config hot reload.
 
-homepage            https://github.com/trodemaster/SwiftKHD
+checksums           rmd160  feeaf2d1e4064480a8e2a0182b3d3eccc233391e \
+                    sha256  f4f091d2a71386de1216774699671c93962a4803a5f572c0c8eda81a03cc30dc \
+                    size    40338
 
 conflicts           skhd skhd.zig
 
-fetch.type          git
-git.url             https://github.com/trodemaster/SwiftKHD
-git.branch          main
-
 use_configure       no
+use_xcode           yes
 
-build {
-    system "cd ${worksrcpath} && HOME=${workpath} swift build -c release"
-}
+build.cmd           swift
+build.target        build
+build.args          --configuration release \
+                    --arch ${configure.build_arch} \
+                    --disable-sandbox
 
 destroot {
-    xinstall -d ${destroot}${prefix}/bin
-    xinstall -m 755 ${worksrcpath}/.build/release/SwiftKHD \
+    xinstall -m 0755 \
+        ${worksrcpath}/.build/${configure.build_arch}-apple-macosx/release/SwiftKHD \
         ${destroot}${prefix}/bin/swiftkHD
 
-    xinstall -d ${destroot}${prefix}/share/doc/${name}
-    xinstall -m 644 ${worksrcpath}/README.md \
-        ${destroot}${prefix}/share/doc/${name}
-    xinstall -m 644 ${worksrcpath}/LICENSE \
-        ${destroot}${prefix}/share/doc/${name}
+    set docdir ${destroot}${prefix}/share/doc/${name}
+    xinstall -d ${docdir}
+    xinstall -m 0644 ${worksrcpath}/README.md ${docdir}
+    xinstall -m 0644 ${worksrcpath}/LICENSE   ${docdir}
 }
 
 notes "
