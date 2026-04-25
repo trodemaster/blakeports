@@ -21,6 +21,7 @@ scripts/check-updates.sh                 # Check all ports in current directory
 
 The script will:
 - Find all Portfiles using GitHub PortGroup or SVN fetch
+- **Skip ports where @trodemaster is not listed as a maintainer**
 - Query GitHub API for latest releases
 - Query SourceForge RSS feeds for SVN release commits
 - Compare current version/revision with latest
@@ -171,7 +172,7 @@ Closes: https://trac.macports.org/ticket/12345
 10. Draft PR description using the official template
 11. **SHOW PR description to user — STOP and wait for explicit approval before proceeding**
 12. Create PR only after approval: `gh pr create --repo macports/macports-ports`
-13. If changes needed: amend commit, force push with `--force-with-lease`
+13. If reviewer feedback requires changes: apply fix to blakeports → run CI (both modern and legacy runners) → verify all passing → THEN amend commit and force push to macports-ports
 14. If PR doesn't receive attention within a few days, email macports-dev@lists.macports.org
 
 **For new ports:**
@@ -428,7 +429,7 @@ cd $(port work <portname>)               # Inspect source
 
 **test-port.sh** - Automate standard port testing workflow  
 **update-checksums.sh** - Guide checksum update process  
-**check-updates.sh** - Check GitHub-hosted ports for available updates
+**check-updates.sh** - Check ports for available updates; only reports ports where @trodemaster is a maintainer
 
 Execute without reading into context for efficiency.
 
@@ -468,3 +469,5 @@ Execute without reading into context for efficiency.
 18. **MacPorts PRs must contain exactly ONE commit** - squash or amend if needed
 19. **Feature branches can be force-pushed** - use `--force-with-lease` after amends
 20. **Use system libraries in place** - avoid bundling frameworks in MacPorts builds
+21. **`platform darwin` version blocks**: sort highest `os.major` threshold first (affects most systems), down to lowest; merge multiple blocks with the same threshold into one
+22. **Never update the upstream macports-ports PR before CI passes** — always fix in blakeports, run CI, verify green, then amend upstream
