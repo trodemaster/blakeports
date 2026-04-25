@@ -15,8 +15,7 @@ description         Simple hotkey daemon for macOS written in Swift
 long_description    SwiftKHD is a Swift port of skhd, a simple hotkey daemon \
                     for macOS. Fully compatible with existing skhd configuration \
                     files. Features modal hotkeys, process-specific bindings, key \
-                    forwarding, media key support, and live config hot reload. \
-                    Service management uses the native SMAppService API (macOS 13+).
+                    forwarding, media key support, and live config hot reload.
 
 homepage            https://github.com/trodemaster/SwiftKHD
 
@@ -29,16 +28,11 @@ git.branch          main
 use_configure       no
 
 build {
-    # MacPorts' macports-user HOME is not writable inside its sandbox, causing SPM to
-    # fall back to re-compiling Package.swift under sandbox-exec — which fails because
-    # nested sandbox-exec is not permitted on macOS. Providing a writable HOME lets
-    # SPM cache the manifest and avoid the nested sandbox path entirely.
     system "cd ${worksrcpath} && HOME=${workpath} swift build -c release"
 }
 
 destroot {
     xinstall -d ${destroot}${prefix}/bin
-    # .build/release is a symlink SPM creates pointing to the native-arch release dir
     xinstall -m 755 ${worksrcpath}/.build/release/SwiftKHD \
         ${destroot}${prefix}/bin/swiftkHD
 
