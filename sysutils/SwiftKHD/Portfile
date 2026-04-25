@@ -18,9 +18,9 @@ long_description    SwiftKHD is a Swift port of skhd, a simple hotkey daemon \
                     files. Features modal hotkeys, process-specific bindings, key \
                     forwarding, media key support, and live config hot reload.
 
-checksums           rmd160  a48dd1b8f4435dca01c77c1ba82550eb9efea701 \
-                    sha256  ec426ba25083b97093a1045196f189ba453582b468484ffaacecf18ba4a4a708 \
-                    size    55118
+checksums           rmd160  3a11ca72220b481e9c826f705dd10f3e75e13bf6 \
+                    sha256  54425bb49c6ae5ae138e5e557b6661893608ed270266e217fe43a4b0f4d89a3f \
+                    size    40361
 
 conflicts           skhd skhd.zig
 
