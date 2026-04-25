@@ -16,27 +16,33 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Function to check if @trodemaster is a maintainer of this port
+is_maintained_by_trodemaster() {
+    local portfile="$1"
+    grep -q "@trodemaster" "$portfile"
+}
+
 # Function to extract github.setup from a Portfile
 get_github_info() {
     local portfile="$1"
-    
+
     # Check if it uses github PortGroup
     if ! grep -q "^PortGroup.*github" "$portfile"; then
         return 1
     fi
-    
+
     # Extract github.setup line (may be indented)
     local setup_line=$(grep "github.setup" "$portfile" | grep -v "^#" | head -1)
     if [ -z "$setup_line" ]; then
         return 1
     fi
-    
+
     # Parse: github.setup owner repo version [tag_prefix]
     local owner=$(echo "$setup_line" | awk '{print $2}')
     local repo=$(echo "$setup_line" | awk '{print $3}')
     local version=$(echo "$setup_line" | awk '{print $4}')
     local tag_prefix=$(echo "$setup_line" | awk '{print $5}')
-    
+
     echo "$owner|$repo|$version|$tag_prefix"
 }
 
@@ -174,7 +180,7 @@ version_compare() {
 }
 
 echo "==========================================="
-echo "Checking for port updates (GitHub + SVN)"
+echo "Checking for port updates (@trodemaster ports only)"
 echo "==========================================="
 echo ""
 
@@ -195,8 +201,13 @@ while IFS= read -r portfile; do
         continue
     fi
     
+    # Skip ports not maintained by @trodemaster
+    if ! is_maintained_by_trodemaster "$portfile"; then
+        continue
+    fi
+
     total=$((total + 1))
-    
+
     # Try GitHub first
     github_info=$(get_github_info "$portfile")
     if [ $? -eq 0 ]; then
