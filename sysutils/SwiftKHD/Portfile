@@ -10,7 +10,7 @@ revision            0
 categories          sysutils
 platforms           {darwin >= 22}
 license             MIT
-maintainers         {netjibbing.com:blake} openmaintainer
+maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
 
 description         Simple hotkey daemon for macOS written in Swift
 long_description    SwiftKHD is a Swift port of skhd, a simple hotkey daemon \
