@@ -166,5 +166,5 @@ jobs:
         run: |
           source ./setupenv.bash
           port installed SwiftKHD
-          ls -la /opt/local/bin/swiftkHD
-          /opt/local/bin/swiftkHD --version
+          ls -la /opt/local/bin/swiftkhd
+          /opt/local/bin/swiftkhd --version
