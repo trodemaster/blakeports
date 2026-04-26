@@ -157,6 +157,11 @@ jobs:
           source ./setupenv.bash
           sudo port -v install SwiftKHD
 
+      - name: Run tests
+        run: |
+          source ./setupenv.bash
+          sudo port -v test SwiftKHD +tests
+
       - name: Verify installation
         run: |
           source ./setupenv.bash
