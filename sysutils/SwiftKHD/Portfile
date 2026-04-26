@@ -3,7 +3,7 @@
 PortSystem          1.0
 PortGroup           github 1.0
 
-github.setup        trodemaster SwiftKHD 0.1.1 v
+github.setup        trodemaster SwiftKHD 0.1.2 v
 github.tarball_from archive
 revision            0
 
@@ -18,9 +18,9 @@ long_description    SwiftKHD is a Swift port of skhd, a simple hotkey daemon \
                     files. Features modal hotkeys, process-specific bindings, key \
                     forwarding, media key support, and live config hot reload.
 
-checksums           rmd160  3a11ca72220b481e9c826f705dd10f3e75e13bf6 \
-                    sha256  54425bb49c6ae5ae138e5e557b6661893608ed270266e217fe43a4b0f4d89a3f \
-                    size    40361
+checksums           rmd160  5390a1ac76edca2d045cacc64e85568cd6e8a48c \
+                    sha256  e65c5d6195928bcb82b55d8a04e2aeabd81b5bfb1776cb680a131e8985096c51 \
+                    size    40360
 
 conflicts           skhd skhd.zig
 
