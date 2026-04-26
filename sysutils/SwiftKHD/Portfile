@@ -33,6 +33,14 @@ build.args          --configuration release \
                     --arch ${configure.build_arch} \
                     --disable-sandbox
 
+test.cmd            swift
+test.target         test
+test.args           --disable-sandbox
+
+variant tests description {Run the test suite} {
+    test.run        yes
+}
+
 destroot {
     xinstall -m 0755 \
         ${worksrcpath}/.build/${configure.build_arch}-apple-macosx/release/SwiftKHD \
