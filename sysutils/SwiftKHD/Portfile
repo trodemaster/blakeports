@@ -3,7 +3,7 @@
 PortSystem          1.0
 PortGroup           github 1.0
 
-github.setup        trodemaster SwiftKHD 0.1.4 v
+github.setup        trodemaster SwiftKHD 0.1.5 v
 github.tarball_from archive
 revision            0
 
@@ -18,9 +18,9 @@ long_description    SwiftKHD is a Swift port of skhd, a simple hotkey daemon \
                     files. Features modal hotkeys, process-specific bindings, key \
                     forwarding, media key support, and live config hot reload.
 
-checksums           rmd160  af38f04d216d04affca8645dcf22729c2b7d5410 \
-                    sha256  3f40757c35bd07d1e41c0fdf68fc9391ce845791ffa9d3e43c8af947687eeae5 \
-                    size    40650
+checksums           rmd160  c166e8bab0a838ef4c27e6ee07d8e622cbf75f93 \
+                    sha256  4ad66ab2b7d9b9045a703048969f34a737992cfaceff432a7bd68eca18fb4672 \
+                    size    44354
 
 conflicts           skhd skhd.zig
 
@@ -45,6 +45,14 @@ destroot {
     xinstall -m 0755 \
         ${worksrcpath}/.build/${configure.build_arch}-apple-macosx/release/SwiftKHD \
         ${destroot}${prefix}/bin/swiftkhd
+
+    xinstall -d ${destroot}${prefix}/share/man/man1
+    xinstall -m 0644 ${worksrcpath}/man/swiftkhd.1 \
+        ${destroot}${prefix}/share/man/man1/swiftkhd.1
+
+    xinstall -d ${destroot}${prefix}/etc/bash_completion.d
+    xinstall -m 0644 ${worksrcpath}/completions/swiftkhd.bash \
+        ${destroot}${prefix}/etc/bash_completion.d/swiftkhd
 
     set docdir ${destroot}${prefix}/share/doc/${name}
     xinstall -d ${docdir}
