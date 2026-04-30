@@ -22,7 +22,7 @@ checksums           rmd160  e7fb1d6ac201a3dfa53998b0eafc3353b5579cff \
                     sha256  d7e9eaa9f33304861401c1811392e5c848764cbc21b5b24db6233c1de62ff8bf \
                     size    47915
 
-conflicts           skhd skhd.zig
+conflicts           skhd
 
 use_configure       no
 use_xcode           yes
