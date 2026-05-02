@@ -27,9 +27,6 @@ checksums           ${distname}${extract.suffix} \
                     sha256  c980c9ac4d952ddc21da63fe28a411852ff49463a6e62c647502b541e3d0b229 \
                     size    11931222
 
-depends_build-append \
-                    path:bin/pkg-config:pkgconfig
-
 post-patch {
     file delete ${worksrcpath}/rust-toolchain.toml
 }
