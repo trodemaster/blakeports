@@ -16,7 +16,7 @@ Comprehensive guide for MacPorts port development workflows: creating and updati
 Check if any GitHub-hosted or SVN-hosted ports have new versions available:
 
 ```bash
-scripts/check-updates.sh                 # Check all ports in current directory
+bash scripts/check-updates.sh           # Check all ports in current directory
 ```
 
 The script will:
@@ -31,7 +31,7 @@ The script will:
 - GitHub-hosted ports (via GitHub API)
 - SourceForge SVN ports (via RSS feed parsing for "Releasing" commits)
 
-**Script available:** `scripts/check-updates.sh` automates version checking.
+**Script available:** `scripts/check-updates.sh` (in repo root `scripts/`) automates version checking.
 
 ### 2. Testing a Port
 
@@ -45,7 +45,7 @@ sudo port clean --dist <portname>        # Clear downloaded files
 sudo port install -sv <portname>         # Install with verbose output
 ```
 
-**Script available:** `scripts/test-port.sh <portname>` automates this sequence.
+**Script available:** `scripts/test-port.sh <portname>` (in repo root `scripts/`) automates this sequence.
 
 ### 3. Updating Port Version
 
@@ -62,7 +62,7 @@ When bumping version number:
 
 **Why keep old checksums:** MacPorts needs them present to fetch the new file and calculate correct checksums.
 
-**Script available:** `scripts/update-checksums.sh <portname>` guides this workflow.
+**Script available:** `scripts/update-checksums.sh <portname>` (in repo root `scripts/`) guides this workflow.
 
 ### 4. Creating New Port
 
@@ -425,11 +425,13 @@ cd $(port work <portname>)               # Inspect source
 
 ## Resources
 
-### Scripts (scripts/)
+### Scripts (scripts/ in repo root)
 
-**test-port.sh** - Automate standard port testing workflow  
-**update-checksums.sh** - Guide checksum update process  
-**check-updates.sh** - Check ports for available updates; only reports ports where @trodemaster is a maintainer
+All scripts live in the `scripts/` directory in the repository root.
+
+**scripts/test-port.sh** - Automate standard port testing workflow  
+**scripts/update-checksums.sh** - Guide checksum update process  
+**scripts/check-updates.sh** - Check ports for available updates; only reports ports where @trodemaster is a maintainer
 
 Execute without reading into context for efficiency.
 
