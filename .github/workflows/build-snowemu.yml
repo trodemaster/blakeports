@@ -137,10 +137,6 @@ jobs:
       - name: Clean existing installation
         run: |
           source ./setupenv.bash
-          if port installed snow | grep -q ' snow @'; then
-            echo "Removing conflicting snow installation..."
-            sudo port uninstall snow
-          fi
           if port installed snowemu | grep -q snowemu; then
             echo "Removing existing snowemu installation..."
             sudo port uninstall snowemu
