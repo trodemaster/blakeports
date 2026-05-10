@@ -169,9 +169,10 @@ Closes: https://trac.macports.org/ticket/12345
 7. **SHOW commit message to user — STOP and wait for explicit approval before proceeding**
 8. Commit after approval: `git commit -m "message"`
 9. Push to fork: `git push -u origin branch-name`
-10. Draft PR description using the official template
-11. **SHOW PR description to user — STOP and wait for explicit approval before proceeding**
-12. Create PR only after approval: `gh pr create --repo macports/macports-ports`
+10. Extract "Tested on" system info from CI runner logs (see pr-template.md) — do NOT use local machine info
+11. Draft PR description using the official template with CI-sourced system info
+12. **SHOW PR description to user — STOP and wait for explicit approval before proceeding**
+13. Create PR only after approval: `gh pr create --repo macports/macports-ports`
 13. If reviewer feedback requires changes: apply fix to blakeports → run CI (both modern and legacy runners) → verify all passing → THEN amend commit and force push to macports-ports
 14. If PR doesn't receive attention within a few days, email macports-dev@lists.macports.org
 
