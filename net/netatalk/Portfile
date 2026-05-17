@@ -6,49 +6,38 @@ PortGroup           meson 1.0
 PortGroup           legacysupport 1.1
 
 name                netatalk
+version             4.4.3
+revision            0
 categories          net
 description         Netatalk is a freely-available Open Source AFP fileserver.
 long_description    Netatalk is a freely-available Open Source AFP fileserver. \
                     It allows Unix-like operating systems to serve as file \
-                    servers for Macintosh computers. This port tracks the \
-                    4.5.0 beta tag for pre-release testing.
+                    servers for Macintosh computers.
 
 if {${subport} eq ${name}} {
-    github.setup        Netatalk netatalk 4.5.0beta
+    github.setup        Netatalk netatalk 4-4-3 netatalk-
+    version             4.4.3
     revision            0
-    git.branch          netatalk-4-5-0beta
-    fetch.type          git
-    github.tarball_from archive
+    github.tarball_from releases
+    distname            netatalk-${version}
+    use_xz              yes
 
     compiler.c_standard 2011
 
-    # Darwin 12-13 (10.8-10.9): system clang (LLVM 5.1/6.0) lacks stdatomic.h
-    # in the SDK headers. Blacklist it so MacPorts selects a bundled clang
-    # whose toolchain includes proper C11 atomics headers.
-    if {${os.major} >= 12 && ${os.major} <= 13} {
-        compiler.blacklist-append {clang}
-    }
-
-    # clang 16+ treats incompatible function pointer types as a hard error.
-    # netatalk's bin/nad/nad_ls.c:638 passes a dirent** comparator to scandir
-    # where void* is expected (a netatalk upstream bug). Suppress the error on
-    # legacy platforms where clang-mp-16 is the selected compiler.
-    if {${os.major} <= 13} {
-        configure.cflags-append -Wno-incompatible-function-pointer-types
-    }
-
+    checksums       rmd160  309a3fb04e01bf4a5076318f9671cc064e74e6f4 \
+                    sha256  863d640ecc99f4923ead6c58e8d3406ab3a1ca9dd3b0d47ccdf6fdebb6efe3ab \
+                    size    1129884
+    
     license             GPL-2+
     maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
-
+    
     homepage            https://netatalk.io
-
-    livecheck.type      none
-
+    
     depends_build-append       path:bin/pkg-config:pkgconfig \
                                port:cmark-gfm \
                                port:bison \
                                port:flex
-
+    
     depends_lib         port:sqlite3 \
                         port:libevent \
                         port:libgcrypt \
@@ -57,55 +46,45 @@ if {${subport} eq ${name}} {
                         port:dbus \
                         port:talloc \
                         port:bstring
-
+    
     configure.args-append -Dwith-init-style=none \
                           -Dwith-pam-config-path=${prefix}/etc/pam.d \
                           -Dwith-lockfile-path=${prefix}/var/run \
                           -Dwith-cnid-backends=sqlite,dbd,mysql \
+                          -Dwith-cnid-default-backend=sqlite \
                           -Dwith-spotlight=true
-
-    # PPC and OS X 10.5 (os.major 9) cannot build tracker3/dbus or MySQL
-    if {${os.major} < 10 || ${configure.build_arch} eq "ppc"} {
-        configure.args-replace  -Dwith-spotlight=true         -Dwith-spotlight=false
-        configure.args-replace  -Dwith-cnid-backends=sqlite,dbd,mysql \
-                                 -Dwith-cnid-backends=sqlite,dbd
-        depends_lib-delete      port:tracker3 \
-                                port:dbus
-    }
-
+    
     startupitem.create  yes
     startupitem.executable  ${prefix}/sbin/netatalk -d -F ${prefix}/etc/afp.conf
     startupitem.logfile ${prefix}/var/log/${name}.log
     startupitem.logfile.stderr ${prefix}/var/log/${name}-stderr.log
     startupitem.logevents yes
     startupitem.debug          yes
-
-    notes "This port tracks the 4.5.0 beta tag (pre-release). Upgrade details: \
-https://netatalk.io/manual/en/Upgrading. Configuration files: ${prefix}/etc/. \
-Logs: ${prefix}/var/log/."
+    
+    notes "Upgrade details: https://netatalk.io/manual/en/Upgrading. Configuration files can be found in: ${prefix}/etc/. Log files can be found in: ${prefix}/var/log/."
 }
 
 # Netatalk 4.x stub port
 subport netatalk4 {
     PortGroup           stub 1.0
 
-    version             4.5.0beta
+    version             4.4.3
     revision            0
-
+    
     categories          net
     license             GPL-2+
     maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
-
+    
     description         Netatalk is a freely-available Open Source AFP fileserver.
     long_description    Netatalk is a freely-available Open Source AFP fileserver. \
                         It allows Unix-like operating systems to serve as file \
                         servers for Macintosh computers.
-
+    
     homepage            https://netatalk.io
-
+    
     # This is a stub port that depends on the main netatalk port
     depends_run         port:netatalk
-
+    
     notes "This is a stub port that provides netatalk4 as an alias for netatalk. \
            The main netatalk port will automatically select the appropriate version \
            based on your macOS version."
