@@ -9,8 +9,7 @@ PortGroup           golang 1.0
 
 go.setup            github.com/trodemaster/lima 33ee4f38
 go.offline_build    no
-version             2.1.0-dev.11
-revision            2
+version             2.1.0-dev.12
 
 homepage            https://lima-vm.io
 
