@@ -7,9 +7,9 @@ PortGroup           golang 1.0
 # for GUI display on macOS 26+
 # Source: https://github.com/trodemaster/lima/tree/feat/macos-vz-gui-appbundle
 
-go.setup            github.com/trodemaster/lima 33ee4f38
+go.setup            github.com/trodemaster/lima 0a227350
 go.offline_build    no
-version             2.1.0-dev.12
+version             2.1.0-dev.13
 
 homepage            https://lima-vm.io
 
@@ -34,9 +34,9 @@ license             Apache-2
 maintainers         {macports.halostatue.ca:austin @halostatue} \
                     openmaintainer
 
-checksums           rmd160  bf65e14c88fa20d7bbb03a055d458db7890e463c \
-                    sha256  e80c8be67564fab27e838edd9d2f67e5e41258ecc9f55fa5a26d41543ba3c722 \
-                    size    18183453
+checksums           rmd160  0313c0574cb2ce8d736522d5b96226c6557993b5 \
+                    sha256  0cf56f7ceacf633641966b360ff99aba46218ee617934127fab71b603d08d572 \
+                    size    18182966
 
 build.cmd           make
 # APP_BUNDLE_DIR controls where Lima.app is built within _output/
