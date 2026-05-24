@@ -7,6 +7,7 @@ PortGroup           cargo 1.0
 github.setup        twvd snow 1.4.1 v
 name                snowemu
 github.tarball_from archive
+homepage            https://snowemu.com
 revision            0
 
 categories          emulators
