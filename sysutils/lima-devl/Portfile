@@ -46,6 +46,9 @@ patchfiles          patch-Makefile.diff \
 
 build.cmd           make
 build.args-append   native
+# G2: APP_BUNDLE_DIR controls where Lima.app is built within _output/
+# (enabled by patch-02-g2-app-bundle.diff which adds the Makefile target)
+#build.args-append   APP_BUNDLE_DIR=_output/share/lima
 
 platform darwin {
     # Lima defaults to VZ with macOS 13.5 and later; drop dependency from 14 onwards
@@ -79,6 +82,14 @@ post-build {
 
 destroot {
     system -W ${worksrcpath} "make install DEST=${destroot}${prefix}"
+
+    # G2: Install Lima.app to the standard MacPorts Applications directory
+    #platform darwin {
+    #    xinstall -d ${destroot}/Applications/MacPorts
+    #    file rename \
+    #        ${destroot}${prefix}/share/lima/Lima.app \
+    #        ${destroot}/Applications/MacPorts/Lima.app
+    #}
 }
 
 notes {
@@ -90,5 +101,12 @@ notes {
     Use macos-26-test VM to confirm whether G1 alone resolves the SIGTRAP\
     on macOS 26 without the Lima.app bundle.
 }
+# G2 notes (uncomment when G2 active):
+#notes-append {
+#    This build includes an experimental macOS app bundle (Lima.app) for
+#    GUI display on macOS 26+. When starting a VM with video.display=default
+#    on macOS 26+, the hostagent launches inside Lima.app for proper Window
+#    Server context.
+#}
 
 github.livecheck.regex {([0-9.]+)}
