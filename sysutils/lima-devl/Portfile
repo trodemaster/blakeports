@@ -10,24 +10,26 @@ revision            0
 
 homepage            https://lima-vm.io
 
-description         Linux virtual machines (with macOS GUI and TCC extensions)
+description         Lima ${version} + G1/G2 macOS 26 GUI patches (upstream PR candidates)
 
 long_description    {*}{
-    Lima launches Linux virtual machines with automatic file sharing
-    and port forwarding (similar to WSL2). The original goal of Lima
-    was to promote containerd including nerdctl (contaiNERD ctl) to
-    Mac users, but Lima can be used for non-container applications as
-    well. Lima also supports other container engines, such as Docker,
-    Podman, Kubernetes, etc. Lima can also emulate other architectures
-    if QEMU is installed.
+    Lima ${version} (upstream release) with experimental patches that are
+    pending upstream review. Built from lima-vm/lima with per-PR patch files
+    applied in dependency order.
 
-    This port applies experimental patches on top of upstream Lima
-    that are pending upstream review:
-    - macOS app bundle (Lima.app) for VZ GUI display on macOS 26+
-    - limactl screenshot command for VZ GUI VMs
-    - fakecloudinit: suppress macOS guest first-run setup screens
-    - guestpatch: pre-populate TCC database during disk patching
-    - hostagent PID wait timeout increase for macOS 26+
+    Active patches in this build:
+      G1  fix(darwin): pin main goroutine to OS thread 0 (LockOSThread in init)
+      G2  feat(vz/darwin): Lima.app bundle for VZ GUI display on macOS 26+
+              + MacPorts /Applications/MacPorts search path (patch-03)
+
+    Available but currently commented out in patchfiles:
+      G3  feat: limactl screenshot command for VZ GUI VMs
+      B1  feat(fakecloudinit): suppress macOS guest first-run setup screens
+      B2  feat(guestpatch): pre-populate TCC database during macOS disk patching
+      O1  fix(hostagent): increase PID wait timeout for macOS 26+ Gatekeeper delay
+
+    Upstream PR branches: https://github.com/trodemaster/lima
+    Upstream issue: https://github.com/lima-vm/lima/issues/4743
 }
 
 categories          sysutils
@@ -48,11 +50,12 @@ patchfiles          patch-Makefile.diff \
                     patch-usrlocalgo.diff \
                     patch-01-g1-thread-pin.diff \
                     patch-02-g2-app-bundle.diff \
-                    patch-03-g2-macports-applications-path.diff \
-                    patch-04-g3-screenshot.diff \
-                    patch-05-b1-fakecloudinit.diff \
-                    patch-06-b2-tcc.diff \
-                    patch-07-o1-pid-timeout.diff
+                    patch-03-g2-macports-applications-path.diff
+#                     \
+#                    patch-04-g3-screenshot.diff \
+#                    patch-05-b1-fakecloudinit.diff \
+#                    patch-06-b2-tcc.diff \
+#                    patch-07-o1-pid-timeout.diff
 
 build.cmd           make
 # APP_BUNDLE_DIR controls where Lima.app is built within _output/
