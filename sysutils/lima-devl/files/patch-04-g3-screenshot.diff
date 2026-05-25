@@ -110,7 +110,7 @@ index 269d85fa..fd446624 100644
  	// Validate returns error if the current driver isn't support for given config
 diff --git pkg/driver/vz/screenshot_darwin.go pkg/driver/vz/screenshot_darwin.go
 new file mode 100644
-index 00000000..cda27223
+index 00000000..d183822f
 --- /dev/null
 +++ pkg/driver/vz/screenshot_darwin.go
 @@ -0,0 +1,89 @@
@@ -187,7 +187,7 @@ index 00000000..cda27223
 +// Implements driver.Screenshotter. Requires the GUI app bundle to be running.
 +func (l *LimaVzDriver) CaptureScreenshot(format string) ([]byte, error) {
 +	if !l.canRunGUI() {
-+		return nil, fmt.Errorf("GUI is not running")
++		return nil, fmt.Errorf("VM has no display configured (set video.display to \"default\" or \"vz\" to enable screenshots)")
 +	}
 +	uti := "public.png"
 +	if format == "bmp" {
@@ -204,18 +204,20 @@ index 00000000..cda27223
 +	return C.GoBytes(ptr, outLen), nil
 +}
 diff --git pkg/hostagent/api/client/client.go pkg/hostagent/api/client/client.go
-index a71d25a9..140c3cd2 100644
+index a71d25a9..d6da895b 100644
 --- pkg/hostagent/api/client/client.go
 +++ pkg/hostagent/api/client/client.go
-@@ -10,6 +10,7 @@ import (
+@@ -9,7 +9,9 @@ package client
+ import (
  	"context"
  	"encoding/json"
++	"errors"
  	"fmt"
 +	"io"
  	"net/http"
  
  	"github.com/lima-vm/lima/v2/pkg/hostagent/api"
-@@ -19,6 +20,8 @@ import (
+@@ -19,6 +21,8 @@ import (
  type HostAgentClient interface {
  	HTTPClient() *http.Client
  	Info(context.Context) (*api.Info, error)
@@ -224,7 +226,7 @@ index a71d25a9..140c3cd2 100644
  }
  
  // NewHostAgentClient creates a client.
-@@ -65,3 +68,16 @@ func (c *client) Info(ctx context.Context) (*api.Info, error) {
+@@ -65,3 +69,27 @@ func (c *client) Info(ctx context.Context) (*api.Info, error) {
  	}
  	return &info, nil
  }
@@ -236,16 +238,46 @@ index a71d25a9..140c3cd2 100644
 +	u := fmt.Sprintf("http://%s/%s/screenshot?format=%s", c.dummyHost, c.version, format)
 +	resp, err := httpclientutil.Get(ctx, c.HTTPClient(), u)
 +	if err != nil {
++		var httpErr *httpclientutil.HTTPStatusError
++		if errors.As(err, &httpErr) {
++			switch httpErr.StatusCode {
++			case http.StatusNotFound:
++				return nil, fmt.Errorf("hostagent does not support screenshot — restart the instance to pick up the latest hostagent binary")
++			case http.StatusNotImplemented:
++				return nil, fmt.Errorf("this VM's driver does not support screenshots (only VZ VMs with a display are supported)")
++			case http.StatusUnprocessableEntity:
++				return nil, fmt.Errorf("VM has no display configured — set video.display to \"default\" or \"vz\" in the instance config")
++			}
++		}
 +		return nil, err
 +	}
 +	defer resp.Body.Close()
 +	return io.ReadAll(resp.Body)
 +}
 diff --git pkg/hostagent/api/server/server.go pkg/hostagent/api/server/server.go
-index 26da6597..64ecd90d 100644
+index 26da6597..d57e1a49 100644
 --- pkg/hostagent/api/server/server.go
 +++ pkg/hostagent/api/server/server.go
-@@ -53,6 +53,35 @@ func (b *Backend) GetInfo(w http.ResponseWriter, r *http.Request) {
+@@ -7,6 +7,7 @@ import (
+ 	"context"
+ 	"encoding/json"
+ 	"net/http"
++	"strings"
+ 
+ 	"github.com/lima-vm/lima/v2/pkg/hostagent"
+ 	"github.com/lima-vm/lima/v2/pkg/httputil"
+@@ -17,8 +18,9 @@ type Backend struct {
+ }
+ 
+ func (b *Backend) onError(w http.ResponseWriter, err error, ec int) {
+-	w.WriteHeader(ec)
++	// Set headers before WriteHeader — calling WriteHeader flushes headers.
+ 	w.Header().Set("Content-Type", "application/json")
++	w.WriteHeader(ec)
+ 	// err may potentially contain credential info (in a future version),
+ 	// but it is safe to return the err to the client, because we do not expose the socket to the internet
+ 	e := httputil.ErrorJSON{
+@@ -53,6 +55,43 @@ func (b *Backend) GetInfo(w http.ResponseWriter, r *http.Request) {
  	_, _ = w.Write(m)
  }
  
@@ -265,7 +297,15 @@ index 26da6597..64ecd90d 100644
 +	}
 +	data, err := b.Agent.Screenshot(ctx, format)
 +	if err != nil {
-+		b.onError(w, err, http.StatusInternalServerError)
++		ec := http.StatusInternalServerError
++		msg := err.Error()
++		switch {
++		case strings.Contains(msg, "does not support screenshots"):
++			ec = http.StatusNotImplemented
++		case strings.Contains(msg, "no display configured"):
++			ec = http.StatusUnprocessableEntity
++		}
++		b.onError(w, err, ec)
 +		return
 +	}
 +	ct := "image/png"
