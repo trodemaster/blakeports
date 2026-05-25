@@ -1,5 +1,5 @@
 diff --git cmd/limactl/main.go cmd/limactl/main.go
-index ae803cdb..df53de61 100644
+index 31f322f6..a53fb6f7 100644
 --- cmd/limactl/main.go
 +++ cmd/limactl/main.go
 @@ -199,6 +199,7 @@ func newApp() *cobra.Command {
@@ -92,7 +92,7 @@ index 00000000..155897aa
 +	return nil
 +}
 diff --git pkg/driver/driver.go pkg/driver/driver.go
-index f0ee529c..0122e97b 100644
+index 269d85fa..fd446624 100644
 --- pkg/driver/driver.go
 +++ pkg/driver/driver.go
 @@ -16,6 +16,12 @@ type VsockEventEmitter interface {
@@ -282,10 +282,10 @@ index 26da6597..64ecd90d 100644
 +	r.Handle("/v1/screenshot", http.HandlerFunc(b.GetScreenshot))
  }
 diff --git pkg/hostagent/hostagent.go pkg/hostagent/hostagent.go
-index fc8de4c6..ccf85b4c 100644
+index b0d894fb..e055ab7d 100644
 --- pkg/hostagent/hostagent.go
 +++ pkg/hostagent/hostagent.go
-@@ -518,6 +518,19 @@ func (a *HostAgent) startRoutinesAndWait(ctx context.Context, errCh <-chan error
+@@ -520,6 +520,19 @@ func (a *HostAgent) startRoutinesAndWait(ctx context.Context, errCh <-chan error
  	return a.driver.Stop(ctx)
  }
  
