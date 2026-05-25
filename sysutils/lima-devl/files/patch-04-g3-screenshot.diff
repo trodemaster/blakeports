@@ -282,14 +282,14 @@ index 26da6597..64ecd90d 100644
 +	r.Handle("/v1/screenshot", http.HandlerFunc(b.GetScreenshot))
  }
 diff --git pkg/hostagent/hostagent.go pkg/hostagent/hostagent.go
-index b0d894fb..e055ab7d 100644
+index b0d894fb..6c587827 100644
 --- pkg/hostagent/hostagent.go
 +++ pkg/hostagent/hostagent.go
 @@ -520,6 +520,19 @@ func (a *HostAgent) startRoutinesAndWait(ctx context.Context, errCh <-chan error
  	return a.driver.Stop(ctx)
  }
  
-+func (a *HostAgent) Screenshot(_ context.Context, format string) ([]byte, error) {
++func (a *HostAgent) Screenshot(ctx context.Context, format string) ([]byte, error) {
 +	// ConfiguredDriver wraps the concrete driver; unwrap to reach optional interfaces.
 +	inner := a.driver
 +	if cd, ok := a.driver.(*driver.ConfiguredDriver); ok {
@@ -297,7 +297,7 @@ index b0d894fb..e055ab7d 100644
 +	}
 +	s, ok := inner.(driver.Screenshotter)
 +	if !ok {
-+		return nil, fmt.Errorf("driver %q does not support screenshots", a.driver.Info().Name)
++		return nil, fmt.Errorf("driver %q does not support screenshots", a.driver.Info(ctx).Name)
 +	}
 +	return s.CaptureScreenshot(format)
 +}
