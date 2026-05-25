@@ -1,7 +1,7 @@
-diff --git a/Makefile b/Makefile
+diff --git Makefile Makefile
 index 7e8f3723..ddfcad4a 100644
---- a/Makefile
-+++ b/Makefile
+--- Makefile
++++ Makefile
 @@ -214,6 +214,9 @@ binaries: limactl helpers limactl-plugins guestagents \
  # _output/bin
  .PHONY: limactl lima helpers
@@ -36,10 +36,10 @@ index 7e8f3723..ddfcad4a 100644
  LIBEXEC_LIMA := _output/libexec/lima
  
  limactl-plugins: $(LIBEXEC_LIMA)/limactl-mcp$(exe) $(LIBEXEC_LIMA)/limactl-url-fedora-rawhide
-diff --git a/pkg/driver/driver.go b/pkg/driver/driver.go
+diff --git pkg/driver/driver.go pkg/driver/driver.go
 index 269d85fa..0b7bb7fb 100644
---- a/pkg/driver/driver.go
-+++ b/pkg/driver/driver.go
+--- pkg/driver/driver.go
++++ pkg/driver/driver.go
 @@ -117,6 +117,7 @@ type Info struct {
  
  type DriverFeatures struct {
@@ -48,11 +48,11 @@ index 269d85fa..0b7bb7fb 100644
  	DynamicSSHAddress    bool `json:"dynamicSSHAddress"`
  	StaticSSHPort        bool `json:"staticSSHPort"`
  	SkipSocketForwarding bool `json:"skipSocketForwarding"`
-diff --git a/pkg/driver/vz/Info.plist b/pkg/driver/vz/Info.plist
+diff --git pkg/driver/vz/Info.plist pkg/driver/vz/Info.plist
 new file mode 100644
 index 00000000..cd5c2c72
 --- /dev/null
-+++ b/pkg/driver/vz/Info.plist
++++ pkg/driver/vz/Info.plist
 @@ -0,0 +1,25 @@
 +<?xml version="1.0" encoding="UTF-8"?>
 +<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -79,10 +79,10 @@ index 00000000..cd5c2c72
 +	<false/>
 +</dict>
 +</plist>
-diff --git a/pkg/driver/vz/vz_driver_darwin.go b/pkg/driver/vz/vz_driver_darwin.go
+diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
 index b2de1437..ef01727b 100644
---- a/pkg/driver/vz/vz_driver_darwin.go
-+++ b/pkg/driver/vz/vz_driver_darwin.go
+--- pkg/driver/vz/vz_driver_darwin.go
++++ pkg/driver/vz/vz_driver_darwin.go
 @@ -14,6 +14,7 @@ import (
  	"os"
  	"os/exec"
@@ -151,17 +151,17 @@ index b2de1437..ef01727b 100644
  		RosettaEnabled:       l.rosettaEnabled,
  		RosettaBinFmt:        l.rosettaBinFmt,
  	}
-diff --git a/pkg/instance/start.go b/pkg/instance/start.go
+diff --git pkg/instance/start.go pkg/instance/start.go
 index dc13872e..78580915 100644
---- a/pkg/instance/start.go
-+++ b/pkg/instance/start.go
+--- pkg/instance/start.go
++++ pkg/instance/start.go
 @@ -218,9 +218,22 @@ func StartWithPaths(ctx context.Context, inst *limatype.Instance, launchHostAgen
  			"hostagent",
  			"--pidfile", haPIDPath,
  			"--socket", haSockPath)
--		if prepared.Driver.Info(ctx).Features.CanRunGUI {
+-		if prepared.Driver.Info().Features.CanRunGUI {
 +
-+		driverInfo := prepared.Driver.Info(ctx)
++		driverInfo := prepared.Driver.Info()
 +		runGUI := driverInfo.Features.CanRunGUI
 +		useAppBundle := false
 +		if !runGUI && driverInfo.Features.WantsGUI {
@@ -228,11 +228,11 @@ index dc13872e..78580915 100644
  		}
  	} else if err = autostart.RequestStart(ctx, inst); err != nil {
  		return fmt.Errorf("failed to request start via autostart manager: %w", err)
-diff --git a/pkg/instance/start_appbundle_darwin.go b/pkg/instance/start_appbundle_darwin.go
+diff --git pkg/instance/start_appbundle_darwin.go pkg/instance/start_appbundle_darwin.go
 new file mode 100644
 index 00000000..980d81aa
 --- /dev/null
-+++ b/pkg/instance/start_appbundle_darwin.go
++++ pkg/instance/start_appbundle_darwin.go
 @@ -0,0 +1,69 @@
 +//go:build darwin
 +
@@ -303,11 +303,11 @@ index 00000000..980d81aa
 +	}
 +	return cmd, nil
 +}
-diff --git a/pkg/instance/start_appbundle_others.go b/pkg/instance/start_appbundle_others.go
+diff --git pkg/instance/start_appbundle_others.go pkg/instance/start_appbundle_others.go
 new file mode 100644
 index 00000000..a72b2867
 --- /dev/null
-+++ b/pkg/instance/start_appbundle_others.go
++++ pkg/instance/start_appbundle_others.go
 @@ -0,0 +1,19 @@
 +//go:build !darwin
 +

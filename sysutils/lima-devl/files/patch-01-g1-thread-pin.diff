@@ -1,8 +1,8 @@
-diff --git a/cmd/limactl/main_darwin_gui.go b/cmd/limactl/main_darwin_gui.go
+diff --git cmd/limactl/main_darwin_gui.go cmd/limactl/main_darwin_gui.go
 new file mode 100644
 index 00000000..dcc9c8cf
 --- /dev/null
-+++ b/cmd/limactl/main_darwin_gui.go
++++ cmd/limactl/main_darwin_gui.go
 @@ -0,0 +1,18 @@
 +//go:build darwin
 +

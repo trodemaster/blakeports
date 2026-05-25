@@ -1,7 +1,7 @@
-diff --git a/pkg/driver/vz/vz_driver_darwin.go b/pkg/driver/vz/vz_driver_darwin.go
+diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
 index b2de1437..ed0fe336 100644
---- a/pkg/driver/vz/vz_driver_darwin.go
-+++ b/pkg/driver/vz/vz_driver_darwin.go
+--- pkg/driver/vz/vz_driver_darwin.go
++++ pkg/driver/vz/vz_driver_darwin.go
 @@ -93,6 +93,7 @@ type LimaVzDriver struct {
  	rosettaEnabled  bool
  	rosettaBinFmt   bool
@@ -29,10 +29,10 @@ index b2de1437..ed0fe336 100644
  				return err
  			}
  			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
-diff --git a/pkg/guestpatch/macos/macos_darwin.go b/pkg/guestpatch/macos/macos_darwin.go
+diff --git pkg/guestpatch/macos/macos_darwin.go pkg/guestpatch/macos/macos_darwin.go
 index c68e6e7e..ce310443 100644
---- a/pkg/guestpatch/macos/macos_darwin.go
-+++ b/pkg/guestpatch/macos/macos_darwin.go
+--- pkg/guestpatch/macos/macos_darwin.go
++++ pkg/guestpatch/macos/macos_darwin.go
 @@ -15,6 +15,7 @@ import (
  
  	"github.com/lima-vm/lima/v2/pkg/apfs"
@@ -205,11 +205,11 @@ index c68e6e7e..ce310443 100644
 +	}
 +	return rp, up, nil
  }
-diff --git a/pkg/guestpatch/macos/tcc_darwin.go b/pkg/guestpatch/macos/tcc_darwin.go
+diff --git pkg/guestpatch/macos/tcc_darwin.go pkg/guestpatch/macos/tcc_darwin.go
 new file mode 100644
 index 00000000..45635f1c
 --- /dev/null
-+++ b/pkg/guestpatch/macos/tcc_darwin.go
++++ pkg/guestpatch/macos/tcc_darwin.go
 @@ -0,0 +1,417 @@
 +// SPDX-FileCopyrightText: Copyright The Lima Authors
 +// SPDX-License-Identifier: Apache-2.0
@@ -628,10 +628,10 @@ index 00000000..45635f1c
 +	}
 +	return strings.Join(names, ", ")
 +}
-diff --git a/pkg/limatype/lima_yaml.go b/pkg/limatype/lima_yaml.go
+diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
 index afb012e8..4404fbeb 100644
---- a/pkg/limatype/lima_yaml.go
-+++ b/pkg/limatype/lima_yaml.go
+--- pkg/limatype/lima_yaml.go
++++ pkg/limatype/lima_yaml.go
 @@ -121,8 +121,26 @@ type QEMUOpts struct {
  }
  

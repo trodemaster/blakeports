@@ -1,7 +1,7 @@
-diff --git a/cmd/limactl/main.go b/cmd/limactl/main.go
+diff --git cmd/limactl/main.go cmd/limactl/main.go
 index 31f322f6..a53fb6f7 100644
---- a/cmd/limactl/main.go
-+++ b/cmd/limactl/main.go
+--- cmd/limactl/main.go
++++ cmd/limactl/main.go
 @@ -199,6 +199,7 @@ func newApp() *cobra.Command {
  		newGenDocCommand(),
  		newGenSchemaCommand(),
@@ -10,11 +10,11 @@ index 31f322f6..a53fb6f7 100644
  		newProtectCommand(),
  		newUnprotectCommand(),
  		newTunnelCommand(),
-diff --git a/cmd/limactl/screenshot.go b/cmd/limactl/screenshot.go
+diff --git cmd/limactl/screenshot.go cmd/limactl/screenshot.go
 new file mode 100644
 index 00000000..155897aa
 --- /dev/null
-+++ b/cmd/limactl/screenshot.go
++++ cmd/limactl/screenshot.go
 @@ -0,0 +1,75 @@
 +// SPDX-FileCopyrightText: Copyright The Lima Authors
 +// SPDX-License-Identifier: Apache-2.0
@@ -91,10 +91,10 @@ index 00000000..155897aa
 +	logrus.Infof("Screenshot saved to %q (%d bytes)", outputPath, len(data))
 +	return nil
 +}
-diff --git a/pkg/driver/driver.go b/pkg/driver/driver.go
+diff --git pkg/driver/driver.go pkg/driver/driver.go
 index 269d85fa..fd446624 100644
---- a/pkg/driver/driver.go
-+++ b/pkg/driver/driver.go
+--- pkg/driver/driver.go
++++ pkg/driver/driver.go
 @@ -16,6 +16,12 @@ type VsockEventEmitter interface {
  	SetVsockEventCallback(callback func(*events.VsockEvent))
  }
@@ -108,11 +108,11 @@ index 269d85fa..fd446624 100644
  // Lifecycle defines basic lifecycle operations.
  type Lifecycle interface {
  	// Validate returns error if the current driver isn't support for given config
-diff --git a/pkg/driver/vz/screenshot_darwin.go b/pkg/driver/vz/screenshot_darwin.go
+diff --git pkg/driver/vz/screenshot_darwin.go pkg/driver/vz/screenshot_darwin.go
 new file mode 100644
 index 00000000..cda27223
 --- /dev/null
-+++ b/pkg/driver/vz/screenshot_darwin.go
++++ pkg/driver/vz/screenshot_darwin.go
 @@ -0,0 +1,89 @@
 +// SPDX-FileCopyrightText: Copyright The Lima Authors
 +// SPDX-License-Identifier: Apache-2.0
@@ -203,10 +203,10 @@ index 00000000..cda27223
 +	defer C.free(unsafe.Pointer(ptr))
 +	return C.GoBytes(ptr, outLen), nil
 +}
-diff --git a/pkg/hostagent/api/client/client.go b/pkg/hostagent/api/client/client.go
+diff --git pkg/hostagent/api/client/client.go pkg/hostagent/api/client/client.go
 index a71d25a9..140c3cd2 100644
---- a/pkg/hostagent/api/client/client.go
-+++ b/pkg/hostagent/api/client/client.go
+--- pkg/hostagent/api/client/client.go
++++ pkg/hostagent/api/client/client.go
 @@ -10,6 +10,7 @@ import (
  	"context"
  	"encoding/json"
@@ -241,10 +241,10 @@ index a71d25a9..140c3cd2 100644
 +	defer resp.Body.Close()
 +	return io.ReadAll(resp.Body)
 +}
-diff --git a/pkg/hostagent/api/server/server.go b/pkg/hostagent/api/server/server.go
+diff --git pkg/hostagent/api/server/server.go pkg/hostagent/api/server/server.go
 index 26da6597..64ecd90d 100644
---- a/pkg/hostagent/api/server/server.go
-+++ b/pkg/hostagent/api/server/server.go
+--- pkg/hostagent/api/server/server.go
++++ pkg/hostagent/api/server/server.go
 @@ -53,6 +53,35 @@ func (b *Backend) GetInfo(w http.ResponseWriter, r *http.Request) {
  	_, _ = w.Write(m)
  }
@@ -281,10 +281,10 @@ index 26da6597..64ecd90d 100644
  	r.Handle("/v1/info", http.HandlerFunc(b.GetInfo))
 +	r.Handle("/v1/screenshot", http.HandlerFunc(b.GetScreenshot))
  }
-diff --git a/pkg/hostagent/hostagent.go b/pkg/hostagent/hostagent.go
+diff --git pkg/hostagent/hostagent.go pkg/hostagent/hostagent.go
 index b0d894fb..e055ab7d 100644
---- a/pkg/hostagent/hostagent.go
-+++ b/pkg/hostagent/hostagent.go
+--- pkg/hostagent/hostagent.go
++++ pkg/hostagent/hostagent.go
 @@ -520,6 +520,19 @@ func (a *HostAgent) startRoutinesAndWait(ctx context.Context, errCh <-chan error
  	return a.driver.Stop(ctx)
  }
