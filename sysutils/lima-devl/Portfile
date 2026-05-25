@@ -7,7 +7,7 @@ go.setup            github.com/lima-vm/lima 939f4137cda18678ee3c771eaa353f88e1b9
 version             2.1.0-dev.20260525
 go.offline_build    no
 name                lima-devl
-revision            0
+revision            1
 
 homepage            https://lima-vm.io
 
