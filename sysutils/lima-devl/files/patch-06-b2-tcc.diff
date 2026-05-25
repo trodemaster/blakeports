@@ -1,3 +1,76 @@
+diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
+index c7310a71..7982a65e 100644
+--- pkg/limatype/lima_yaml.go
++++ pkg/limatype/lima_yaml.go
+@@ -121,9 +121,10 @@ type QEMUOpts struct {
+ }
+ 
+ type VZOpts struct {
+-	Rosetta                  Rosetta                  `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
+-	DiskImageFormat          *image.Type              `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
+-	SuppressFirstLoginSetup  *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
++	Rosetta                 Rosetta                  `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
++	DiskImageFormat         *image.Type              `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
++	SuppressFirstLoginSetup *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
++	GuestPatch              VZGuestPatch             `yaml:"guestPatch,omitempty" json:"guestPatch,omitempty"`
+ }
+ 
+ // SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
+@@ -133,6 +134,23 @@ type SuppressFirstLoginSetup struct {
+ 	Plist string `yaml:"plist,omitempty" json:"plist,omitempty"`
+ }
+ 
++type VZGuestPatch struct {
++	TCCPermissions []TCCPermission `yaml:"tccPermissions,omitempty" json:"tccPermissions,omitempty" jsonschema:"nullable"`
++}
++
++// TCCPermission adds one entry to the guest's system TCC database during disk patching.
++// Set Preset to a built-in name, or set Service/Client/ClientType/AuthValue for a custom entry.
++// For kTCCServiceAppleEvents entries, also set Receiver and ReceiverType.
++type TCCPermission struct {
++	Preset       string `yaml:"preset,omitempty" json:"preset,omitempty"`
++	Service      string `yaml:"service,omitempty" json:"service,omitempty"`
++	Client       string `yaml:"client,omitempty" json:"client,omitempty"`
++	ClientType   string `yaml:"clientType,omitempty" json:"clientType,omitempty"`   // "bundle" or "path"
++	AuthValue    string `yaml:"authValue,omitempty" json:"authValue,omitempty"`     // "allow" (default) or "deny"
++	Receiver     string `yaml:"receiver,omitempty" json:"receiver,omitempty"`       // for kTCCServiceAppleEvents: bundle ID or path of the receiving app
++	ReceiverType string `yaml:"receiverType,omitempty" json:"receiverType,omitempty"` // "bundle" or "path"
++}
++
+ type Rosetta struct {
+ 	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" jsonschema:"nullable"`
+ 	BinFmt  *bool `yaml:"binfmt,omitempty" json:"binfmt,omitempty" jsonschema:"nullable"`
+diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
+index b2de1437..ed0fe336 100644
+--- pkg/driver/vz/vz_driver_darwin.go
++++ pkg/driver/vz/vz_driver_darwin.go
+@@ -93,6 +93,7 @@ type LimaVzDriver struct {
+ 	rosettaEnabled  bool
+ 	rosettaBinFmt   bool
+ 	diskImageFormat image.Type
++	guestPatch      limatype.VZGuestPatch
+ 
+ 	machine                    *virtualMachineWrapper
+ 	waitSSHLocalPortAccessible <-chan any
+@@ -153,6 +154,7 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) *dr
+ 	} else {
+ 		l.diskImageFormat = raw.Type
+ 	}
++	l.guestPatch = vzOpts.GuestPatch
+ 
+ 	return &driver.ConfiguredDriver{
+ 		Driver: l,
+@@ -370,7 +372,9 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+ 		patchedMarker := disk + ".patched" // empty file
+ 		if !osutil.FileExists(patchedMarker) {
+ 			logrus.Infof("Patching macOS disk %q", disk)
+-			if err := macos.Patch(ctx, disk); err != nil {
++			guestHomeRelDir := fmt.Sprintf("Users/%s.guest", *l.Instance.Config.User.Name)
++			guestUID := *l.Instance.Config.User.UID
++			if err := macos.Patch(ctx, disk, l.guestPatch.TCCPermissions, guestHomeRelDir, guestUID); err != nil {
+ 				return err
+ 			}
+ 			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
 diff --git pkg/guestpatch/macos/macos_darwin.go pkg/guestpatch/macos/macos_darwin.go
 index c68e6e7e..ce310443 100644
 --- pkg/guestpatch/macos/macos_darwin.go
@@ -581,39 +654,6 @@ index 00000000..717f4719
 +	}
 +	return strings.Join(names, ", ")
 +}
-diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index afb012e8..4404fbeb 100644
---- pkg/limatype/lima_yaml.go
-+++ pkg/limatype/lima_yaml.go
-@@ -121,8 +121,26 @@ type QEMUOpts struct {
- }
- 
- type VZOpts struct {
--	Rosetta         Rosetta     `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
--	DiskImageFormat *image.Type `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	Rosetta         Rosetta      `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
-+	DiskImageFormat *image.Type  `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	GuestPatch      VZGuestPatch `yaml:"guestPatch,omitempty" json:"guestPatch,omitempty"`
-+}
-+
-+type VZGuestPatch struct {
-+	TCCPermissions []TCCPermission `yaml:"tccPermissions,omitempty" json:"tccPermissions,omitempty" jsonschema:"nullable"`
-+}
-+
-+// TCCPermission adds one entry to the guest's system TCC database during disk patching.
-+// Set Preset to a built-in name, or set Service/Client/ClientType/AuthValue for a custom entry.
-+// For kTCCServiceAppleEvents entries, also set Receiver and ReceiverType.
-+type TCCPermission struct {
-+	Preset       string `yaml:"preset,omitempty" json:"preset,omitempty"`
-+	Service      string `yaml:"service,omitempty" json:"service,omitempty"`
-+	Client       string `yaml:"client,omitempty" json:"client,omitempty"`
-+	ClientType   string `yaml:"clientType,omitempty" json:"clientType,omitempty"`   // "bundle" or "path"
-+	AuthValue    string `yaml:"authValue,omitempty" json:"authValue,omitempty"`     // "allow" (default) or "deny"
-+	Receiver     string `yaml:"receiver,omitempty" json:"receiver,omitempty"`       // for kTCCServiceAppleEvents: bundle ID or path of the receiving app
-+	ReceiverType string `yaml:"receiverType,omitempty" json:"receiverType,omitempty"` // "bundle" or "path"
- }
- 
- type Rosetta struct {
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
 index ab01f113..33f7c157 100644
 --- website/content/en/docs/usage/guests/macos.md
