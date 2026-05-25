@@ -10,27 +10,14 @@ revision            0
 
 homepage            https://lima-vm.io
 
-description         Lima ${version} + G1/G2 macOS 26 GUI patches (upstream PR candidates)
+# Patch revisions — increment when a patch is regenerated against new upstream
+set g1_rev  1
+set g2_rev  1
+set g2p_rev 1
 
-long_description    {*}{
-    Lima ${version} (upstream release) with experimental patches that are
-    pending upstream review. Built from lima-vm/lima with per-PR patch files
-    applied in dependency order.
+description         Lima ${version} | G1:r${g1_rev} G2:r${g2_rev} G2+:r${g2p_rev} | off: G3 B1 B2 O1
 
-    Active patches in this build:
-      G1  fix(darwin): pin main goroutine to OS thread 0 (LockOSThread in init)
-      G2  feat(vz/darwin): Lima.app bundle for VZ GUI display on macOS 26+
-              + MacPorts /Applications/MacPorts search path (patch-03)
-
-    Available but currently commented out in patchfiles:
-      G3  feat: limactl screenshot command for VZ GUI VMs
-      B1  feat(fakecloudinit): suppress macOS guest first-run setup screens
-      B2  feat(guestpatch): pre-populate TCC database during macOS disk patching
-      O1  fix(hostagent): increase PID wait timeout for macOS 26+ Gatekeeper delay
-
-    Upstream PR branches: https://github.com/trodemaster/lima
-    Upstream issue: https://github.com/lima-vm/lima/issues/4743
-}
+long_description    {*}${description}
 
 categories          sysutils
 installs_libs       no
