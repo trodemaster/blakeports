@@ -3,13 +3,9 @@
 PortSystem          1.0
 PortGroup           golang 1.0
 
-# This port builds lima from trodemaster/lima feature branch with macOS app bundle support
-# for GUI display on macOS 26+
-# Source: https://github.com/trodemaster/lima/tree/feat/macos-vz-gui-appbundle
-
-go.setup            github.com/trodemaster/lima e94c5165
+go.setup            github.com/lima-vm/lima 2.1.1 v
 go.offline_build    no
-version             2.1.0-dev.14
+revision            0
 
 homepage            https://lima-vm.io
 
@@ -23,27 +19,22 @@ long_description    {*}{
     well. Lima also supports other container engines, such as Docker,
     Podman, Kubernetes, etc. Lima can also emulate other architectures
     if QEMU is installed.
-
-    This version includes experimental macOS app bundle support for GUI
-    display on macOS 26+.
 }
 
 categories          sysutils
 installs_libs       no
 license             Apache-2
-maintainers         {macports.halostatue.ca:austin @halostatue} \
+maintainers         {@trodemaster icloud.com:manuals-unread2u} \
                     openmaintainer
 
-checksums           rmd160  e9207cac84f97bd1d1f0ed5e512ce52c235cec4d \
-                    sha256  81f2b93aa6eb538c3c5dcefaa4efccdd9c3657ce5284713b639e3fbb3ccebc65 \
-                    size    18183071
+conflicts           lima-devl
+
+checksums           rmd160  b01c90ce75e3a08433f11852b224ea8b1cc56299 \
+                    sha256  c1cb9f2a5d35715937bbf21566d58f89fc221ab285a42ddcc30fd6fdaab2c15a \
+                    size    7795047
 
 build.cmd           make
-# APP_BUNDLE_DIR controls where Lima.app is built within _output/
-# Default: _output/share/lima (recommended for all installation methods)
-# The app bundle is later installed by "make install DEST=$(destroot)$(prefix)"
-build.args-append   native \
-                    APP_BUNDLE_DIR=_output/share/lima
+build.args-append   native
 
 patchfiles          patch-Makefile.diff \
                     patch-usrlocalgo.diff
@@ -64,10 +55,6 @@ notes {
     Lima has a variant (+additional_guestagents, disabled by default),\
     that builds guest agents for all supported architectures, requiring\
     qemu.
-    
-    This build includes experimental macOS app bundle support for GUI\
-    display on macOS 26+. When starting a Lima VM with --run-gui on macOS\
-    26+, the hostagent launches inside Lima.app for proper GUI context.
 }
 
 post-patch {
@@ -90,15 +77,6 @@ post-build {
 
 destroot {
     system -W ${worksrcpath} "make install DEST=${destroot}${prefix}"
-
-    # Install Lima.app to the standard MacPorts Applications directory
-    # so it appears alongside other MacPorts GUI apps at /Applications/MacPorts/
-    platform darwin {
-        xinstall -d ${destroot}/Applications/MacPorts
-        file rename \
-            ${destroot}${prefix}/share/lima/Lima.app \
-            ${destroot}/Applications/MacPorts/Lima.app
-    }
 }
 
 github.livecheck.regex {([0-9.]+)}

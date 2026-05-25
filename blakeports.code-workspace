@@ -20,6 +20,12 @@
 		},
 		{
 			"path": "../lima_mac"
+		},
+		{
+			"path": "../lima-devl"
+		},
+		{
+			"path": "../lima"
 		}
 	],
 	"settings": {
