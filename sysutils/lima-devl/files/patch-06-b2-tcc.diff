@@ -1,38 +1,7 @@
-diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index b2de1437..ed0fe336 100644
---- pkg/driver/vz/vz_driver_darwin.go
-+++ pkg/driver/vz/vz_driver_darwin.go
-@@ -93,6 +93,7 @@ type LimaVzDriver struct {
- 	rosettaEnabled  bool
- 	rosettaBinFmt   bool
- 	diskImageFormat image.Type
-+	guestPatch      limatype.VZGuestPatch
- 
- 	machine                    *virtualMachineWrapper
- 	waitSSHLocalPortAccessible <-chan any
-@@ -153,6 +154,7 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) *dr
- 	} else {
- 		l.diskImageFormat = raw.Type
- 	}
-+	l.guestPatch = vzOpts.GuestPatch
- 
- 	return &driver.ConfiguredDriver{
- 		Driver: l,
-@@ -370,7 +372,9 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
- 		patchedMarker := disk + ".patched" // empty file
- 		if !osutil.FileExists(patchedMarker) {
- 			logrus.Infof("Patching macOS disk %q", disk)
--			if err := macos.Patch(ctx, disk); err != nil {
-+			guestHomeRelDir := fmt.Sprintf("Users/%s.guest", *l.Instance.Config.User.Name)
-+			guestUID := *l.Instance.Config.User.UID
-+			if err := macos.Patch(ctx, disk, l.guestPatch.TCCPermissions, guestHomeRelDir, guestUID); err != nil {
- 				return err
- 			}
- 			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
-diff --git pkg/guestpatch/macos/macos_darwin.go pkg/guestpatch/macos/macos_darwin.go
+diff --git a/pkg/guestpatch/macos/macos_darwin.go b/pkg/guestpatch/macos/macos_darwin.go
 index c68e6e7e..ce310443 100644
---- pkg/guestpatch/macos/macos_darwin.go
-+++ pkg/guestpatch/macos/macos_darwin.go
+--- a/pkg/guestpatch/macos/macos_darwin.go
++++ b/pkg/guestpatch/macos/macos_darwin.go
 @@ -15,6 +15,7 @@ import (
  
  	"github.com/lima-vm/lima/v2/pkg/apfs"
@@ -205,12 +174,12 @@ index c68e6e7e..ce310443 100644
 +	}
 +	return rp, up, nil
  }
-diff --git pkg/guestpatch/macos/tcc_darwin.go pkg/guestpatch/macos/tcc_darwin.go
+diff --git a/pkg/guestpatch/macos/tcc_darwin.go b/pkg/guestpatch/macos/tcc_darwin.go
 new file mode 100644
-index 00000000..45635f1c
+index 00000000..717f4719
 --- /dev/null
-+++ pkg/guestpatch/macos/tcc_darwin.go
-@@ -0,0 +1,417 @@
++++ b/pkg/guestpatch/macos/tcc_darwin.go
+@@ -0,0 +1,401 @@
 +// SPDX-FileCopyrightText: Copyright The Lima Authors
 +// SPDX-License-Identifier: Apache-2.0
 +
@@ -358,22 +327,6 @@ index 00000000..45635f1c
 +			indirectObjectIdentifier:     "com.apple.finder",
 +			indirectObjectIdentifierType: 0,
 +			indirectObjectCodeIdentity:   csreqFinder,
-+		},
-+	},
-+	// cliclick-accessibility: grants the cliclick CLI tool Accessibility permission so it
-+	// can send synthetic keyboard events to the GUI session. Used in configure.sh to
-+	// auto-approve the TCC consent dialog by pressing Return (the Allow button default)
-+	// when UserNotificationCenter appears.
-+	// csreq is nil because cliclick is not Apple-signed; path-based entries with nil csreq
-+	// skip code-signing validation (same pattern as lima-guestagent-full-disk-access).
-+	"cliclick-accessibility": {
-+		{
-+			service:     "kTCCServiceAccessibility",
-+			client:      "/opt/local/bin/cliclick",
-+			clientType:  1,
-+			authValue:   2,
-+			authVersion: 1,
-+			csreq:       nil,
 +		},
 +	},
 +}
@@ -628,10 +581,10 @@ index 00000000..45635f1c
 +	}
 +	return strings.Join(names, ", ")
 +}
-diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
+diff --git a/pkg/limatype/lima_yaml.go b/pkg/limatype/lima_yaml.go
 index afb012e8..4404fbeb 100644
---- pkg/limatype/lima_yaml.go
-+++ pkg/limatype/lima_yaml.go
+--- a/pkg/limatype/lima_yaml.go
++++ b/pkg/limatype/lima_yaml.go
 @@ -121,8 +121,26 @@ type QEMUOpts struct {
  }
  
@@ -661,3 +614,79 @@ index afb012e8..4404fbeb 100644
  }
  
  type Rosetta struct {
+diff --git a/website/content/en/docs/usage/guests/macos.md b/website/content/en/docs/usage/guests/macos.md
+index ab01f113..1c305d12 100644
+--- a/website/content/en/docs/usage/guests/macos.md
++++ b/website/content/en/docs/usage/guests/macos.md
+@@ -33,6 +33,71 @@ limactl shell macos cat /Users/${USER}.guest/password
+ - Password-less sudo is disabled, except for `/sbin/shutdown -h now`
+ - Several features are not implemented yet. See [Caveats](#caveats) below.
+ 
++## Pre-populating TCC permissions
++
++macOS uses the Transparency, Consent, and Control (TCC) framework to gate
++access to sensitive services (Accessibility, Full Disk Access, AppleEvents,
++etc.). By default a fresh VM shows consent dialogs on first use, which
++blocks unattended or automated setups.
++
++`vmOpts.vz.guestPatch.tccPermissions` lets Lima write rows into the guest's
++TCC database during initial disk setup — before the VM boots for the first
++time — so permissions are already in place when the guest starts.
++
++### Built-in presets
++
++Presets capture the exact csreq blobs and schema fields that macOS records
++when a user manually grants a permission. Use a preset name when the client
++is a native macOS or Lima binary:
++
++| Preset | Effect |
++|--------|--------|
++| `sshd-full-disk-access` | Grants Full Disk Access to `/usr/libexec/sshd-keygen-wrapper` |
++| `lima-guestagent-full-disk-access` | Grants Full Disk Access to the Lima guest agent on the cidata volume |
++| `terminal-accessibility` | Grants Accessibility + PostEvent to `com.apple.Terminal` |
++| `terminal-apple-events` | Allows Terminal to send AppleEvents to System Events (AppleScript/UI automation) |
++| `sshd-apple-events-finder` | Allows the SSH daemon to send AppleEvents to Finder (e.g. `osascript` over SSH) |
++
++```yaml
++vmOpts:
++  vz:
++    guestPatch:
++      tccPermissions:
++        - preset: terminal-accessibility
++        - preset: terminal-apple-events
++        - preset: sshd-full-disk-access
++```
++
++### Custom entries
++
++For third-party or non-Apple-signed tools, use the raw fields instead of a
++preset. Path-based entries (`clientType: path`) with no csreq skip
++code-signing validation, which is appropriate for tools that are rebuilt
++or updated frequently.
++
++Example — grant Accessibility to [cliclick](https://github.com/BlueM/cliclick),
++a CLI tool for synthetic mouse and keyboard input:
++
++```yaml
++vmOpts:
++  vz:
++    guestPatch:
++      tccPermissions:
++        - service: kTCCServiceAccessibility
++          client: /opt/local/bin/cliclick
++          clientType: path
++          authValue: allow
++```
++
++| Field | Values | Notes |
++|-------|--------|-------|
++| `service` | TCC service string | e.g. `kTCCServiceAccessibility`, `kTCCServiceSystemPolicyAllFiles`, `kTCCServiceAppleEvents` |
++| `client` | Bundle ID or path | Bundle ID for Apple-signed apps; absolute path for other binaries |
++| `clientType` | `bundle` or `path` | |
++| `authValue` | `allow` (default) or `deny` | |
++| `receiver` | Bundle ID or path | Required for `kTCCServiceAppleEvents`: the app receiving the events |
++| `receiverType` | `bundle` (default) or `path` | |
++
+ ## Caveats
+ - No support for turning off the video display.
+ - No support for automatic port forwarding.
