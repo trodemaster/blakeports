@@ -13,11 +13,12 @@ homepage            https://lima-vm.io
 
 # Patch revisions — increment when a patch is regenerated against new upstream
 set g1_rev  2
+set g4_rev  1
 set g3_rev  2
 set b1_rev  4
 set b2_rev  3
 
-description         Lima ${version} | G1:r${g1_rev} G3:r${g3_rev} B1:r${b1_rev} B2:r${b2_rev} | off: O1
+description         Lima ${version} | G1:r${g1_rev} G4:r${g4_rev} G3:r${g3_rev} B1:r${b1_rev} B2:r${b2_rev} | off: O1
 
 long_description    {*}${description}
 
@@ -38,6 +39,7 @@ checksums           rmd160  6a2a83555aad64ad6448f763512fce6f535dba57 \
 patchfiles          patch-Makefile.diff \
                     patch-usrlocalgo.diff \
                     patch-01-g1-thread-pin.diff \
+                    patch-02-g4-window-title.diff \
                     patch-04-g3-screenshot.diff \
                     patch-05-b1-fakecloudinit.diff \
                     patch-06-b2-tcc.diff
