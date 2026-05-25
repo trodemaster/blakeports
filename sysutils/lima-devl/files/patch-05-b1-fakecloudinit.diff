@@ -1,0 +1,161 @@
+diff --git a/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go b/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+index 034f84e6..522f5a36 100644
+--- a/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
++++ b/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+@@ -22,7 +22,6 @@ import (
+ 	"github.com/sirupsen/logrus"
+ 
+ 	"github.com/lima-vm/lima/v2/pkg/cidata/cloudinittypes"
+-	"github.com/lima-vm/lima/v2/pkg/osutil"
+ )
+ 
+ func Run(ctx context.Context) error {
+@@ -219,13 +218,132 @@ func populateHomeDir(ctx context.Context, uid int, homedir string) error {
+ 	return nil
+ }
+ 
++// suppressFirstLoginScreens writes preference plists into the user's home
++// directory immediately after home creation, while running as a root
++// LaunchDaemon — before any GUI session starts. cfprefsd reads these files
++// fresh at first login so macOS does not get a chance to reset them.
++//
++// Two plists are written:
++//   - ~/Library/Preferences/com.apple.SetupAssistant.plist  (per-user, chowned to uid)
++//     Marks all first-login wizard panes as already seen.
++//   - /Library/Preferences/com.apple.SoftwareUpdate.plist   (system-wide, root:wheel)
++//     Pre-configures automatic-update settings so the "Update Mac Automatically"
++//     dialog does not appear on first login.
++func suppressFirstLoginScreens(uid int, homedir string) error {
++	prefsDir := filepath.Join(homedir, "Library/Preferences")
++	if err := os.MkdirAll(prefsDir, 0o700); err != nil {
++		return fmt.Errorf("failed to create Preferences dir %q: %w", prefsDir, err)
++	}
++	if err := os.Chown(prefsDir, uid, -1); err != nil {
++		logrus.WithError(err).Warnf("Failed to chown Preferences dir %q", prefsDir)
++	}
++
++	// Fetch current OS build and product version — macOS uses LastPreLoginTasksPerformedBuild
++	// to determine whether to show express-settings dialogs (MiniBuddyLaunchReason=13).
++	// If the stored build matches the running build, mini-buddy considers setup complete.
++	buildVersion := "unknown"
++	if out, err := exec.Command("sw_vers", "-buildVersion").Output(); err == nil {
++		buildVersion = strings.TrimSpace(string(out))
++	} else {
++		logrus.WithError(err).Warn("Failed to get build version from sw_vers")
++	}
++	productVersion := "unknown"
++	if out, err := exec.Command("sw_vers", "-productVersion").Output(); err == nil {
++		productVersion = strings.TrimSpace(string(out))
++	} else {
++		logrus.WithError(err).Warn("Failed to get product version from sw_vers")
++	}
++
++	// Per-user SetupAssistant plist — mark every first-login pane as already seen.
++	// SkipExpressSettingsUpdating suppresses the express-settings prompt.
++	// SkipFirstLoginOptimization skips the first-login Spotlight indexing pass.
++	// MiniBuddyLaunchReason 0 + MiniBuddyShouldLaunchToResumeSetup false ensures
++	// mini-buddy does not resume any pending pane on first login.
++	// The LastPreLoginTasksPerformedBuild / *Version and LastSeen* version stamps
++	// are what macOS actually checks to decide whether setup is already complete;
++	// without them macOS resets MiniBuddyLaunchReason to 13 on first GUI login.
++	setupAssistantPlist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++	<key>DidSeeAccessibility</key><true/>
++	<key>DidSeeActivationLock</key><true/>
++	<key>DidSeeAppStore</key><true/>
++	<key>DidSeeAppearanceSetup</key><true/>
++	<key>DidSeeApplePaySetup</key><true/>
++	<key>DidSeeCloudSetup</key><true/>
++	<key>DidSeeLockdownMode</key><true/>
++	<key>DidSeePrivacy</key><true/>
++	<key>DidSeeScreenTime</key><true/>
++	<key>DidSeeSetupSequence</key><true/>
++	<key>DidSeeSiriSetup</key><true/>
++	<key>DidSeeSyncSetup</key><true/>
++	<key>DidSeeSyncSetup2</key><true/>
++	<key>DidSeeTermsOfAddress</key><true/>
++	<key>DidSeeTouchIDSetup</key><true/>
++	<key>DidSeeiCloudLoginForStorageServices</key><true/>
++	<key>LastPreLoginTasksPerformedBuild</key><string>%s</string>
++	<key>LastPreLoginTasksPerformedVersion</key><string>%s</string>
++	<key>LastSeenAgeRangeSelectionProductVersion</key><string>%s</string>
++	<key>LastSeenBuddyBuildVersion</key><string>%s</string>
++	<key>LastSeenCloudProductVersion</key><string>%s</string>
++	<key>LastSeenDiagnosticsProductVersion</key><string>%s</string>
++	<key>MiniBuddyLaunchReason</key><integer>0</integer>
++	<key>MiniBuddyShouldLaunchToResumeSetup</key><false/>
++	<key>SkipExpressSettingsUpdating</key><true/>
++	<key>SkipFirstLoginOptimization</key><true/>
++</dict>
++</plist>
++`, buildVersion, productVersion, productVersion, buildVersion, productVersion, productVersion)
++
++	saPlist := filepath.Join(prefsDir, "com.apple.SetupAssistant.plist")
++	if err := os.WriteFile(saPlist, []byte(setupAssistantPlist), 0o600); err != nil {
++		return fmt.Errorf("failed to write SetupAssistant plist %q: %w", saPlist, err)
++	}
++	if err := os.Chown(saPlist, uid, -1); err != nil {
++		logrus.WithError(err).Warnf("Failed to chown SetupAssistant plist %q", saPlist)
++	}
++
++	// System-wide SoftwareUpdate preferences — pre-configure update settings so the
++	// "Update Mac Automatically" dialog is skipped on first login.
++	// Using 'defaults write' (via exec) rather than os.WriteFile so that cfprefsd
++	// owns the domain; raw file writes get overwritten when softwareupdated rewrites
++	// the plist with its own runtime keys on first boot.
++	// AutomaticCheckEnabled is true (so softwareupdated runs checks) but automatic
++	// download/install of macOS updates is disabled to prevent unexpected OS upgrades.
++	// ConfigDataInstall signals to mini-buddy that the user has made an update-policy
++	// choice; without it the "Update Mac Automatically" pane is shown regardless.
++	swPrefs := [][]string{
++		{"AutomaticCheckEnabled", "-bool", "true"},
++		{"AutomaticDownload", "-bool", "false"},
++		{"AutomaticallyInstallMacOSUpdates", "-bool", "false"},
++		{"ConfigDataInstall", "-bool", "true"},
++		{"CriticalUpdateInstall", "-bool", "false"},
++	}
++	for _, pref := range swPrefs {
++		args := append([]string{"write", "/Library/Preferences/com.apple.SoftwareUpdate"}, pref...)
++		cmd := exec.Command("defaults", args...)
++		if output, err := cmd.CombinedOutput(); err != nil {
++			// Non-fatal: the dialog is annoying but does not block VM operation.
++			logrus.WithError(err).Warnf("Failed to set SoftwareUpdate pref %v (output=%q)", pref[0], output)
++		}
++	}
++
++	logrus.Infof("Suppressed first-login setup screens for uid %d in %q (build=%s, version=%s)",
++		uid, homedir, buildVersion, productVersion)
++	return nil
++}
++
+ func createUser(ctx context.Context, u *cloudinittypes.User) error {
+ 	homedir := u.Homedir
+ 	if homedir == "" {
+ 		return fmt.Errorf("homedir is required for user %q", u.Name)
+ 	}
+-	if osutil.FileExists(homedir) {
+-		logrus.Debugf("homedir %q already exists, skipping user creation for user %q", homedir, u.Name)
++	// Check OpenDirectory rather than the filesystem: disk patching may pre-create
++	// the home directory tree (e.g. for per-user TCC database setup) before first boot,
++	// which would cause a filesystem-existence check to skip user account creation.
++	if cmd := exec.CommandContext(ctx, "dscl", ".", "-read", "/Users/"+u.Name, "RecordName"); cmd.Run() == nil {
++		logrus.Debugf("user %q already exists in directory services, skipping creation", u.Name)
+ 		return nil
+ 	}
+ 	if u.UID == "" {
+@@ -281,6 +399,13 @@ func createUser(ctx context.Context, u *cloudinittypes.User) error {
+ 		return fmt.Errorf("failed to populate home directory for user %q: %w", u.Name, err)
+ 	}
+ 
++	// Write first-login preference plists now, as root, before any GUI session starts.
++	// cfprefsd reads these fresh at first login so macOS does not reset them.
++	if err = suppressFirstLoginScreens(uid, homedir); err != nil {
++		// Non-fatal: SSH provisioning (configure.sh) can still handle it if needed.
++		logrus.WithError(err).Warnf("Failed to suppress first-login screens for user %q", u.Name)
++	}
++
+ 	cmd = exec.CommandContext(ctx, "chmod", "700", homedir)
+ 	logrus.Infof("Executing command: %v", cmd.Args)
+ 	if output, err := cmd.CombinedOutput(); err != nil {

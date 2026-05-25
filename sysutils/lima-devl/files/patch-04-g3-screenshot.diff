@@ -1,0 +1,307 @@
+diff --git a/cmd/limactl/main.go b/cmd/limactl/main.go
+index 31f322f6..a53fb6f7 100644
+--- a/cmd/limactl/main.go
++++ b/cmd/limactl/main.go
+@@ -199,6 +199,7 @@ func newApp() *cobra.Command {
+ 		newGenDocCommand(),
+ 		newGenSchemaCommand(),
+ 		newSnapshotCommand(),
++		newScreenshotCommand(),
+ 		newProtectCommand(),
+ 		newUnprotectCommand(),
+ 		newTunnelCommand(),
+diff --git a/cmd/limactl/screenshot.go b/cmd/limactl/screenshot.go
+new file mode 100644
+index 00000000..155897aa
+--- /dev/null
++++ b/cmd/limactl/screenshot.go
+@@ -0,0 +1,75 @@
++// SPDX-FileCopyrightText: Copyright The Lima Authors
++// SPDX-License-Identifier: Apache-2.0
++
++//go:build darwin
++
++package main
++
++import (
++	"fmt"
++	"os"
++	"path/filepath"
++	"strings"
++
++	"github.com/sirupsen/logrus"
++	"github.com/spf13/cobra"
++
++	"github.com/lima-vm/lima/v2/pkg/hostagent/api/client"
++	"github.com/lima-vm/lima/v2/pkg/limatype"
++	"github.com/lima-vm/lima/v2/pkg/limatype/filenames"
++	"github.com/lima-vm/lima/v2/pkg/store"
++)
++
++func newScreenshotCommand() *cobra.Command {
++	cmd := &cobra.Command{
++		Use:     "screenshot INSTANCE",
++		Short:   "Capture a screenshot of the VM display",
++		Args:    WrapArgsError(cobra.ExactArgs(1)),
++		RunE:    screenshotAction,
++		GroupID: advancedCommand,
++	}
++	cmd.Flags().StringP("output", "o", "", "Output path; extension sets format: .png (default) or .bmp")
++	return cmd
++}
++
++func screenshotAction(cmd *cobra.Command, args []string) error {
++	instName := args[0]
++
++	ctx := cmd.Context()
++	inst, err := store.Inspect(ctx, instName)
++	if err != nil {
++		return err
++	}
++	if inst.Status != limatype.StatusRunning {
++		return fmt.Errorf("instance %q is not running (status: %s)", instName, inst.Status)
++	}
++
++	outputPath, _ := cmd.Flags().GetString("output")
++
++	// Infer format from output extension; default to PNG.
++	format := "png"
++	if strings.ToLower(filepath.Ext(outputPath)) == ".bmp" {
++		format = "bmp"
++	}
++
++	if outputPath == "" {
++		outputPath = instName + "-screenshot.png"
++	}
++
++	haSock := filepath.Join(inst.Dir, filenames.HostAgentSock)
++	haClient, err := client.NewHostAgentClient(haSock)
++	if err != nil {
++		return fmt.Errorf("failed to connect to hostagent: %w", err)
++	}
++
++	data, err := haClient.Screenshot(ctx, format)
++	if err != nil {
++		return fmt.Errorf("screenshot failed: %w", err)
++	}
++
++	if err := os.WriteFile(outputPath, data, 0o644); err != nil {
++		return fmt.Errorf("failed to write %q: %w", outputPath, err)
++	}
++	logrus.Infof("Screenshot saved to %q (%d bytes)", outputPath, len(data))
++	return nil
++}
+diff --git a/pkg/driver/driver.go b/pkg/driver/driver.go
+index 269d85fa..fd446624 100644
+--- a/pkg/driver/driver.go
++++ b/pkg/driver/driver.go
+@@ -16,6 +16,12 @@ type VsockEventEmitter interface {
+ 	SetVsockEventCallback(callback func(*events.VsockEvent))
+ }
+ 
++// Screenshotter is an optional interface for drivers that can capture the VM display.
++// format is "png" or "bmp"; an empty string defaults to "png".
++type Screenshotter interface {
++	CaptureScreenshot(format string) ([]byte, error)
++}
++
+ // Lifecycle defines basic lifecycle operations.
+ type Lifecycle interface {
+ 	// Validate returns error if the current driver isn't support for given config
+diff --git a/pkg/driver/vz/screenshot_darwin.go b/pkg/driver/vz/screenshot_darwin.go
+new file mode 100644
+index 00000000..cda27223
+--- /dev/null
++++ b/pkg/driver/vz/screenshot_darwin.go
+@@ -0,0 +1,89 @@
++// SPDX-FileCopyrightText: Copyright The Lima Authors
++// SPDX-License-Identifier: Apache-2.0
++
++//go:build darwin && !no_vz
++
++package vz
++
++/*
++#cgo darwin CFLAGS: -mmacosx-version-min=11 -x objective-c -fno-objc-arc
++#cgo darwin LDFLAGS: -lobjc -framework Foundation -framework AppKit -framework CoreGraphics -framework ImageIO
++#include <stdlib.h>
++#include <AppKit/AppKit.h>
++#include <CoreGraphics/CoreGraphics.h>
++#include <ImageIO/ImageIO.h>
++
++// captureWindowImageBytes captures the frontmost non-panel on-screen window of
++// the current process, encodes it using the given ImageIO UTI, and returns a
++// malloc'd buffer. The caller must free() the returned pointer.
++static void *captureWindowImageBytes(int *outLen, const char *uti) {
++    __block void *result = NULL;
++    __block int resultLen = 0;
++
++    NSString *utiStr = [NSString stringWithUTF8String:uti];
++    dispatch_sync(dispatch_get_main_queue(), ^{
++        NSWindow *target = nil;
++        for (NSWindow *w in [NSApplication sharedApplication].windows) {
++            if ([w isKindOfClass:[NSPanel class]]) continue;
++            if (!w.isVisible) continue;
++            target = w;
++            break;
++        }
++        if (!target) return;
++
++        CGWindowID wid = (CGWindowID)[target windowNumber];
++        CGImageRef img = CGWindowListCreateImage(
++            CGRectNull,
++            kCGWindowListOptionIncludingWindow,
++            wid,
++            kCGWindowImageBoundsIgnoreFraming | kCGWindowImageShouldBeOpaque
++        );
++        if (!img) return;
++
++        NSMutableData *data = [NSMutableData data];
++        CGImageDestinationRef dst = CGImageDestinationCreateWithData(
++            (__bridge CFMutableDataRef)data,
++            (__bridge CFStringRef)utiStr,
++            1, NULL
++        );
++        CGImageDestinationAddImage(dst, img, NULL);
++        CGImageDestinationFinalize(dst);
++        CFRelease(dst);
++        CGImageRelease(img);
++
++        resultLen = (int)data.length;
++        result = malloc(resultLen);
++        memcpy(result, data.bytes, resultLen);
++    });
++
++    *outLen = resultLen;
++    return result;
++}
++*/
++import "C"
++import (
++	"fmt"
++	"unsafe"
++)
++
++// CaptureScreenshot captures the VM display window.
++// format is "png" or "bmp"; anything else defaults to PNG.
++// Implements driver.Screenshotter. Requires the GUI app bundle to be running.
++func (l *LimaVzDriver) CaptureScreenshot(format string) ([]byte, error) {
++	if !l.canRunGUI() {
++		return nil, fmt.Errorf("GUI is not running")
++	}
++	uti := "public.png"
++	if format == "bmp" {
++		uti = "com.microsoft.bmp"
++	}
++	cuti := C.CString(uti)
++	defer C.free(unsafe.Pointer(cuti))
++	var outLen C.int
++	ptr := C.captureWindowImageBytes(&outLen, cuti)
++	if ptr == nil || outLen == 0 {
++		return nil, fmt.Errorf("screenshot capture returned no data; GUI window may not be visible")
++	}
++	defer C.free(unsafe.Pointer(ptr))
++	return C.GoBytes(ptr, outLen), nil
++}
+diff --git a/pkg/hostagent/api/client/client.go b/pkg/hostagent/api/client/client.go
+index a71d25a9..140c3cd2 100644
+--- a/pkg/hostagent/api/client/client.go
++++ b/pkg/hostagent/api/client/client.go
+@@ -10,6 +10,7 @@ import (
+ 	"context"
+ 	"encoding/json"
+ 	"fmt"
++	"io"
+ 	"net/http"
+ 
+ 	"github.com/lima-vm/lima/v2/pkg/hostagent/api"
+@@ -19,6 +20,8 @@ import (
+ type HostAgentClient interface {
+ 	HTTPClient() *http.Client
+ 	Info(context.Context) (*api.Info, error)
++	// Screenshot captures the VM display. format is "png" or "bmp" (default "png").
++	Screenshot(context.Context, string) ([]byte, error)
+ }
+ 
+ // NewHostAgentClient creates a client.
+@@ -65,3 +68,16 @@ func (c *client) Info(ctx context.Context) (*api.Info, error) {
+ 	}
+ 	return &info, nil
+ }
++
++func (c *client) Screenshot(ctx context.Context, format string) ([]byte, error) {
++	if format == "" {
++		format = "png"
++	}
++	u := fmt.Sprintf("http://%s/%s/screenshot?format=%s", c.dummyHost, c.version, format)
++	resp, err := httpclientutil.Get(ctx, c.HTTPClient(), u)
++	if err != nil {
++		return nil, err
++	}
++	defer resp.Body.Close()
++	return io.ReadAll(resp.Body)
++}
+diff --git a/pkg/hostagent/api/server/server.go b/pkg/hostagent/api/server/server.go
+index 26da6597..64ecd90d 100644
+--- a/pkg/hostagent/api/server/server.go
++++ b/pkg/hostagent/api/server/server.go
+@@ -53,6 +53,35 @@ func (b *Backend) GetInfo(w http.ResponseWriter, r *http.Request) {
+ 	_, _ = w.Write(m)
+ }
+ 
++// GetScreenshot is the handler for GET /v1/screenshot.
++func (b *Backend) GetScreenshot(w http.ResponseWriter, r *http.Request) {
++	if r.Method != http.MethodGet {
++		w.WriteHeader(http.StatusMethodNotAllowed)
++		return
++	}
++	ctx := r.Context()
++	ctx, cancel := context.WithCancel(ctx)
++	defer cancel()
++
++	format := r.URL.Query().Get("format")
++	if format == "" {
++		format = "png"
++	}
++	data, err := b.Agent.Screenshot(ctx, format)
++	if err != nil {
++		b.onError(w, err, http.StatusInternalServerError)
++		return
++	}
++	ct := "image/png"
++	if format == "bmp" {
++		ct = "image/bmp"
++	}
++	w.Header().Set("Content-Type", ct)
++	w.WriteHeader(http.StatusOK)
++	_, _ = w.Write(data)
++}
++
+ func AddRoutes(r *http.ServeMux, b *Backend) {
+ 	r.Handle("/v1/info", http.HandlerFunc(b.GetInfo))
++	r.Handle("/v1/screenshot", http.HandlerFunc(b.GetScreenshot))
+ }
+diff --git a/pkg/hostagent/hostagent.go b/pkg/hostagent/hostagent.go
+index b0d894fb..e055ab7d 100644
+--- a/pkg/hostagent/hostagent.go
++++ b/pkg/hostagent/hostagent.go
+@@ -520,6 +520,19 @@ func (a *HostAgent) startRoutinesAndWait(ctx context.Context, errCh <-chan error
+ 	return a.driver.Stop(ctx)
+ }
+ 
++func (a *HostAgent) Screenshot(_ context.Context, format string) ([]byte, error) {
++	// ConfiguredDriver wraps the concrete driver; unwrap to reach optional interfaces.
++	inner := a.driver
++	if cd, ok := a.driver.(*driver.ConfiguredDriver); ok {
++		inner = cd.Driver
++	}
++	s, ok := inner.(driver.Screenshotter)
++	if !ok {
++		return nil, fmt.Errorf("driver %q does not support screenshots", a.driver.Info().Name)
++	}
++	return s.CaptureScreenshot(format)
++}
++
+ func (a *HostAgent) Info(_ context.Context) (*hostagentapi.Info, error) {
+ 	info := &hostagentapi.Info{
+ 		AutoStartedIdentifier: autostart.AutoStartedIdentifier(),
