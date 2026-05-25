@@ -7,15 +7,15 @@ go.setup            github.com/lima-vm/lima 939f4137cda18678ee3c771eaa353f88e1b9
 version             2.1.0-dev.20260525
 go.offline_build    no
 name                lima-devl
-revision            1
+revision            0
 
 homepage            https://lima-vm.io
 
 # Patch revisions — increment when a patch is regenerated against new upstream
 set g1_rev  2
 set g3_rev  2
-set b1_rev  3
-set b2_rev  1
+set b1_rev  4
+set b2_rev  2
 
 description         Lima ${version} | G1:r${g1_rev} G3:r${g3_rev} B1:r${b1_rev} B2:r${b2_rev} | off: O1
 

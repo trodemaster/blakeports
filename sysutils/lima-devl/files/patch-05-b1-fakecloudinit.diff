@@ -1,7 +1,7 @@
-diff --git a/pkg/cidata/cidata.TEMPLATE.d/user-data b/pkg/cidata/cidata.TEMPLATE.d/user-data
+diff --git pkg/cidata/cidata.TEMPLATE.d/user-data pkg/cidata/cidata.TEMPLATE.d/user-data
 index 61f82da5..de2a1247 100644
---- a/pkg/cidata/cidata.TEMPLATE.d/user-data
-+++ b/pkg/cidata/cidata.TEMPLATE.d/user-data
+--- pkg/cidata/cidata.TEMPLATE.d/user-data
++++ pkg/cidata/cidata.TEMPLATE.d/user-data
 @@ -172,6 +172,10 @@ ca_certs:
    {{- end }}
  {{- end }}
@@ -13,10 +13,10 @@ index 61f82da5..de2a1247 100644
  {{- if .BootCmds }}
  bootcmd:
    {{- range $cmd := $.BootCmds }}
-diff --git a/pkg/cidata/cidata.go b/pkg/cidata/cidata.go
+diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
 index fc3a7332..693faca4 100644
---- a/pkg/cidata/cidata.go
-+++ b/pkg/cidata/cidata.go
+--- pkg/cidata/cidata.go
++++ pkg/cidata/cidata.go
 @@ -148,6 +148,23 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
  		Plain:          *instConfig.Plain,
  		TimeZone:       *instConfig.TimeZone,
@@ -55,10 +55,10 @@ index fc3a7332..693faca4 100644
  	driverScripts, err := drv.BootScripts(ctx)
  	if err != nil {
  		return "", fmt.Errorf("failed to get boot scripts: %w", err)
-diff --git a/pkg/cidata/cloudinittypes/userdata.go b/pkg/cidata/cloudinittypes/userdata.go
+diff --git pkg/cidata/cloudinittypes/userdata.go pkg/cidata/cloudinittypes/userdata.go
 index 9a6cbf7d..9ff3db88 100644
---- a/pkg/cidata/cloudinittypes/userdata.go
-+++ b/pkg/cidata/cloudinittypes/userdata.go
+--- pkg/cidata/cloudinittypes/userdata.go
++++ pkg/cidata/cloudinittypes/userdata.go
 @@ -24,6 +24,10 @@ type UserData struct {
  	CACerts *CACerts `yaml:"ca_certs,omitempty"`
  
@@ -70,10 +70,10 @@ index 9a6cbf7d..9ff3db88 100644
  }
  
  type Growpart struct {
-diff --git a/pkg/cidata/template.go b/pkg/cidata/template.go
+diff --git pkg/cidata/template.go pkg/cidata/template.go
 index b70bc663..d9cf1f20 100644
---- a/pkg/cidata/template.go
-+++ b/pkg/cidata/template.go
+--- pkg/cidata/template.go
++++ pkg/cidata/template.go
 @@ -117,6 +117,8 @@ type TemplateArgs struct {
  	Plain                           bool
  	TimeZone                        string
@@ -83,10 +83,10 @@ index b70bc663..d9cf1f20 100644
  }
  
  func ValidateTemplateArgs(args *TemplateArgs) error {
-diff --git a/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go b/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 index 034f84e6..fe5b704e 100644
---- a/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-+++ b/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+--- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
++++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 @@ -22,7 +22,6 @@ import (
  	"github.com/sirupsen/logrus"
  
@@ -270,10 +270,10 @@ index 034f84e6..fe5b704e 100644
  	cmd = exec.CommandContext(ctx, "chmod", "700", homedir)
  	logrus.Infof("Executing command: %v", cmd.Args)
  	if output, err := cmd.CombinedOutput(); err != nil {
-diff --git a/pkg/limatype/lima_yaml.go b/pkg/limatype/lima_yaml.go
+diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
 index afb012e8..c7310a71 100644
---- a/pkg/limatype/lima_yaml.go
-+++ b/pkg/limatype/lima_yaml.go
+--- pkg/limatype/lima_yaml.go
++++ pkg/limatype/lima_yaml.go
 @@ -121,8 +121,16 @@ type QEMUOpts struct {
  }
  
@@ -293,10 +293,10 @@ index afb012e8..c7310a71 100644
  }
  
  type Rosetta struct {
-diff --git a/website/content/en/docs/usage/guests/macos.md b/website/content/en/docs/usage/guests/macos.md
+diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
 index ab01f113..7f93ded2 100644
---- a/website/content/en/docs/usage/guests/macos.md
-+++ b/website/content/en/docs/usage/guests/macos.md
+--- website/content/en/docs/usage/guests/macos.md
++++ website/content/en/docs/usage/guests/macos.md
 @@ -33,6 +33,81 @@ limactl shell macos cat /Users/${USER}.guest/password
  - Password-less sudo is disabled, except for `/sbin/shutdown -h now`
  - Several features are not implemented yet. See [Caveats](#caveats) below.
