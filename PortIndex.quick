@@ -9,9 +9,9 @@ libfido2 4811
 vault 5458
 swiftkhd 6286
 lima 6903
-bstring 7709
-xorg-server-devel 8318
-lima-devl 9237
+lima-devl 7709
+bstring 8214
+xorg-server-devel 8823
 netatalk4 9742
 py39-meson 10295
 py310-meson 11131
