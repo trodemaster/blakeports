@@ -172,13 +172,3 @@ jobs:
           echo ""
           echo "Guest agent:"
           ls /opt/local/share/lima/lima-guestagent.* 2>/dev/null || echo "No guest agents found"
-          echo ""
-          echo "Lima.app bundle (required for VZ GUI on macOS 26+):"
-          if [ -d /Applications/MacPorts/Lima.app ]; then
-            echo "Lima.app found at /Applications/MacPorts/Lima.app"
-            ls -la /Applications/MacPorts/Lima.app/Contents/MacOS/limactl
-            /usr/bin/codesign -dv /Applications/MacPorts/Lima.app 2>&1 | grep -E "Identifier|TeamIdentifier|Signature" || true
-          else
-            echo "Lima.app not found — required for VZ GUI on macOS 26+"
-            exit 1
-          fi
