@@ -3,7 +3,7 @@
 PortSystem          1.0
 PortGroup           golang 1.0
 
-go.setup            github.com/lima-vm/lima 2.1.1 v
+go.setup            github.com/lima-vm/lima 2.1.2-beta.0 v
 go.offline_build    no
 name                lima-devl
 revision            0
@@ -38,9 +38,9 @@ maintainers         {@trodemaster icloud.com:manuals-unread2u} \
 
 conflicts           lima
 
-checksums           rmd160  b01c90ce75e3a08433f11852b224ea8b1cc56299 \
-                    sha256  c1cb9f2a5d35715937bbf21566d58f89fc221ab285a42ddcc30fd6fdaab2c15a \
-                    size    7795047
+checksums           rmd160  44f9035187941c2bfe5fddcfab47a6ca8bf1956b \
+                    sha256  96b52e19fb2f18a1c06317784931e17d9b2022d9accd4b9d3ded4ed5a678d030 \
+                    size    7802072
 
 # Standard patches (shared with the upstream lima port)
 # Feature patches (upstream PR candidates, applied in dependency order)

@@ -1,5 +1,5 @@
 diff --git Makefile Makefile
-index 7e8f3723..ddfcad4a 100644
+index 1ee3ccf5..76d26ff7 100644
 --- Makefile
 +++ Makefile
 @@ -214,6 +214,9 @@ binaries: limactl helpers limactl-plugins guestagents \
@@ -37,7 +37,7 @@ index 7e8f3723..ddfcad4a 100644
  
  limactl-plugins: $(LIBEXEC_LIMA)/limactl-mcp$(exe) $(LIBEXEC_LIMA)/limactl-url-fedora-rawhide
 diff --git pkg/driver/driver.go pkg/driver/driver.go
-index 269d85fa..0b7bb7fb 100644
+index f0ee529c..7440b493 100644
 --- pkg/driver/driver.go
 +++ pkg/driver/driver.go
 @@ -117,6 +117,7 @@ type Info struct {
@@ -80,7 +80,7 @@ index 00000000..cd5c2c72
 +</dict>
 +</plist>
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index b2de1437..ef01727b 100644
+index 87bb6093..6fce20e4 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -14,6 +14,7 @@ import (
@@ -125,7 +125,7 @@ index b2de1437..ef01727b 100644
  		return true
 @@ -468,7 +494,8 @@ func (l *LimaVzDriver) canRunGUI() bool {
  
- func (l *LimaVzDriver) RunGUI(_ context.Context) error {
+ func (l *LimaVzDriver) RunGUI() error {
  	if l.canRunGUI() {
 -		return l.machine.StartGraphicApplication(1920, 1200)
 +		title := fmt.Sprintf("Lima: %s (%s)", l.Instance.Name, l.Instance.Arch)
@@ -133,7 +133,7 @@ index b2de1437..ef01727b 100644
  	}
  	return fmt.Errorf("RunGUI is not supported for the given driver '%s' and display '%s'", "vz", *l.Instance.Config.Video.Display)
  }
-@@ -546,14 +573,16 @@ func (l *LimaVzDriver) Info(_ context.Context) driver.Info {
+@@ -546,14 +573,16 @@ func (l *LimaVzDriver) Info() driver.Info {
  		info.InstanceDir = l.Instance.Dir
  	}
  
@@ -152,7 +152,7 @@ index b2de1437..ef01727b 100644
  		RosettaBinFmt:        l.rosettaBinFmt,
  	}
 diff --git pkg/instance/start.go pkg/instance/start.go
-index dc13872e..78580915 100644
+index edff9da3..9c499919 100644
 --- pkg/instance/start.go
 +++ pkg/instance/start.go
 @@ -218,9 +218,22 @@ func StartWithPaths(ctx context.Context, inst *limatype.Instance, launchHostAgen
