@@ -1,5 +1,5 @@
 diff --git pkg/instance/start.go pkg/instance/start.go
-index edff9da3..63fd6708 100644
+index dc13872e..30533002 100644
 --- pkg/instance/start.go
 +++ pkg/instance/start.go
 @@ -289,7 +289,7 @@ func Start(ctx context.Context, inst *limatype.Instance, launchHostAgentForegrou
