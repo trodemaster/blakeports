@@ -210,12 +210,50 @@ See [debugging.md](references/debugging.md) for comprehensive debugging techniqu
 
 ### 7. Creating Patches
 
-For upstream build system issues:
-1. Modify source files to fix the issue
-2. Create unified diff: `diff -u original.txt modified.txt > patch-name.diff`
-3. Place in `files/` directory
-4. Add to Portfile: `patchfiles patch-name.diff`
-5. Test the patch
+**CRITICAL: MacPorts applies patches with `patch -p0`.** This means paths in the diff must be bare — no `a/`/`b/` prefixes. Using `git diff` without `--no-prefix` produces `a/foo.go`/`b/foo.go` paths that `-p0` cannot resolve, causing "No file to patch" failures.
+
+#### From a git branch (upstream PR candidates)
+
+Always use `--no-prefix` when generating patches from git branches:
+
+```bash
+git diff --no-prefix origin/master..upstream-pr/<branch> -- [files...] > files/patch-name.diff
+```
+
+Verify the patch header looks like this (no `a/`/`b/`):
+```
+diff --git pkg/foo/bar.go pkg/foo/bar.go
+--- pkg/foo/bar.go
++++ pkg/foo/bar.go
+```
+
+**Never edit patch files directly** — always make the fix on the branch in the fork, then regenerate:
+```bash
+# 1. Fix on the branch
+git -C /path/to/repo checkout upstream-pr/<branch>
+# ... make changes, commit ...
+
+# 2. Regenerate patch
+git -C /path/to/repo diff --no-prefix origin/master..upstream-pr/<branch> -- [files] \
+  > sysutils/<port>/files/patch-name.diff
+
+# 3. Bump the patch revision variable in the Portfile (e.g. set b1_rev 2)
+```
+
+#### From plain file edits
+
+For simple single-file patches not tracked in a branch:
+```bash
+diff -u original.txt modified.txt > files/patch-name.diff
+```
+
+`diff -u` does not add `a/`/`b/` prefixes, so it is `-p0` compatible by default.
+
+#### Adding to Portfile
+
+```tcl
+patchfiles          patch-name.diff
+```
 
 **MacPorts approach**: Use system libraries in place, avoid bundling.
 
