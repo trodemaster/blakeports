@@ -14,7 +14,7 @@ homepage            https://lima-vm.io
 # Patch revisions — increment when a patch is regenerated against new upstream
 set g1_rev  2
 set g3_rev  2
-set b1_rev  1
+set b1_rev  2
 
 description         Lima ${version} | G1:r${g1_rev} G3:r${g3_rev} B1:r${b1_rev} | off: B2 O1
 

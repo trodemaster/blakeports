@@ -1,7 +1,7 @@
-diff --git pkg/cidata/cidata.TEMPLATE.d/user-data pkg/cidata/cidata.TEMPLATE.d/user-data
+diff --git a/pkg/cidata/cidata.TEMPLATE.d/user-data b/pkg/cidata/cidata.TEMPLATE.d/user-data
 index 61f82da5..de2a1247 100644
---- pkg/cidata/cidata.TEMPLATE.d/user-data
-+++ pkg/cidata/cidata.TEMPLATE.d/user-data
+--- a/pkg/cidata/cidata.TEMPLATE.d/user-data
++++ b/pkg/cidata/cidata.TEMPLATE.d/user-data
 @@ -172,6 +172,10 @@ ca_certs:
    {{- end }}
  {{- end }}
@@ -13,11 +13,11 @@ index 61f82da5..de2a1247 100644
  {{- if .BootCmds }}
  bootcmd:
    {{- range $cmd := $.BootCmds }}
-diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index fc3a7332..1aa8f384 100644
---- pkg/cidata/cidata.go
-+++ pkg/cidata/cidata.go
-@@ -148,6 +148,13 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+diff --git a/pkg/cidata/cidata.go b/pkg/cidata/cidata.go
+index fc3a7332..693faca4 100644
+--- a/pkg/cidata/cidata.go
++++ b/pkg/cidata/cidata.go
+@@ -148,6 +148,23 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
  		Plain:          *instConfig.Plain,
  		TimeZone:       *instConfig.TimeZone,
  		NoCloudInit:    noCloudInit,
@@ -26,15 +26,39 @@ index fc3a7332..1aa8f384 100644
 +			if err := limayaml.Convert(instConfig.VMOpts[limatype.VZ], &vzOpts, "vmOpts.vz"); err != nil {
 +				return false
 +			}
-+			return vzOpts.SuppressFirstLoginSetup != nil && *vzOpts.SuppressFirstLoginSetup
++			return vzOpts.SuppressFirstLoginSetup != nil
++		}(),
++		SuppressFirstLoginSetupPlist: func() string {
++			var vzOpts limatype.VZOpts
++			if err := limayaml.Convert(instConfig.VMOpts[limatype.VZ], &vzOpts, "vmOpts.vz"); err != nil {
++				return ""
++			}
++			if vzOpts.SuppressFirstLoginSetup == nil {
++				return ""
++			}
++			return vzOpts.SuppressFirstLoginSetup.Plist
 +		}(),
  		Param:          instConfig.Param,
  	}
  
-diff --git pkg/cidata/cloudinittypes/userdata.go pkg/cidata/cloudinittypes/userdata.go
+@@ -398,6 +415,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+ 		return "", err
+ 	}
+ 
++	if args.SuppressFirstLoginSetupPlist != "" {
++		layout = append(layout, iso9660util.Entry{
++			Path:   "setup-assistant.plist",
++			Reader: strings.NewReader(args.SuppressFirstLoginSetupPlist),
++		})
++	}
++
+ 	driverScripts, err := drv.BootScripts(ctx)
+ 	if err != nil {
+ 		return "", fmt.Errorf("failed to get boot scripts: %w", err)
+diff --git a/pkg/cidata/cloudinittypes/userdata.go b/pkg/cidata/cloudinittypes/userdata.go
 index 9a6cbf7d..9ff3db88 100644
---- pkg/cidata/cloudinittypes/userdata.go
-+++ pkg/cidata/cloudinittypes/userdata.go
+--- a/pkg/cidata/cloudinittypes/userdata.go
++++ b/pkg/cidata/cloudinittypes/userdata.go
 @@ -24,6 +24,10 @@ type UserData struct {
  	CACerts *CACerts `yaml:"ca_certs,omitempty"`
  
@@ -46,22 +70,23 @@ index 9a6cbf7d..9ff3db88 100644
  }
  
  type Growpart struct {
-diff --git pkg/cidata/template.go pkg/cidata/template.go
-index b70bc663..59c970d6 100644
---- pkg/cidata/template.go
-+++ pkg/cidata/template.go
-@@ -117,6 +117,7 @@ type TemplateArgs struct {
+diff --git a/pkg/cidata/template.go b/pkg/cidata/template.go
+index b70bc663..d9cf1f20 100644
+--- a/pkg/cidata/template.go
++++ b/pkg/cidata/template.go
+@@ -117,6 +117,8 @@ type TemplateArgs struct {
  	Plain                           bool
  	TimeZone                        string
  	NoCloudInit                     bool
 +	SuppressFirstLoginSetup         bool
++	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
  }
  
  func ValidateTemplateArgs(args *TemplateArgs) error {
-diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-index 034f84e6..3ddb055c 100644
---- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-+++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+diff --git a/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go b/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+index 034f84e6..fe5b704e 100644
+--- a/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
++++ b/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 @@ -22,7 +22,6 @@ import (
  	"github.com/sirupsen/logrus"
  
@@ -75,11 +100,11 @@ index 034f84e6..3ddb055c 100644
  	}
  	for _, u := range userData.Users {
 -		if err := createUser(ctx, &u); err != nil {
-+		if err := createUser(ctx, &u, userData.SuppressFirstLoginSetup); err != nil {
++		if err := createUser(ctx, &u, userData.SuppressFirstLoginSetup, mnt); err != nil {
  			errs = append(errs, fmt.Errorf("failed to create user %q: %w", u.Name, err))
  		}
  	}
-@@ -219,13 +218,132 @@ func populateHomeDir(ctx context.Context, uid int, homedir string) error {
+@@ -219,13 +218,146 @@ func populateHomeDir(ctx context.Context, uid int, homedir string) error {
  	return nil
  }
  
@@ -95,7 +120,10 @@ index 034f84e6..3ddb055c 100644
 +//   - /Library/Preferences/com.apple.SoftwareUpdate.plist   (system-wide, root:wheel)
 +//     Pre-configures automatic-update settings so the "Update Mac Automatically"
 +//     dialog does not appear on first login.
-+func suppressFirstLoginScreens(uid int, homedir string) error {
++//
++// If mnt/setup-assistant.plist exists on the cidata volume it is used verbatim
++// instead of the built-in template, allowing the caller to supply version-specific keys.
++func suppressFirstLoginScreens(mnt string, uid int, homedir string) error {
 +	prefsDir := filepath.Join(homedir, "Library/Preferences")
 +	if err := os.MkdirAll(prefsDir, 0o700); err != nil {
 +		return fmt.Errorf("failed to create Preferences dir %q: %w", prefsDir, err)
@@ -104,31 +132,42 @@ index 034f84e6..3ddb055c 100644
 +		logrus.WithError(err).Warnf("Failed to chown Preferences dir %q", prefsDir)
 +	}
 +
-+	// Fetch current OS build and product version — macOS uses LastPreLoginTasksPerformedBuild
-+	// to determine whether to show express-settings dialogs (MiniBuddyLaunchReason=13).
-+	// If the stored build matches the running build, mini-buddy considers setup complete.
-+	buildVersion := "unknown"
-+	if out, err := exec.Command("sw_vers", "-buildVersion").Output(); err == nil {
-+		buildVersion = strings.TrimSpace(string(out))
-+	} else {
-+		logrus.WithError(err).Warn("Failed to get build version from sw_vers")
++	// Use a custom plist from the cidata volume if provided, otherwise fall back
++	// to the built-in template which stamps version/build info to prevent macOS
++	// from resetting MiniBuddyLaunchReason to 13 on first GUI login.
++	var setupAssistantPlist string
++	if customPlistPath := filepath.Join(mnt, "setup-assistant.plist"); mnt != "" {
++		if data, err := os.ReadFile(customPlistPath); err == nil {
++			setupAssistantPlist = string(data)
++			logrus.Infof("Using custom SetupAssistant plist from %q", customPlistPath)
++		}
 +	}
-+	productVersion := "unknown"
-+	if out, err := exec.Command("sw_vers", "-productVersion").Output(); err == nil {
-+		productVersion = strings.TrimSpace(string(out))
-+	} else {
-+		logrus.WithError(err).Warn("Failed to get product version from sw_vers")
-+	}
++	if setupAssistantPlist == "" {
++		// Fetch current OS build and product version — macOS uses LastPreLoginTasksPerformedBuild
++		// to determine whether to show express-settings dialogs (MiniBuddyLaunchReason=13).
++		// If the stored build matches the running build, mini-buddy considers setup complete.
++		buildVersion := "unknown"
++		if out, err := exec.Command("sw_vers", "-buildVersion").Output(); err == nil {
++			buildVersion = strings.TrimSpace(string(out))
++		} else {
++			logrus.WithError(err).Warn("Failed to get build version from sw_vers")
++		}
++		productVersion := "unknown"
++		if out, err := exec.Command("sw_vers", "-productVersion").Output(); err == nil {
++			productVersion = strings.TrimSpace(string(out))
++		} else {
++			logrus.WithError(err).Warn("Failed to get product version from sw_vers")
++		}
 +
-+	// Per-user SetupAssistant plist — mark every first-login pane as already seen.
-+	// SkipExpressSettingsUpdating suppresses the express-settings prompt.
-+	// SkipFirstLoginOptimization skips the first-login Spotlight indexing pass.
-+	// MiniBuddyLaunchReason 0 + MiniBuddyShouldLaunchToResumeSetup false ensures
-+	// mini-buddy does not resume any pending pane on first login.
-+	// The LastPreLoginTasksPerformedBuild / *Version and LastSeen* version stamps
-+	// are what macOS actually checks to decide whether setup is already complete;
-+	// without them macOS resets MiniBuddyLaunchReason to 13 on first GUI login.
-+	setupAssistantPlist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
++		// Per-user SetupAssistant plist — mark every first-login pane as already seen.
++		// SkipExpressSettingsUpdating suppresses the express-settings prompt.
++		// SkipFirstLoginOptimization skips the first-login Spotlight indexing pass.
++		// MiniBuddyLaunchReason 0 + MiniBuddyShouldLaunchToResumeSetup false ensures
++		// mini-buddy does not resume any pending pane on first login.
++		// The LastPreLoginTasksPerformedBuild / *Version and LastSeen* version stamps
++		// are what macOS actually checks to decide whether setup is already complete;
++		// without them macOS resets MiniBuddyLaunchReason to 13 on first GUI login.
++		setupAssistantPlist = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 +<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 +<plist version="1.0">
 +<dict>
@@ -161,6 +200,7 @@ index 034f84e6..3ddb055c 100644
 +</dict>
 +</plist>
 +`, buildVersion, productVersion, productVersion, buildVersion, productVersion, productVersion)
++	}
 +
 +	saPlist := filepath.Join(prefsDir, "com.apple.SetupAssistant.plist")
 +	if err := os.WriteFile(saPlist, []byte(setupAssistantPlist), 0o600); err != nil {
@@ -195,12 +235,11 @@ index 034f84e6..3ddb055c 100644
 +		}
 +	}
 +
-+	logrus.Infof("Suppressed first-login setup screens for uid %d in %q (build=%s, version=%s)",
-+		uid, homedir, buildVersion, productVersion)
++	logrus.Infof("Suppressed first-login setup screens for uid %d in %q", uid, homedir)
 +	return nil
 +}
 +
-+func createUser(ctx context.Context, u *cloudinittypes.User, suppressFirstLoginSetup bool) error {
++func createUser(ctx context.Context, u *cloudinittypes.User, suppressFirstLoginSetup bool, mnt string) error {
  	homedir := u.Homedir
  	if homedir == "" {
  		return fmt.Errorf("homedir is required for user %q", u.Name)
@@ -215,14 +254,14 @@ index 034f84e6..3ddb055c 100644
  		return nil
  	}
  	if u.UID == "" {
-@@ -281,6 +399,15 @@ func createUser(ctx context.Context, u *cloudinittypes.User) error {
+@@ -281,6 +413,15 @@ func createUser(ctx context.Context, u *cloudinittypes.User) error {
  		return fmt.Errorf("failed to populate home directory for user %q: %w", u.Name, err)
  	}
  
 +	if suppressFirstLoginSetup {
 +		// Write first-login preference plists now, as root, before any GUI session starts.
 +		// cfprefsd reads these fresh at first login so macOS does not reset them.
-+		if err = suppressFirstLoginScreens(uid, homedir); err != nil {
++		if err = suppressFirstLoginScreens(mnt, uid, homedir); err != nil {
 +			// Non-fatal: SSH provisioning (configure.sh) can still handle it if needed.
 +			logrus.WithError(err).Warnf("Failed to suppress first-login screens for user %q", u.Name)
 +		}
@@ -231,27 +270,34 @@ index 034f84e6..3ddb055c 100644
  	cmd = exec.CommandContext(ctx, "chmod", "700", homedir)
  	logrus.Infof("Executing command: %v", cmd.Args)
  	if output, err := cmd.CombinedOutput(); err != nil {
-diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index afb012e8..f1d27be3 100644
---- pkg/limatype/lima_yaml.go
-+++ pkg/limatype/lima_yaml.go
-@@ -121,8 +121,9 @@ type QEMUOpts struct {
+diff --git a/pkg/limatype/lima_yaml.go b/pkg/limatype/lima_yaml.go
+index afb012e8..c7310a71 100644
+--- a/pkg/limatype/lima_yaml.go
++++ b/pkg/limatype/lima_yaml.go
+@@ -121,8 +121,16 @@ type QEMUOpts struct {
  }
  
  type VZOpts struct {
 -	Rosetta         Rosetta     `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
 -	DiskImageFormat *image.Type `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	Rosetta                  Rosetta     `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
-+	DiskImageFormat          *image.Type `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	SuppressFirstLoginSetup  *bool       `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
++	Rosetta                  Rosetta                  `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
++	DiskImageFormat          *image.Type              `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
++	SuppressFirstLoginSetup  *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
++}
++
++// SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
++// If non-nil, the feature is enabled. Plist overrides the built-in com.apple.SetupAssistant.plist
++// content if non-empty; otherwise the built-in plist is used.
++type SuppressFirstLoginSetup struct {
++	Plist string `yaml:"plist,omitempty" json:"plist,omitempty"`
  }
  
  type Rosetta struct {
-diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index ab01f113..afecd26e 100644
---- website/content/en/docs/usage/guests/macos.md
-+++ website/content/en/docs/usage/guests/macos.md
-@@ -33,6 +33,28 @@ limactl shell macos cat /Users/${USER}.guest/password
+diff --git a/website/content/en/docs/usage/guests/macos.md b/website/content/en/docs/usage/guests/macos.md
+index ab01f113..f0c9554e 100644
+--- a/website/content/en/docs/usage/guests/macos.md
++++ b/website/content/en/docs/usage/guests/macos.md
+@@ -33,6 +33,54 @@ limactl shell macos cat /Users/${USER}.guest/password
  - Password-less sudo is disabled, except for `/sbin/shutdown -h now`
  - Several features are not implemented yet. See [Caveats](#caveats) below.
  
@@ -259,14 +305,14 @@ index ab01f113..afecd26e 100644
 +
 +By default, macOS shows a series of setup wizard screens (Setup Assistant /
 +mini-buddy) on the first GUI login. For automated or headless-style macOS VMs
-+this is inconvenient. Set `vmOpts.vz.suppressFirstLoginSetup: true` to have
-+Lima pre-populate the relevant preference plists during provisioning, before
-+any GUI session starts, so the setup screens are skipped automatically:
++this is inconvenient. Set `vmOpts.vz.suppressFirstLoginSetup` to have Lima
++pre-populate the relevant preference plists during provisioning, before any GUI
++session starts, so the setup screens are skipped automatically:
 +
 +```yaml
 +vmOpts:
 +  vz:
-+    suppressFirstLoginSetup: true
++    suppressFirstLoginSetup: {}
 +```
 +
 +This writes `com.apple.SetupAssistant.plist` into the guest user's home
@@ -275,7 +321,33 @@ index ab01f113..afecd26e 100644
 +are written as root (via the Lima guest agent) before first login, so macOS
 +reads them as the authoritative initial state and does not reset them.
 +
-+**Default:** `false` — setup screens are shown as normal.
++**Default:** unset — setup screens are shown as normal.
++
++### Custom plist
++
++The built-in `com.apple.SetupAssistant.plist` content stamps the current OS
++build/version to prevent macOS from resetting the wizard state. If the keys
++that macOS checks change between OS releases, you can supply your own plist:
++
++```yaml
++vmOpts:
++  vz:
++    suppressFirstLoginSetup:
++      plist: |
++        <?xml version="1.0" encoding="UTF-8"?>
++        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++        <plist version="1.0">
++        <dict>
++            <key>DidSeeCloudSetup</key><true/>
++            <key>DidSeePrivacy</key><true/>
++            <key>SkipExpressSettingsUpdating</key><true/>
++        </dict>
++        </plist>
++```
++
++The plist is written as a file in the cidata ISO and read by the Lima guest
++agent before first login. When `plist` is omitted, the built-in template is
++used.
 +
  ## Caveats
  - No support for turning off the video display.
