@@ -1,0 +1,18 @@
+--- a/pkg/instance/start_appbundle_darwin.go
++++ b/pkg/instance/start_appbundle_darwin.go
+@@ -21,10 +21,11 @@ const appBundleName = "Lima.app"
+ func findAppBundle() string {
+ 	// Search for Lima.app in order of precedence:
+-	// 1. Standard macOS Applications directory (highest priority)
++	// 1. Standard macOS Applications directories (highest priority)
+ 	// 2. ShareLima() paths derived from the running binary's prefix
+-	// 3. Explicit prefix share/lima fallbacks
++	// 3. Explicit prefix share/lima fallbacks
+ 	var searchPaths []string
+
+-	// Standard macOS Applications location
++	// Standard macOS Applications locations, including MacPorts convention
+ 	searchPaths = append(searchPaths,
++		"/Applications/MacPorts",
+ 		"/Applications",
+ 	)
