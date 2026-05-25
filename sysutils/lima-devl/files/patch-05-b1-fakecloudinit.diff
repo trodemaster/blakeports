@@ -1,7 +1,7 @@
-diff --git a/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go b/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 index 034f84e6..522f5a36 100644
---- a/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-+++ b/pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+--- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
++++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 @@ -22,7 +22,6 @@ import (
  	"github.com/sirupsen/logrus"
  

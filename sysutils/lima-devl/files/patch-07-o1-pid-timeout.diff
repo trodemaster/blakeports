@@ -1,7 +1,7 @@
-diff --git a/pkg/instance/start.go b/pkg/instance/start.go
+diff --git pkg/instance/start.go pkg/instance/start.go
 index dc13872e..30533002 100644
---- a/pkg/instance/start.go
-+++ b/pkg/instance/start.go
+--- pkg/instance/start.go
++++ pkg/instance/start.go
 @@ -289,7 +289,7 @@ func Start(ctx context.Context, inst *limatype.Instance, launchHostAgentForegrou
  
  func waitHostAgentStart(_ context.Context, haPIDPath, haStderrPath string) error {
