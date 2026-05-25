@@ -1,5 +1,5 @@
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index b2de1437..ed0fe336 100644
+index 87bb6093..bc4f4d32 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -93,6 +93,7 @@ type LimaVzDriver struct {
@@ -10,7 +10,7 @@ index b2de1437..ed0fe336 100644
  
  	machine                    *virtualMachineWrapper
  	waitSSHLocalPortAccessible <-chan any
-@@ -153,6 +154,7 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) *dr
+@@ -153,6 +154,7 @@ func (l *LimaVzDriver) Configure(inst *limatype.Instance) *driver.ConfiguredDriv
  	} else {
  		l.diskImageFormat = raw.Type
  	}
