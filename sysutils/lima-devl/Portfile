@@ -15,7 +15,7 @@ set g1_rev  1
 set g2_rev  1
 set g2p_rev 1
 
-description         Lima ${version} | G1:r${g1_rev} G2:r${g2_rev} G2+:r${g2p_rev} | off: G3 B1 B2 O1
+description         Lima ${version} | G1:r${g1_rev} | off: G2 G2+ G3 B1 B2 O1
 
 long_description    {*}${description}
 
@@ -35,20 +35,17 @@ checksums           rmd160  44f9035187941c2bfe5fddcfab47a6ca8bf1956b \
 # Feature patches (upstream PR candidates, applied in dependency order)
 patchfiles          patch-Makefile.diff \
                     patch-usrlocalgo.diff \
-                    patch-01-g1-thread-pin.diff \
-                    patch-02-g2-app-bundle.diff \
-                    patch-03-g2-macports-applications-path.diff
+                    patch-01-g1-thread-pin.diff
 #                     \
+#                    patch-02-g2-app-bundle.diff \
+#                    patch-03-g2-macports-applications-path.diff \
 #                    patch-04-g3-screenshot.diff \
 #                    patch-05-b1-fakecloudinit.diff \
 #                    patch-06-b2-tcc.diff \
 #                    patch-07-o1-pid-timeout.diff
 
 build.cmd           make
-# APP_BUNDLE_DIR controls where Lima.app is built within _output/
-# (enabled by patch-02-g2-app-bundle.diff which adds the Makefile target)
-build.args-append   native \
-                    APP_BUNDLE_DIR=_output/share/lima
+build.args-append   native
 
 platform darwin {
     # Lima defaults to VZ with macOS 13.5 and later; drop dependency from 14 onwards
@@ -82,15 +79,6 @@ post-build {
 
 destroot {
     system -W ${worksrcpath} "make install DEST=${destroot}${prefix}"
-
-    # Install Lima.app to the standard MacPorts Applications directory
-    # so it appears alongside other MacPorts GUI apps at /Applications/MacPorts/
-    platform darwin {
-        xinstall -d ${destroot}/Applications/MacPorts
-        file rename \
-            ${destroot}${prefix}/share/lima/Lima.app \
-            ${destroot}/Applications/MacPorts/Lima.app
-    }
 }
 
 notes {
@@ -98,14 +86,9 @@ notes {
     that builds guest agents for all supported architectures, requiring\
     qemu.
 
-    This build includes an experimental macOS app bundle (Lima.app) for\
-    GUI display on macOS 26+. When starting a VM with video.display=default\
-    on macOS 26+, the hostagent launches inside Lima.app for proper Window\
-    Server context.
-
-    The guestpatch TCC feature adds a tccPermissions key to lima.yaml.\
-    Instances configured with tccPermissions are not compatible with the\
-    upstream lima port — remove the key before switching.
+    G1-only test build: LockOSThread patch active, app bundle (G2) disabled.\
+    Use macos-26-test VM to confirm whether G1 alone resolves the SIGTRAP\
+    on macOS 26 without the Lima.app bundle.
 }
 
 github.livecheck.regex {([0-9.]+)}
