@@ -14,8 +14,8 @@ xorg-server-devel 8318
 lima-devl 9237
 netatalk4 9748
 py39-meson 10301
-py312-meson 11137
-py310-meson 11981
-py314-meson 12825
-py311-meson 13669
-py313-meson 14513
+py310-meson 11137
+py311-meson 11981
+py312-meson 12825
+py313-meson 13669
+py314-meson 14513
