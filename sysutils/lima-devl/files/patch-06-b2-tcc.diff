@@ -615,10 +615,10 @@ index afb012e8..4404fbeb 100644
  
  type Rosetta struct {
 diff --git a/website/content/en/docs/usage/guests/macos.md b/website/content/en/docs/usage/guests/macos.md
-index ab01f113..1c305d12 100644
+index ab01f113..33f7c157 100644
 --- a/website/content/en/docs/usage/guests/macos.md
 +++ b/website/content/en/docs/usage/guests/macos.md
-@@ -33,6 +33,71 @@ limactl shell macos cat /Users/${USER}.guest/password
+@@ -33,6 +33,74 @@ limactl shell macos cat /Users/${USER}.guest/password
  - Password-less sudo is disabled, except for `/sbin/shutdown -h now`
  - Several features are not implemented yet. See [Caveats](#caveats) below.
  
@@ -659,24 +659,27 @@ index ab01f113..1c305d12 100644
 +
 +### Custom entries
 +
-+For third-party or non-Apple-signed tools, use the raw fields instead of a
-+preset. Path-based entries (`clientType: path`) with no csreq skip
-+code-signing validation, which is appropriate for tools that are rebuilt
-+or updated frequently.
++For cases not covered by a preset, use the raw fields directly. Note that
++custom entries do not include a code-signing requirement (csreq), so they
++skip binary identity validation — use presets for Apple-signed system
++binaries where an exact csreq is known.
 +
-+Example — grant Accessibility to [cliclick](https://github.com/BlueM/cliclick),
-+a CLI tool for synthetic mouse and keyboard input:
++Example — the equivalent of `sshd-full-disk-access` written as a custom entry:
 +
 +```yaml
 +vmOpts:
 +  vz:
 +    guestPatch:
 +      tccPermissions:
-+        - service: kTCCServiceAccessibility
-+          client: /opt/local/bin/cliclick
++        - service: kTCCServiceSystemPolicyAllFiles
++          client: /usr/libexec/sshd-keygen-wrapper
 +          clientType: path
 +          authValue: allow
 +```
++
++Use the `sshd-full-disk-access` preset instead of the above when possible,
++as the preset includes the correct csreq blob that macOS records for
++`sshd-keygen-wrapper`.
 +
 +| Field | Values | Notes |
 +|-------|--------|-------|
