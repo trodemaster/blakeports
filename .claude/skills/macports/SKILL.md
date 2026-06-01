@@ -162,19 +162,28 @@ Closes: https://trac.macports.org/ticket/12345
 **Workflow:**
 1. Run lint check: `port lint --nitpick category/portname`
 2. Fix all warnings and errors
-3. Create branch: `git checkout -b category/portname-update-X.Y.Z`
+3. Fetch upstream and create branch from `upstream/master` (not fork master, which may lag):
+   ```bash
+   git fetch upstream master
+   git checkout -b category/portname-update-X.Y.Z upstream/master
+   ```
 4. Copy/modify files from blakeports to macports-ports
 5. Stage changes: `git add category/portname/`
 6. Draft commit message (following guidelines above)
 7. **SHOW commit message to user — STOP and wait for explicit approval before proceeding**
 8. Commit after approval: `git commit -m "message"`
-9. Push to fork: `git push -u origin branch-name`
-10. Extract "Tested on" system info from CI runner logs (see pr-template.md) — do NOT use local machine info
-11. Draft PR description using the official template with CI-sourced system info
-12. **SHOW PR description to user — STOP and wait for explicit approval before proceeding**
-13. Create PR only after approval: `gh pr create --repo macports/macports-ports`
-13. If reviewer feedback requires changes: apply fix to blakeports → run CI (both modern and legacy runners) → verify all passing → THEN amend commit and force push to macports-ports
-14. If PR doesn't receive attention within a few days, email macports-dev@lists.macports.org
+9. Rebase onto latest upstream/master before pushing (catches any commits that landed since branch creation):
+   ```bash
+   git fetch upstream master
+   git rebase upstream/master
+   ```
+10. Push to fork: `git push -u origin branch-name`
+11. Extract "Tested on" system info from CI runner logs (see pr-template.md) — do NOT use local machine info
+12. Draft PR description using the official template with CI-sourced system info
+13. **SHOW PR description to user — STOP and wait for explicit approval before proceeding**
+14. Create PR only after approval: `gh pr create --repo macports/macports-ports`
+15. If reviewer feedback requires changes: apply fix to blakeports → run CI (both modern and legacy runners) → verify all passing → THEN amend commit and force push to macports-ports
+16. If PR doesn't receive attention within a few days, email macports-dev@lists.macports.org
 
 **For new ports:**
 - Set ticket type to "submission" (if using Trac)
@@ -271,8 +280,22 @@ sudo port install -d <portname>          # Debug mode
 ```bash
 sudo port uninstall <portname>           # Remove port
 sudo port clean --dist <portname>        # Clear downloads (important!)
-sudo port clean --all <portname>         # Clean everything
+sudo port clean --all <portname>         # Clean everything (work dir + downloads)
 ```
+
+**Clean rebuild after source changes (preferred):**
+```bash
+sudo port uninstall stash && sudo port clean --all stash && sudo port install stash
+```
+`port clean --all` must come after uninstall to clear the cached work directory so the next install re-fetches and rebuilds from scratch.
+
+**Rebuild only the port, skip dependency processing:**
+```bash
+sudo port -n upgrade --force <portname>
+```
+The `-n` flag skips all dependency processing. Use this when dependencies are already up to date and you only want to rebuild the target port itself.
+
+**Avoid:** `sudo port upgrade --force <portname>` without `-n` — this forces a rebuild of the port AND its outdated dependencies, which can trigger a large cascade of rebuilds.
 
 **Quality Checks:**
 ```bash
@@ -447,6 +470,16 @@ sudo port uninstall <portname> && \
 sudo port install -sv <portname>
 ```
 
+### Clean Rebuild After Source Changes
+```bash
+sudo port uninstall <portname> && sudo port clean --all <portname> && sudo port install <portname>
+```
+
+### Rebuild Only This Port (dependencies already installed)
+```bash
+sudo port -n upgrade --force <portname>
+```
+
 ### Checksum Update Workflow
 ```bash
 # 1. Update version in Portfile (keep old checksums)
@@ -512,3 +545,4 @@ Execute without reading into context for efficiency.
 20. **Use system libraries in place** - avoid bundling frameworks in MacPorts builds
 21. **`platform darwin` version blocks**: sort highest `os.major` threshold first (affects most systems), down to lowest; merge multiple blocks with the same threshold into one
 22. **Never update the upstream macports-ports PR before CI passes** — always fix in blakeports, run CI, verify green, then amend upstream
+23. **Always branch from `upstream/master`**, not from fork master — fork master can lag behind, causing conflicts when upstream merges a concurrent change to the same port before your PR lands
