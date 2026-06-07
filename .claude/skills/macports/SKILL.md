@@ -546,3 +546,4 @@ Execute without reading into context for efficiency.
 21. **`platform darwin` version blocks**: sort highest `os.major` threshold first (affects most systems), down to lowest; merge multiple blocks with the same threshold into one
 22. **Never update the upstream macports-ports PR before CI passes** — always fix in blakeports, run CI, verify green, then amend upstream
 23. **Always branch from `upstream/master`**, not from fork master — fork master can lag behind, causing conflicts when upstream merges a concurrent change to the same port before your PR lands
+24. **Bump `revision` when fixing a dependency or build flag without changing the version** — users with the port already installed at `version_0` won't get the fix automatically unless revision increments. Required for: adding a missing dependency, removing an incorrect one, or changing configure args that affect the built binary
