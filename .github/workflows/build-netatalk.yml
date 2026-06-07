@@ -281,6 +281,35 @@ jobs:
           ls -la /opt/local/sbin/afpd || echo "afpd binary not found"
           /opt/local/sbin/afpd -V || echo "Could not get afpd version"
 
+      - name: Verify features
+        if: matrix.type == 'modern'
+        run: |
+          NETATALK_V=$(/opt/local/sbin/netatalk -v 2>&1)
+          AFPD_V=$(/opt/local/sbin/afpd -V 2>&1)
+          PASS=true
+
+          check() {
+            local label="$1" pattern="$2" output="$3"
+            if echo "$output" | grep -qE "$pattern"; then
+              echo "✅ $label"
+            else
+              echo "❌ $label — not found in binary output"
+              PASS=false
+            fi
+          }
+
+          check "Spotlight cnid backend (netatalk)" "Spotlight search backends:.*cnid" "$NETATALK_V"
+          check "Spotlight cnid backend (afpd)"     "Spotlight search backends:.*cnid" "$AFPD_V"
+          check "CNID backend: sqlite"              "CNID backends:.*sqlite"           "$AFPD_V"
+          check "CNID backend: dbd"                 "CNID backends:.*dbd"              "$AFPD_V"
+
+          if [ "$PASS" != "true" ]; then
+            echo ""
+            echo "One or more expected features are missing. Full netatalk -v output:"
+            echo "$NETATALK_V"
+            exit 1
+          fi
+
       #
       # LEGACY PLATFORM STEPS
       #
