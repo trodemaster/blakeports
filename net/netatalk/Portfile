@@ -42,6 +42,7 @@ if {${subport} eq ${name}} {
                         port:libevent \
                         port:libgcrypt \
                         port:iniparser \
+                        port:talloc \
                         port:bstring
 
     configure.args-append -Dwith-init-style=none \
