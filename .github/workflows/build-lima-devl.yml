@@ -176,16 +176,18 @@ jobs:
       - name: Prepare Go lint environment
         run: |
           source ./setupenv.bash
-          SRCDIR=$(port work lima-devl)
-          # golang portgroup: worksrcpath = workpath/gopath/src/github.com/lima-vm/lima
-          # walk up 4 dirs to reach workpath/gopath (module cache lives here)
-          GOPATH_DIR=$(dirname "$(dirname "$(dirname "$(dirname "${SRCDIR}")")")")
+          # port work returns workpath (.../work), not worksrcpath
+          # golang portgroup places source at workpath/gopath/src/github.com/lima-vm/lima
+          WORKPATH=$(port work lima-devl)
+          SRCDIR="${WORKPATH}/gopath/src/github.com/lima-vm/lima"
+          GOPATH_DIR="${WORKPATH}/gopath"
+          echo "Work dir:   ${WORKPATH}"
           echo "Source dir: ${SRCDIR}"
           echo "GOPATH:     ${GOPATH_DIR}"
           echo "LIMA_SRCDIR=${SRCDIR}" >> "$GITHUB_ENV"
           echo "LIMA_GOPATH=${GOPATH_DIR}" >> "$GITHUB_ENV"
           # Transfer ownership of work directory to runner user
-          sudo chown -R "$(id -un):$(id -gn)" "$(dirname "${GOPATH_DIR}")"
+          sudo chown -R "$(id -un):$(id -gn)" "${WORKPATH}"
           # Make MacPorts Go available to the lint action
           echo "/opt/local/bin" >> "$GITHUB_PATH"
 
