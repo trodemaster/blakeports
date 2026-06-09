@@ -157,7 +157,7 @@ jobs:
       - name: Build port
         run: |
           source ./setupenv.bash
-          sudo port -v install lima-devl
+          sudo port -kv install lima-devl
 
       - name: Verify installation
         run: |
@@ -172,3 +172,34 @@ jobs:
           echo ""
           echo "Guest agent:"
           ls /opt/local/share/lima/lima-guestagent.* 2>/dev/null || echo "No guest agents found"
+
+      - name: Prepare Go lint environment
+        run: |
+          source ./setupenv.bash
+          SRCDIR=$(port work lima-devl)
+          # golang portgroup: worksrcpath = workpath/gopath/src/github.com/lima-vm/lima
+          # walk up 4 dirs to reach workpath/gopath (module cache lives here)
+          GOPATH_DIR=$(dirname "$(dirname "$(dirname "$(dirname "${SRCDIR}")")")")
+          echo "Source dir: ${SRCDIR}"
+          echo "GOPATH:     ${GOPATH_DIR}"
+          echo "LIMA_SRCDIR=${SRCDIR}" >> "$GITHUB_ENV"
+          echo "LIMA_GOPATH=${GOPATH_DIR}" >> "$GITHUB_ENV"
+          # Transfer ownership of work directory to runner user
+          sudo chown -R "$(id -un):$(id -gn)" "$(dirname "${GOPATH_DIR}")"
+          # Make MacPorts Go available to the lint action
+          echo "/opt/local/bin" >> "$GITHUB_PATH"
+
+      - name: Lint Go (golangci-lint)
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+          working-directory: ${{ env.LIMA_SRCDIR }}
+        env:
+          GOPATH: ${{ env.LIMA_GOPATH }}
+          GOMODCACHE: ${{ env.LIMA_GOPATH }}/pkg/mod
+
+      - name: Clean port work directory
+        if: always()
+        run: |
+          source ./setupenv.bash
+          sudo port clean --work lima-devl
