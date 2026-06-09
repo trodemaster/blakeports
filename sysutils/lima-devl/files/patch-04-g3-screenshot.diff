@@ -108,7 +108,7 @@ index 269d85fa..fd446624 100644
  	// Validate returns error if the current driver isn't support for given config
 diff --git pkg/driver/vz/screenshot_darwin.go pkg/driver/vz/screenshot_darwin.go
 new file mode 100644
-index 00000000..b9638651
+index 00000000..5d6a5338
 --- /dev/null
 +++ pkg/driver/vz/screenshot_darwin.go
 @@ -0,0 +1,90 @@
@@ -174,11 +174,11 @@ index 00000000..b9638651
 +    return result;
 +}
 +*/
-+import "C"
++import "C" //nolint:gocritic // CGo pseudo-package; a separate import block is required by the CGo specification
 +
 +import (
 +	"errors"
-+	"unsafe"
++	"unsafe" //nolint:gocritic // unsafe.Pointer is required for C pointer conversions; implicitly available via CGo but must be imported explicitly
 +)
 +
 +// CaptureScreenshot captures the VM display window.
