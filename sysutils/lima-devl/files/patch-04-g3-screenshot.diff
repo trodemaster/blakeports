@@ -1,5 +1,5 @@
 diff --git cmd/limactl/main.go cmd/limactl/main.go
-index 31f322f6..a53fb6f7 100644
+index f75d2e44..86a2ac0d 100644
 --- cmd/limactl/main.go
 +++ cmd/limactl/main.go
 @@ -199,6 +199,7 @@ func newApp() *cobra.Command {
@@ -12,14 +12,12 @@ index 31f322f6..a53fb6f7 100644
  		newTunnelCommand(),
 diff --git cmd/limactl/screenshot.go cmd/limactl/screenshot.go
 new file mode 100644
-index 00000000..155897aa
+index 00000000..6d15fd8f
 --- /dev/null
 +++ cmd/limactl/screenshot.go
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,73 @@
 +// SPDX-FileCopyrightText: Copyright The Lima Authors
 +// SPDX-License-Identifier: Apache-2.0
-+
-+//go:build darwin
 +
 +package main
 +
@@ -110,10 +108,10 @@ index 269d85fa..fd446624 100644
  	// Validate returns error if the current driver isn't support for given config
 diff --git pkg/driver/vz/screenshot_darwin.go pkg/driver/vz/screenshot_darwin.go
 new file mode 100644
-index 00000000..d183822f
+index 00000000..b9638651
 --- /dev/null
 +++ pkg/driver/vz/screenshot_darwin.go
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,90 @@
 +// SPDX-FileCopyrightText: Copyright The Lima Authors
 +// SPDX-License-Identifier: Apache-2.0
 +
@@ -177,8 +175,9 @@ index 00000000..d183822f
 +}
 +*/
 +import "C"
++
 +import (
-+	"fmt"
++	"errors"
 +	"unsafe"
 +)
 +
@@ -187,7 +186,7 @@ index 00000000..d183822f
 +// Implements driver.Screenshotter. Requires the GUI app bundle to be running.
 +func (l *LimaVzDriver) CaptureScreenshot(format string) ([]byte, error) {
 +	if !l.canRunGUI() {
-+		return nil, fmt.Errorf("VM has no display configured (set video.display to \"default\" or \"vz\" to enable screenshots)")
++		return nil, errors.New("VM has no display configured (set video.display to \"default\" or \"vz\" to enable screenshots)")
 +	}
 +	uti := "public.png"
 +	if format == "bmp" {
@@ -198,13 +197,13 @@ index 00000000..d183822f
 +	var outLen C.int
 +	ptr := C.captureWindowImageBytes(&outLen, cuti)
 +	if ptr == nil || outLen == 0 {
-+		return nil, fmt.Errorf("screenshot capture returned no data; GUI window may not be visible")
++		return nil, errors.New("screenshot capture returned no data; GUI window may not be visible")
 +	}
-+	defer C.free(unsafe.Pointer(ptr))
++	defer C.free(ptr)
 +	return C.GoBytes(ptr, outLen), nil
 +}
 diff --git pkg/hostagent/api/client/client.go pkg/hostagent/api/client/client.go
-index a71d25a9..d6da895b 100644
+index a71d25a9..ad8a8510 100644
 --- pkg/hostagent/api/client/client.go
 +++ pkg/hostagent/api/client/client.go
 @@ -9,7 +9,9 @@ package client
@@ -242,11 +241,11 @@ index a71d25a9..d6da895b 100644
 +		if errors.As(err, &httpErr) {
 +			switch httpErr.StatusCode {
 +			case http.StatusNotFound:
-+				return nil, fmt.Errorf("hostagent does not support screenshot — restart the instance to pick up the latest hostagent binary")
++				return nil, errors.New("hostagent does not support screenshot — restart the instance to pick up the latest hostagent binary")
 +			case http.StatusNotImplemented:
-+				return nil, fmt.Errorf("this VM's driver does not support screenshots (only VZ VMs with a display are supported)")
++				return nil, errors.New("this VM's driver does not support screenshots (only VZ VMs with a display are supported)")
 +			case http.StatusUnprocessableEntity:
-+				return nil, fmt.Errorf("VM has no display configured — set video.display to \"default\" or \"vz\" in the instance config")
++				return nil, errors.New("VM has no display configured — set video.display to \"default\" or \"vz\" in the instance config")
 +			}
 +		}
 +		return nil, err
@@ -322,10 +321,10 @@ index 26da6597..d57e1a49 100644
 +	r.Handle("/v1/screenshot", http.HandlerFunc(b.GetScreenshot))
  }
 diff --git pkg/hostagent/hostagent.go pkg/hostagent/hostagent.go
-index b0d894fb..6c587827 100644
+index 2cf8a5ec..79ab2061 100644
 --- pkg/hostagent/hostagent.go
 +++ pkg/hostagent/hostagent.go
-@@ -520,6 +520,19 @@ func (a *HostAgent) startRoutinesAndWait(ctx context.Context, errCh <-chan error
+@@ -526,6 +526,19 @@ func (a *HostAgent) startRoutinesAndWait(ctx context.Context, errCh <-chan error
  	return a.driver.Stop(ctx)
  }
  

@@ -63,7 +63,7 @@ index b2de1437..ed0fe336 100644
 @@ -370,7 +372,9 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  		patchedMarker := disk + ".patched" // empty file
  		if !osutil.FileExists(patchedMarker) {
- 			logrus.Infof("Patching macOS disk %q", disk)
+ 			logrus.Infof("Patching macOS disk %#q", disk)
 -			if err := macos.Patch(ctx, disk); err != nil {
 +			guestHomeRelDir := fmt.Sprintf("Users/%s.guest", *l.Instance.Config.User.Name)
 +			guestUID := *l.Instance.Config.User.UID
