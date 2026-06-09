@@ -3,8 +3,8 @@
 PortSystem          1.0
 PortGroup           golang 1.0
 
-go.setup            github.com/lima-vm/lima 939f4137cda18678ee3c771eaa353f88e1b9a786
-version             2.1.0-dev.20260525
+go.setup            github.com/lima-vm/lima 45e64f1825117034625a721a7abc268610be364c
+version             2.1.2-dev.20260607
 go.offline_build    no
 name                lima-devl
 revision            0
@@ -12,13 +12,11 @@ revision            0
 homepage            https://lima-vm.io
 
 # Patch revisions — increment when a patch is regenerated against new upstream
-set g1_rev  2
-set g4_rev  1
-set g3_rev  2
+set g3_rev  7
 set b1_rev  4
-set b2_rev  3
+set b2_rev  4
 
-description         Lima ${version} | G1:r${g1_rev} G4:r${g4_rev} G3:r${g3_rev} B1:r${b1_rev} B2:r${b2_rev} | off: O1
+description         Lima ${version} | G3:r${g3_rev} B1:r${b1_rev} B2:r${b2_rev} | off: O1 (G1 upstream, G4 upstream)
 
 long_description    {*}${description}
 
@@ -30,16 +28,14 @@ maintainers         {@trodemaster icloud.com:manuals-unread2u} \
 
 conflicts           lima
 
-checksums           rmd160  6a2a83555aad64ad6448f763512fce6f535dba57 \
-                    sha256  06de7135fb3f0281ad96bf4e2c0ee63f915ebe270d32b02083045eb529eca3de \
-                    size    7806979
+checksums           rmd160  9db7af1bba31cae57167ec88634594b6d6e3c57f \
+                    sha256  15bdab97dabfea0a7b2cb1fb08cd0d314ab9eacec0f5f22525e92257f980a721 \
+                    size    7811208
 
 # Standard patches (shared with the upstream lima port)
 # Feature patches (upstream PR candidates, applied in dependency order)
 patchfiles          patch-Makefile.diff \
                     patch-usrlocalgo.diff \
-                    patch-01-g1-thread-pin.diff \
-                    patch-02-g4-window-title.diff \
                     patch-04-g3-screenshot.diff \
                     patch-05-b1-fakecloudinit.diff \
                     patch-06-b2-tcc.diff
