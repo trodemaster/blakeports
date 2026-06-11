@@ -14,36 +14,25 @@ index 61f82da5..de2a1247 100644
  bootcmd:
    {{- range $cmd := $.BootCmds }}
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 009c5d67..a9408749 100644
+index 009c5d67..706e2ac3 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -148,7 +148,24 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
- 		Plain:          *instConfig.Plain,
- 		TimeZone:       *instConfig.TimeZone,
- 		NoCloudInit:    noCloudInit,
--		Param:          instConfig.Param,
-+		SuppressFirstLoginSetup: func() bool {
-+			var vzOpts limatype.VZOpts
-+			if err := limayaml.Convert(instConfig.VMOpts[limatype.VZ], &vzOpts, "vmOpts.vz"); err != nil {
-+				return false
-+			}
-+			return vzOpts.SuppressFirstLoginSetup != nil
-+		}(),
-+		SuppressFirstLoginSetupPlist: func() string {
-+			var vzOpts limatype.VZOpts
-+			if err := limayaml.Convert(instConfig.VMOpts[limatype.VZ], &vzOpts, "vmOpts.vz"); err != nil {
-+				return ""
-+			}
-+			if vzOpts.SuppressFirstLoginSetup == nil {
-+				return ""
-+			}
-+			return vzOpts.SuppressFirstLoginSetup.Plist
-+		}(),
-+		Param: instConfig.Param,
+@@ -151,6 +151,14 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+ 		Param:          instConfig.Param,
  	}
  
++	if *instConfig.OS == limatype.DARWIN && *instConfig.VMType == limatype.VZ {
++		var vzOpts limatype.VZOpts
++		if err := limayaml.Convert(instConfig.VMOpts[limatype.VZ], &vzOpts, "vmOpts.vz"); err == nil && vzOpts.SuppressFirstLoginSetup != nil {
++			args.SuppressFirstLoginSetup = true
++			args.SuppressFirstLoginSetupPlist = vzOpts.SuppressFirstLoginSetup.Plist
++		}
++	}
++
  	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
-@@ -398,6 +415,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+ 	var subnet net.IP
+ 	var err error
+@@ -398,6 +406,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
  		return "", err
  	}
  
@@ -86,18 +75,10 @@ index 181c49e2..a5aa9a38 100644
  
  func ValidateTemplateArgs(args *TemplateArgs) error {
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-index 034f84e6..f20df3d8 100644
+index 034f84e6..e7bd760f 100644
 --- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 +++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-@@ -22,7 +22,6 @@ import (
- 	"github.com/sirupsen/logrus"
- 
- 	"github.com/lima-vm/lima/v2/pkg/cidata/cloudinittypes"
--	"github.com/lima-vm/lima/v2/pkg/osutil"
- )
- 
- func Run(ctx context.Context) error {
-@@ -117,7 +116,7 @@ func processUserData(ctx context.Context, mnt string) error {
+@@ -117,7 +117,7 @@ func processUserData(ctx context.Context, mnt string) error {
  		}
  	}
  	for _, u := range userData.Users {
@@ -106,7 +87,7 @@ index 034f84e6..f20df3d8 100644
  			errs = append(errs, fmt.Errorf("failed to create user %q: %w", u.Name, err))
  		}
  	}
-@@ -219,13 +218,146 @@ func populateHomeDir(ctx context.Context, uid int, homedir string) error {
+@@ -219,7 +219,138 @@ func populateHomeDir(ctx context.Context, uid int, homedir string) error {
  	return nil
  }
  
@@ -138,7 +119,8 @@ index 034f84e6..f20df3d8 100644
 +	// to the built-in template which stamps version/build info to prevent macOS
 +	// from resetting MiniBuddyLaunchReason to 13 on first GUI login.
 +	var setupAssistantPlist string
-+	if customPlistPath := filepath.Join(mnt, "setup-assistant.plist"); mnt != "" {
++	if mnt != "" {
++		customPlistPath := filepath.Join(mnt, "setup-assistant.plist")
 +		if data, err := os.ReadFile(customPlistPath); err == nil {
 +			setupAssistantPlist = string(data)
 +			logrus.Infof("Using custom SetupAssistant plist from %q", customPlistPath)
@@ -245,18 +227,7 @@ index 034f84e6..f20df3d8 100644
  	homedir := u.Homedir
  	if homedir == "" {
  		return fmt.Errorf("homedir is required for user %q", u.Name)
- 	}
--	if osutil.FileExists(homedir) {
--		logrus.Debugf("homedir %q already exists, skipping user creation for user %q", homedir, u.Name)
-+	// Check OpenDirectory rather than the filesystem: disk patching may pre-create
-+	// the home directory tree (e.g. for per-user TCC database setup) before first boot,
-+	// which would cause a filesystem-existence check to skip user account creation.
-+	if cmd := exec.CommandContext(ctx, "dscl", ".", "-read", "/Users/"+u.Name, "RecordName"); cmd.Run() == nil {
-+		logrus.Debugf("user %q already exists in directory services, skipping creation", u.Name)
- 		return nil
- 	}
- 	if u.UID == "" {
-@@ -281,6 +413,15 @@ func createUser(ctx context.Context, u *cloudinittypes.User) error {
+@@ -281,6 +412,15 @@ func createUser(ctx context.Context, u *cloudinittypes.User) error {
  		return fmt.Errorf("failed to populate home directory for user %q: %w", u.Name, err)
  	}
  
@@ -295,463 +266,8 @@ index afb012e8..57df90f0 100644
  }
  
  type Rosetta struct {
-diff --git pkg/limatype/lima_yaml.go.orig pkg/limatype/lima_yaml.go.orig
-new file mode 100644
-index 00000000..57df90f0
---- /dev/null
-+++ pkg/limatype/lima_yaml.go.orig
-@@ -0,0 +1,429 @@
-+// SPDX-FileCopyrightText: Copyright The Lima Authors
-+// SPDX-License-Identifier: Apache-2.0
-+
-+package limatype
-+
-+import (
-+	"net"
-+	"runtime"
-+
-+	"github.com/lima-vm/go-qcow2reader/image"
-+	"github.com/opencontainers/go-digest"
-+	"github.com/sirupsen/logrus"
-+	"golang.org/x/sys/cpu"
-+)
-+
-+type LimaYAML struct {
-+	Base               BaseTemplates `yaml:"base,omitempty" json:"base,omitempty"`
-+	MinimumLimaVersion *string       `yaml:"minimumLimaVersion,omitempty" json:"minimumLimaVersion,omitempty" jsonschema:"nullable"`
-+	VMType             *VMType       `yaml:"vmType,omitempty" json:"vmType,omitempty" jsonschema:"nullable"`
-+	VMOpts             VMOpts        `yaml:"vmOpts,omitempty" json:"vmOpts,omitempty"`
-+	OS                 *OS           `yaml:"os,omitempty" json:"os,omitempty" jsonschema:"nullable"`
-+	Arch               *Arch         `yaml:"arch,omitempty" json:"arch,omitempty" jsonschema:"nullable"`
-+	Images             []Image       `yaml:"images,omitempty" json:"images,omitempty" jsonschema:"nullable"`
-+	// Deprecated: Use vmOpts.qemu.cpuType instead.
-+	CPUType               CPUType       `yaml:"cpuType,omitempty" json:"cpuType,omitempty" jsonschema:"nullable"`
-+	CPUs                  *int          `yaml:"cpus,omitempty" json:"cpus,omitempty" jsonschema:"nullable"`
-+	Memory                *string       `yaml:"memory,omitempty" json:"memory,omitempty" jsonschema:"nullable"` // go-units.RAMInBytes
-+	Disk                  *string       `yaml:"disk,omitempty" json:"disk,omitempty" jsonschema:"nullable"`     // go-units.RAMInBytes
-+	AdditionalDisks       []Disk        `yaml:"additionalDisks,omitempty" json:"additionalDisks,omitempty" jsonschema:"nullable"`
-+	Mounts                []Mount       `yaml:"mounts,omitempty" json:"mounts,omitempty"`
-+	MountTypesUnsupported []string      `yaml:"mountTypesUnsupported,omitempty" json:"mountTypesUnsupported,omitempty" jsonschema:"nullable"`
-+	MountType             *MountType    `yaml:"mountType,omitempty" json:"mountType,omitempty" jsonschema:"nullable"`
-+	MountInotify          *bool         `yaml:"mountInotify,omitempty" json:"mountInotify,omitempty" jsonschema:"nullable"`
-+	SSH                   SSH           `yaml:"ssh,omitempty" json:"ssh,omitempty"` // REQUIRED (FIXME)
-+	Firmware              Firmware      `yaml:"firmware,omitempty" json:"firmware,omitempty"`
-+	Audio                 Audio         `yaml:"audio,omitempty" json:"audio,omitempty"`
-+	Video                 Video         `yaml:"video,omitempty" json:"video,omitempty"`
-+	Provision             []Provision   `yaml:"provision,omitempty" json:"provision,omitempty"`
-+	UpgradePackages       *bool         `yaml:"upgradePackages,omitempty" json:"upgradePackages,omitempty" jsonschema:"nullable"`
-+	Containerd            Containerd    `yaml:"containerd,omitempty" json:"containerd,omitempty"`
-+	GuestInstallPrefix    *string       `yaml:"guestInstallPrefix,omitempty" json:"guestInstallPrefix,omitempty" jsonschema:"nullable"`
-+	Probes                []Probe       `yaml:"probes,omitempty" json:"probes,omitempty"`
-+	PortForwards          []PortForward `yaml:"portForwards,omitempty" json:"portForwards,omitempty"`
-+	CopyToHost            []CopyToHost  `yaml:"copyToHost,omitempty" json:"copyToHost,omitempty"`
-+	Message               string        `yaml:"message,omitempty" json:"message,omitempty"`
-+	Networks              []Network     `yaml:"networks,omitempty" json:"networks,omitempty" jsonschema:"nullable"`
-+	// `network` was deprecated in Lima v0.7.0, removed in Lima v0.14.0. Use `networks` instead.
-+	Env          map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
-+	Param        map[string]string `yaml:"param,omitempty" json:"param,omitempty"`
-+	DNS          []net.IP          `yaml:"dns,omitempty" json:"dns,omitempty"`
-+	HostResolver HostResolver      `yaml:"hostResolver,omitempty" json:"hostResolver,omitempty"`
-+	// `useHostResolver` was deprecated in Lima v0.8.1, removed in Lima v0.14.0. Use `hostResolver.enabled` instead.
-+	PropagateProxyEnv *bool          `yaml:"propagateProxyEnv,omitempty" json:"propagateProxyEnv,omitempty" jsonschema:"nullable"`
-+	CACertificates    CACertificates `yaml:"caCerts,omitempty" json:"caCerts,omitempty"`
-+	// Deprecated: Use vmOpts.vz.rosetta instead.
-+	Rosetta              Rosetta `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
-+	Plain                *bool   `yaml:"plain,omitempty" json:"plain,omitempty" jsonschema:"nullable"`
-+	TimeZone             *string `yaml:"timezone,omitempty" json:"timezone,omitempty" jsonschema:"nullable"`
-+	NestedVirtualization *bool   `yaml:"nestedVirtualization,omitempty" json:"nestedVirtualization,omitempty" jsonschema:"nullable"`
-+	User                 User    `yaml:"user,omitempty" json:"user,omitempty"`
-+}
-+
-+type BaseTemplates []LocatorWithDigest
-+
-+type LocatorWithDigest struct {
-+	URL    string  `yaml:"url" json:"url"`
-+	Digest *string `yaml:"digest,omitempty" json:"digest,omitempty"` // TODO currently unused
-+}
-+
-+type (
-+	OS        = string
-+	Arch      = string
-+	MountType = string
-+	VMType    = string
-+)
-+
-+type CPUType = map[Arch]string
-+
-+const (
-+	LINUX   OS = "Linux"
-+	DARWIN  OS = "Darwin"
-+	FREEBSD OS = "FreeBSD"
-+
-+	X8664   Arch = "x86_64"
-+	AARCH64 Arch = "aarch64"
-+	ARMV7L  Arch = "armv7l"
-+	PPC64LE Arch = "ppc64le"
-+	RISCV64 Arch = "riscv64"
-+	S390X   Arch = "s390x"
-+
-+	REVSSHFS MountType = "reverse-sshfs"
-+	NINEP    MountType = "9p"
-+	VIRTIOFS MountType = "virtiofs"
-+	WSLMount MountType = "wsl2"
-+
-+	QEMU VMType = "qemu"
-+	VZ   VMType = "vz"
-+	WSL2 VMType = "wsl2"
-+)
-+
-+var (
-+	OSTypes    = []OS{LINUX, DARWIN, FREEBSD}
-+	ArchTypes  = []Arch{X8664, AARCH64, ARMV7L, PPC64LE, RISCV64, S390X}
-+	MountTypes = []MountType{REVSSHFS, NINEP, VIRTIOFS, WSLMount}
-+	VMTypes    = []VMType{QEMU, VZ, WSL2}
-+)
-+
-+type User struct {
-+	Name    *string `yaml:"name,omitempty" json:"name,omitempty" jsonschema:"nullable"`
-+	Comment *string `yaml:"comment,omitempty" json:"comment,omitempty" jsonschema:"nullable"`
-+	Home    *string `yaml:"home,omitempty" json:"home,omitempty" jsonschema:"nullable"`
-+	Shell   *string `yaml:"shell,omitempty" json:"shell,omitempty" jsonschema:"nullable"`
-+	UID     *uint32 `yaml:"uid,omitempty" json:"uid,omitempty" jsonschema:"nullable"`
-+}
-+
-+type VMOpts map[VMType]any
-+
-+type QEMUOpts struct {
-+	MinimumVersion *string `yaml:"minimumVersion,omitempty" json:"minimumVersion,omitempty" jsonschema:"nullable"`
-+	CPUType        CPUType `yaml:"cpuType,omitempty" json:"cpuType,omitempty" jsonschema:"nullable"`
-+}
-+
-+type VZOpts struct {
-+	Rosetta                 Rosetta                  `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
-+	DiskImageFormat         *image.Type              `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	SuppressFirstLoginSetup *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
-+}
-+
-+// SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
-+// If non-nil, the feature is enabled. Plist overrides the built-in com.apple.SetupAssistant.plist
-+// content if non-empty; otherwise the built-in plist is used.
-+type SuppressFirstLoginSetup struct {
-+	Plist string `yaml:"plist,omitempty" json:"plist,omitempty"`
-+}
-+
-+type Rosetta struct {
-+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" jsonschema:"nullable"`
-+	BinFmt  *bool `yaml:"binfmt,omitempty" json:"binfmt,omitempty" jsonschema:"nullable"`
-+}
-+
-+type File struct {
-+	Location string        `yaml:"location" json:"location"` // REQUIRED
-+	Arch     Arch          `yaml:"arch,omitempty" json:"arch,omitempty"`
-+	Digest   digest.Digest `yaml:"digest,omitempty" json:"digest,omitempty"`
-+}
-+
-+type FileWithVMType struct {
-+	File   `yaml:",inline"`
-+	VMType VMType `yaml:"vmType,omitempty" json:"vmType,omitempty"`
-+}
-+
-+type Kernel struct {
-+	File    `yaml:",inline"`
-+	Cmdline string `yaml:"cmdline,omitempty" json:"cmdline,omitempty"`
-+}
-+
-+type Image struct {
-+	File   `yaml:",inline"`
-+	Kernel *Kernel `yaml:"kernel,omitempty" json:"kernel,omitempty"`
-+	Initrd *File   `yaml:"initrd,omitempty" json:"initrd,omitempty"`
-+}
-+
-+type Disk struct {
-+	Name   string   `yaml:"name" json:"name"` // REQUIRED
-+	Format *bool    `yaml:"format,omitempty" json:"format,omitempty"`
-+	FSType *string  `yaml:"fsType,omitempty" json:"fsType,omitempty"`
-+	FSArgs []string `yaml:"fsArgs,omitempty" json:"fsArgs,omitempty"`
-+}
-+
-+type Mount struct {
-+	Location   string   `yaml:"location" json:"location"` // REQUIRED
-+	MountPoint *string  `yaml:"mountPoint,omitempty" json:"mountPoint,omitempty" jsonschema:"nullable"`
-+	Writable   *bool    `yaml:"writable,omitempty" json:"writable,omitempty" jsonschema:"nullable"`
-+	SSHFS      SSHFS    `yaml:"sshfs,omitempty" json:"sshfs,omitempty"`
-+	NineP      NineP    `yaml:"9p,omitempty" json:"9p,omitempty"`
-+	Virtiofs   Virtiofs `yaml:"virtiofs,omitempty" json:"virtiofs,omitempty"`
-+}
-+
-+type SFTPDriver = string
-+
-+const (
-+	SFTPDriverBuiltin           = "builtin"
-+	SFTPDriverOpenSSHSFTPServer = "openssh-sftp-server"
-+)
-+
-+type SSHFS struct {
-+	Cache          *bool       `yaml:"cache,omitempty" json:"cache,omitempty" jsonschema:"nullable"`
-+	FollowSymlinks *bool       `yaml:"followSymlinks,omitempty" json:"followSymlinks,omitempty" jsonschema:"nullable"`
-+	SFTPDriver     *SFTPDriver `yaml:"sftpDriver,omitempty" json:"sftpDriver,omitempty" jsonschema:"nullable"`
-+}
-+
-+type NineP struct {
-+	SecurityModel   *string `yaml:"securityModel,omitempty" json:"securityModel,omitempty" jsonschema:"nullable"`
-+	ProtocolVersion *string `yaml:"protocolVersion,omitempty" json:"protocolVersion,omitempty" jsonschema:"nullable"`
-+	Msize           *string `yaml:"msize,omitempty" json:"msize,omitempty" jsonschema:"nullable"`
-+	Cache           *string `yaml:"cache,omitempty" json:"cache,omitempty" jsonschema:"nullable"`
-+}
-+
-+type Virtiofs struct {
-+	QueueSize *int `yaml:"queueSize,omitempty" json:"queueSize,omitempty"`
-+}
-+
-+type SSH struct {
-+	LocalPort *int `yaml:"localPort,omitempty" json:"localPort,omitempty" jsonschema:"nullable"`
-+
-+	// LoadDotSSHPubKeys loads ~/.ssh/*.pub in addition to $LIMA_HOME/_config/user.pub .
-+	LoadDotSSHPubKeys *bool `yaml:"loadDotSSHPubKeys,omitempty" json:"loadDotSSHPubKeys,omitempty" jsonschema:"nullable"` // default: false
-+	ForwardAgent      *bool `yaml:"forwardAgent,omitempty" json:"forwardAgent,omitempty" jsonschema:"nullable"`           // default: false
-+	ForwardX11        *bool `yaml:"forwardX11,omitempty" json:"forwardX11,omitempty" jsonschema:"nullable"`               // default: false
-+	ForwardX11Trusted *bool `yaml:"forwardX11Trusted,omitempty" json:"forwardX11Trusted,omitempty" jsonschema:"nullable"` // default: false
-+
-+	OverVsock *bool `yaml:"overVsock,omitempty" json:"overVsock,omitempty" jsonschema:"nullable"` // default: depends on VMType
-+}
-+
-+type Firmware struct {
-+	// LegacyBIOS disables UEFI if set.
-+	// LegacyBIOS is ignored for aarch64.
-+	LegacyBIOS *bool `yaml:"legacyBIOS,omitempty" json:"legacyBIOS,omitempty" jsonschema:"nullable"`
-+
-+	// Images specify UEFI images (edk2-aarch64-code.fd.gz).
-+	// Defaults to built-in UEFI.
-+	Images []FileWithVMType `yaml:"images,omitempty" json:"images,omitempty"`
-+}
-+
-+type Audio struct {
-+	// Device is a QEMU audiodev string
-+	Device *string `yaml:"device,omitempty" json:"device,omitempty" jsonschema:"nullable"`
-+}
-+
-+type VNCOptions struct {
-+	Display *string `yaml:"display,omitempty" json:"display,omitempty" jsonschema:"nullable"`
-+}
-+
-+type Video struct {
-+	// Display is a QEMU display string
-+	Display *string    `yaml:"display,omitempty" json:"display,omitempty" jsonschema:"nullable"`
-+	VNC     VNCOptions `yaml:"vnc,omitempty" json:"vnc,omitempty"`
-+}
-+
-+type ProvisionMode = string
-+
-+const (
-+	ProvisionModeSystem     ProvisionMode = "system"
-+	ProvisionModeUser       ProvisionMode = "user"
-+	ProvisionModeBoot       ProvisionMode = "boot"
-+	ProvisionModeDependency ProvisionMode = "dependency"
-+	ProvisionModeAnsible    ProvisionMode = "ansible" // DEPRECATED
-+	ProvisionModeData       ProvisionMode = "data"
-+	ProvisionModeYQ         ProvisionMode = "yq"
-+)
-+
-+type Provision struct {
-+	Mode                            ProvisionMode      `yaml:"mode,omitempty" json:"mode,omitempty" jsonschema:"default=system"`
-+	SkipDefaultDependencyResolution *bool              `yaml:"skipDefaultDependencyResolution,omitempty" json:"skipDefaultDependencyResolution,omitempty"`
-+	Script                          *string            `yaml:"script,omitempty" json:"script,omitempty"`
-+	File                            *LocatorWithDigest `yaml:"file,omitempty" json:"file,omitempty" jsonschema:"nullable"`
-+	Playbook                        string             `yaml:"playbook,omitempty" json:"playbook,omitempty"` // DEPRECATED
-+	// All ProvisionData fields must be nil unless Mode is ProvisionModeData
-+	ProvisionData `yaml:",inline"` // Flatten fields for "strict" YAML mode
-+	// ProvisionModeYQ borrows Owner, Path, and Permissions from ProvisionData
-+	Expression *string `yaml:"expression,omitempty" json:"expression,omitempty" jsonschema:"nullable"`
-+	Format     *string `yaml:"format,omitempty" json:"format,omitempty" jsonschema:"nullable"`
-+}
-+
-+type ProvisionData struct {
-+	Content     *string `yaml:"content,omitempty" json:"content,omitempty" jsonschema:"nullable"`
-+	Overwrite   *bool   `yaml:"overwrite,omitempty" json:"overwrite,omitempty" jsonschema:"nullable"`
-+	Owner       *string `yaml:"owner,omitempty" json:"owner,omitempty"` // any owner string supported by `chown`, defaults to "root:root" on Linux
-+	Path        *string `yaml:"path,omitempty" json:"path,omitempty"`
-+	Permissions *string `yaml:"permissions,omitempty" json:"permissions,omitempty"`
-+}
-+
-+type Containerd struct {
-+	System   *bool  `yaml:"system,omitempty" json:"system,omitempty" jsonschema:"nullable"` // default: false
-+	User     *bool  `yaml:"user,omitempty" json:"user,omitempty" jsonschema:"nullable"`     // default: true
-+	Archives []File `yaml:"archives,omitempty" json:"archives,omitempty"`                   // default: see defaultContainerdArchives
-+}
-+
-+type ProbeMode = string
-+
-+const (
-+	ProbeModeReadiness ProbeMode = "readiness"
-+)
-+
-+type Probe struct {
-+	Mode        ProbeMode          `yaml:"mode,omitempty" json:"mode,omitempty" jsonschema:"default=readiness"`
-+	Description string             `yaml:"description,omitempty" json:"description,omitempty"`
-+	Script      *string            `yaml:"script,omitempty" json:"script,omitempty"`
-+	File        *LocatorWithDigest `yaml:"file,omitempty" json:"file,omitempty" jsonschema:"nullable"`
-+	Hint        string             `yaml:"hint,omitempty" json:"hint,omitempty"`
-+}
-+
-+type Proto = string
-+
-+const (
-+	ProtoTCP Proto = "tcp"
-+	ProtoUDP Proto = "udp"
-+	ProtoAny Proto = "any"
-+)
-+
-+type PortForward struct {
-+	GuestIPMustBeZero *bool  `yaml:"guestIPMustBeZero,omitempty" json:"guestIPMustBeZero,omitempty"`
-+	GuestIP           net.IP `yaml:"guestIP,omitempty" json:"guestIP,omitempty"`
-+	GuestPort         int    `yaml:"guestPort,omitempty" json:"guestPort,omitempty"`
-+	GuestPortRange    [2]int `yaml:"guestPortRange,omitempty" json:"guestPortRange,omitempty"`
-+	GuestSocket       string `yaml:"guestSocket,omitempty" json:"guestSocket,omitempty"`
-+	HostIP            net.IP `yaml:"hostIP,omitempty" json:"hostIP,omitempty"`
-+	HostPort          int    `yaml:"hostPort,omitempty" json:"hostPort,omitempty"`
-+	HostPortRange     [2]int `yaml:"hostPortRange,omitempty" json:"hostPortRange,omitempty"`
-+	HostSocket        string `yaml:"hostSocket,omitempty" json:"hostSocket,omitempty"`
-+	Proto             Proto  `yaml:"proto,omitempty" json:"proto,omitempty"`
-+	Reverse           bool   `yaml:"reverse,omitempty" json:"reverse,omitempty"`
-+	Ignore            bool   `yaml:"ignore,omitempty" json:"ignore,omitempty"`
-+	Static            bool   `yaml:"static,omitempty" json:"static,omitempty"`
-+}
-+
-+type CopyToHost struct {
-+	GuestFile    string `yaml:"guest,omitempty" json:"guest,omitempty"`
-+	HostFile     string `yaml:"host,omitempty" json:"host,omitempty"`
-+	DeleteOnStop bool   `yaml:"deleteOnStop,omitempty" json:"deleteOnStop,omitempty"`
-+}
-+
-+type Network struct {
-+	// `Lima` and `Socket` are mutually exclusive; exactly one is required
-+	Lima string `yaml:"lima,omitempty" json:"lima,omitempty"`
-+	// Socket is a QEMU-compatible socket
-+	Socket string `yaml:"socket,omitempty" json:"socket,omitempty"`
-+	// VZNAT uses VZNATNetworkDeviceAttachment. Needs VZ. No root privilege is required.
-+	VZNAT *bool `yaml:"vzNAT,omitempty" json:"vzNAT,omitempty"`
-+
-+	MACAddress string  `yaml:"macAddress,omitempty" json:"macAddress,omitempty"`
-+	Interface  string  `yaml:"interface,omitempty" json:"interface,omitempty"`
-+	Metric     *uint32 `yaml:"metric,omitempty" json:"metric,omitempty"`
-+}
-+
-+type HostResolver struct {
-+	Enabled *bool             `yaml:"enabled,omitempty" json:"enabled,omitempty" jsonschema:"nullable"`
-+	IPv6    *bool             `yaml:"ipv6,omitempty" json:"ipv6,omitempty" jsonschema:"nullable"`
-+	Hosts   map[string]string `yaml:"hosts,omitempty" json:"hosts,omitempty" jsonschema:"nullable"`
-+}
-+
-+type CACertificates struct {
-+	RemoveDefaults *bool    `yaml:"removeDefaults,omitempty" json:"removeDefaults,omitempty" jsonschema:"nullable"` // default: false
-+	Files          []string `yaml:"files,omitempty" json:"files,omitempty" jsonschema:"nullable"`
-+	Certs          []string `yaml:"certs,omitempty" json:"certs,omitempty" jsonschema:"nullable"`
-+}
-+
-+type PreConfiguredDriverPayload struct {
-+	Config   LimaYAML `json:"config"`
-+	FilePath string   `json:"filePath"`
-+}
-+
-+func NewOS(osname string) OS {
-+	switch osname {
-+	case "linux":
-+		return LINUX
-+	case "darwin":
-+		return DARWIN
-+	default:
-+		logrus.Warnf("Unknown os: %s", osname)
-+		return osname
-+	}
-+}
-+
-+func Goarm() int {
-+	if runtime.GOOS != "linux" {
-+		return 0
-+	}
-+	if runtime.GOARCH != "arm" {
-+		return 0
-+	}
-+	if cpu.ARM.HasVFPv3 {
-+		return 7
-+	}
-+	if cpu.ARM.HasVFP {
-+		return 6
-+	}
-+	return 5 // default
-+}
-+
-+func NewArch(arch string) Arch {
-+	switch arch {
-+	case "amd64":
-+		return X8664
-+	case "arm64":
-+		return AARCH64
-+	case "arm":
-+		arm := Goarm()
-+		if arm == 7 {
-+			return ARMV7L
-+		}
-+		logrus.Warnf("Unknown arm: %d", arm)
-+		return arch
-+	case "ppc64le":
-+		return PPC64LE
-+	case "riscv64":
-+		return RISCV64
-+	case "s390x":
-+		return S390X
-+	default:
-+		logrus.Warnf("Unknown arch: %s", arch)
-+		return arch
-+	}
-+}
-+
-+func IsNativeArch(arch Arch) bool {
-+	nativeX8664 := arch == X8664 && runtime.GOARCH == "amd64"
-+	nativeAARCH64 := arch == AARCH64 && runtime.GOARCH == "arm64"
-+	nativeARMV7L := arch == ARMV7L && runtime.GOARCH == "arm" && Goarm() == 7
-+	nativePPC64LE := arch == PPC64LE && runtime.GOARCH == "ppc64le"
-+	nativeRISCV64 := arch == RISCV64 && runtime.GOARCH == "riscv64"
-+	nativeS390X := arch == S390X && runtime.GOARCH == "s390x"
-+	return nativeX8664 || nativeAARCH64 || nativeARMV7L || nativePPC64LE || nativeRISCV64 || nativeS390X
-+}
-+
-+func DefaultDriver() VMType {
-+	switch runtime.GOOS {
-+	case "darwin":
-+		return VZ
-+	case "windows":
-+		return WSL2
-+	default:
-+		return QEMU
-+	}
-+}
-+
-+func DefaultNonNativeArchDriver() VMType {
-+	return QEMU
-+}
-diff --git pkg/limatype/lima_yaml.go.rej pkg/limatype/lima_yaml.go.rej
-new file mode 100644
-index 00000000..ae14ff88
---- /dev/null
-+++ pkg/limatype/lima_yaml.go.rej
-@@ -0,0 +1,14 @@
-+@@ -121,9 +121,10 @@
-+ }
-+ 
-+ type VZOpts struct {
-+-	Rosetta                  Rosetta                  `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
-+-	DiskImageFormat          *image.Type              `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+-	SuppressFirstLoginSetup  *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
-++	Rosetta                 Rosetta                  `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
-++	DiskImageFormat         *image.Type              `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-++	SuppressFirstLoginSetup *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
-++	GuestPatch              VZGuestPatch             `yaml:"guestPatch,omitempty" json:"guestPatch,omitempty"`
-+ }
-+ 
-+ // SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index ab01f113..7f93ded2 100644
+index ab01f113..b9f3f18a 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -33,6 +33,81 @@ limactl shell macos cat /Users/${USER}.guest/password
@@ -782,9 +298,9 @@ index ab01f113..7f93ded2 100644
 +
 +### Custom plist
 +
-+The built-in `com.apple.SetupAssistant.plist` template is shown below. At VM
-+creation time, `<build>` is replaced with the output of `sw_vers -buildVersion`
-+and `<version>` with `sw_vers -productVersion` from inside the guest. The
++The built-in `com.apple.SetupAssistant.plist` template is shown below. At first
++boot, the guest agent replaces `<build>` with the output of `sw_vers -buildVersion`
++and `<version>` with `sw_vers -productVersion`, both queried inside the guest. The
 +version stamps are what macOS checks to decide whether setup is already
 +complete — without them macOS resets `MiniBuddyLaunchReason` to 13 on first
 +GUI login.
@@ -836,125 +352,3 @@ index ab01f113..7f93ded2 100644
  ## Caveats
  - No support for turning off the video display.
  - No support for automatic port forwarding.
-diff --git website/content/en/docs/usage/guests/macos.md.orig website/content/en/docs/usage/guests/macos.md.orig
-new file mode 100644
-index 00000000..7f93ded2
---- /dev/null
-+++ website/content/en/docs/usage/guests/macos.md.orig
-@@ -0,0 +1,116 @@
-+---
-+title: macOS
-+weight: 2
-+---
-+
-+| ⚡ Requirement | Lima >= 2.1, macOS, ARM  |
-+|-------------------|-----------------------------|
-+
-+Running macOS guests is experimentally supported since Lima v2.1.
-+
-+{{< tabpane text=true >}}
-+{{% tab header="macOS only" %}}
-+```bash
-+limactl start template:macos
-+```
-+{{% /tab %}}
-+{{% tab header="With Homebrew" %}}
-+```bash
-+limactl start template:homebrew-macos
-+```
-+{{% /tab %}}
-+{{< /tabpane >}}
-+
-+The user password is randomly generated and stored in the `~/password` file in the VM.
-+Consider changing it after the first login.
-+
-+```bash
-+limactl shell macos cat /Users/${USER}.guest/password
-+```
-+
-+## Difference from Linux guests
-+- Password login is enabled
-+- Password-less sudo is disabled, except for `/sbin/shutdown -h now`
-+- Several features are not implemented yet. See [Caveats](#caveats) below.
-+
-+## Suppressing first-login setup screens
-+
-+By default, macOS shows a series of setup wizard screens (Setup Assistant /
-+mini-buddy) on the first GUI login. For automated or headless-style macOS VMs
-+this is inconvenient. Set `vmOpts.vz.suppressFirstLoginSetup` to have Lima
-+pre-populate the relevant preference plists during provisioning, before any GUI
-+session starts, so the setup screens are skipped automatically:
-+
-+```yaml
-+vmOpts:
-+  vz:
-+    suppressFirstLoginSetup: {}
-+```
-+
-+This writes `com.apple.SetupAssistant.plist` into the guest user's home
-+directory and pre-configures `com.apple.SoftwareUpdate` system preferences so
-+that the "Update Mac Automatically" dialog is also suppressed. The preferences
-+are written as root (via the Lima guest agent) before first login, so macOS
-+reads them as the authoritative initial state and does not reset them.
-+
-+**Default:** unset — setup screens are shown as normal.
-+
-+### Custom plist
-+
-+The built-in `com.apple.SetupAssistant.plist` template is shown below. At VM
-+creation time, `<build>` is replaced with the output of `sw_vers -buildVersion`
-+and `<version>` with `sw_vers -productVersion` from inside the guest. The
-+version stamps are what macOS checks to decide whether setup is already
-+complete — without them macOS resets `MiniBuddyLaunchReason` to 13 on first
-+GUI login.
-+
-+```yaml
-+vmOpts:
-+  vz:
-+    suppressFirstLoginSetup:
-+      plist: |
-+        <?xml version="1.0" encoding="UTF-8"?>
-+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-+        <plist version="1.0">
-+        <dict>
-+        	<key>DidSeeAccessibility</key><true/>
-+        	<key>DidSeeActivationLock</key><true/>
-+        	<key>DidSeeAppStore</key><true/>
-+        	<key>DidSeeAppearanceSetup</key><true/>
-+        	<key>DidSeeApplePaySetup</key><true/>
-+        	<key>DidSeeCloudSetup</key><true/>
-+        	<key>DidSeeLockdownMode</key><true/>
-+        	<key>DidSeePrivacy</key><true/>
-+        	<key>DidSeeScreenTime</key><true/>
-+        	<key>DidSeeSetupSequence</key><true/>
-+        	<key>DidSeeSiriSetup</key><true/>
-+        	<key>DidSeeSyncSetup</key><true/>
-+        	<key>DidSeeSyncSetup2</key><true/>
-+        	<key>DidSeeTermsOfAddress</key><true/>
-+        	<key>DidSeeTouchIDSetup</key><true/>
-+        	<key>DidSeeiCloudLoginForStorageServices</key><true/>
-+        	<key>LastPreLoginTasksPerformedBuild</key><string><build></string>
-+        	<key>LastPreLoginTasksPerformedVersion</key><string><version></string>
-+        	<key>LastSeenAgeRangeSelectionProductVersion</key><string><version></string>
-+        	<key>LastSeenBuddyBuildVersion</key><string><build></string>
-+        	<key>LastSeenCloudProductVersion</key><string><version></string>
-+        	<key>LastSeenDiagnosticsProductVersion</key><string><version></string>
-+        	<key>MiniBuddyLaunchReason</key><integer>0</integer>
-+        	<key>MiniBuddyShouldLaunchToResumeSetup</key><false/>
-+        	<key>SkipExpressSettingsUpdating</key><true/>
-+        	<key>SkipFirstLoginOptimization</key><true/>
-+        </dict>
-+        </plist>
-+```
-+
-+When a custom `plist` is supplied, it is used verbatim — no `<build>`/`<version>`
-+substitution is performed. Copy and adapt the built-in template above, then
-+supply the actual build and version strings for your target OS release if
-+needed.
-+
-+## Caveats
-+- No support for turning off the video display.
-+- No support for automatic port forwarding.
-+  Use `ssh -L` to manually set up port forwarding, or,
-+  use the [`vzNAT`](../../config/network/vmnet.md#vznat) network to access the guest by its IP.
-+- No support for installing custom `caCerts`
