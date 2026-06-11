@@ -1,5 +1,5 @@
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index f6b65254..ddf26b6f 100644
+index f6b65254..d7704154 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -93,6 +93,7 @@ type LimaVzDriver struct {
@@ -18,46 +18,17 @@ index f6b65254..ddf26b6f 100644
  
  	return &driver.ConfiguredDriver{
  		Driver: l,
-@@ -370,7 +372,9 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+@@ -370,7 +372,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  		patchedMarker := disk + ".patched" // empty file
  		if !osutil.FileExists(patchedMarker) {
  			logrus.Infof("Patching macOS disk %#q", disk)
 -			if err := macos.Patch(ctx, disk); err != nil {
-+			guestHomeRelDir := fmt.Sprintf("Users/%s.guest", *l.Instance.Config.User.Name)
-+			guestUID := *l.Instance.Config.User.UID
-+			if err := macos.Patch(ctx, disk, l.guestPatch.TCCPermissions, guestHomeRelDir, guestUID); err != nil {
++			if err := macos.Patch(ctx, disk, l.guestPatch.TCCPermissions); err != nil {
  				return err
  			}
  			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
-diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-index e7bd760f..35bfe35e 100644
---- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-+++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-@@ -22,7 +22,6 @@ import (
- 	"github.com/sirupsen/logrus"
- 
- 	"github.com/lima-vm/lima/v2/pkg/cidata/cloudinittypes"
--	"github.com/lima-vm/lima/v2/pkg/osutil"
- )
- 
- func Run(ctx context.Context) error {
-@@ -355,8 +354,12 @@ func createUser(ctx context.Context, u *cloudinittypes.User, suppressFirstLoginS
- 	if homedir == "" {
- 		return fmt.Errorf("homedir is required for user %q", u.Name)
- 	}
--	if osutil.FileExists(homedir) {
--		logrus.Debugf("homedir %q already exists, skipping user creation for user %q", homedir, u.Name)
-+	// Check OpenDirectory rather than the filesystem: TCC disk patching may
-+	// pre-create the home directory tree (for the per-user TCC database) before
-+	// first boot, which would cause a filesystem-existence check to skip user
-+	// account creation.
-+	if cmd := exec.CommandContext(ctx, "dscl", ".", "-read", "/Users/"+u.Name, "RecordName"); cmd.Run() == nil {
-+		logrus.Debugf("user %q already exists in directory services, skipping creation", u.Name)
- 		return nil
- 	}
- 	if u.UID == "" {
 diff --git pkg/guestpatch/macos/macos_darwin.go pkg/guestpatch/macos/macos_darwin.go
-index c68e6e7e..ce310443 100644
+index c68e6e7e..a08724ca 100644
 --- pkg/guestpatch/macos/macos_darwin.go
 +++ pkg/guestpatch/macos/macos_darwin.go
 @@ -15,6 +15,7 @@ import (
@@ -68,7 +39,7 @@ index c68e6e7e..ce310443 100644
  	"github.com/lima-vm/lima/v2/pkg/limatype/filenames"
  	"github.com/lima-vm/lima/v2/pkg/osutil"
  )
-@@ -37,50 +38,56 @@ func attachImageWithRetry(ctx context.Context, disk string, retry int) (*asifuti
+@@ -37,25 +38,28 @@ func attachImageWithRetry(ctx context.Context, disk string, retry int) (*asifuti
  }
  
  // Patch prepares a macOS guest disk for first boot. It writes the
@@ -81,163 +52,136 @@ index c68e6e7e..ce310443 100644
 +// permission entries via a noowners mount, then fixes file ownership
 +// by patching APFS inode records directly on the raw disk image.
 +// No sudo required.
-+//
-+// guestHomeRelDir is the relative path of the guest home directory on the
-+// Data volume (e.g. "Users/alice.guest"). guestUID is the guest user's UID.
-+func Patch(ctx context.Context, disk string, tccPerms []limatype.TCCPermission, guestHomeRelDir string, guestUID uint32) error {
-+	rootPaths, userPaths, err := patchWriteGuestFiles(ctx, disk, tccPerms, guestHomeRelDir)
++func Patch(ctx context.Context, disk string, tccPerms []limatype.TCCPermission) error {
++	tccPaths, err := patchWriteGuestFiles(ctx, disk, tccPerms)
 +	if err != nil {
  		return err
  	}
 -	return patchFixOwnership(ctx, disk)
-+	return patchFixOwnership(ctx, disk, rootPaths, userPaths, guestUID)
++	return patchFixOwnership(ctx, disk, tccPaths)
  }
  
  // patchWriteGuestFiles attaches the disk image, mounts the Data
  // volume with noowners, writes guest files, then detaches.
 -func patchWriteGuestFiles(ctx context.Context, disk string) error {
--	attached, err := attachImageWithRetry(ctx, disk, 3)
--	if err != nil {
++// Returns the relative paths of TCC files that need root:wheel ownership.
++func patchWriteGuestFiles(ctx context.Context, disk string, tccPerms []limatype.TCCPermission) ([]string, error) {
+ 	attached, err := attachImageWithRetry(ctx, disk, 3)
+ 	if err != nil {
 -		return fmt.Errorf("failed to attach disk: %w", err)
-+// Returns rootPaths (need root:wheel) and userPaths (need guestUID:staff).
-+func patchWriteGuestFiles(ctx context.Context, disk string, tccPerms []limatype.TCCPermission, guestHomeRelDir string) (rootPaths, userPaths []string, err error) {
-+	attached, attachErr := attachImageWithRetry(ctx, disk, 3)
-+	if attachErr != nil {
-+		return nil, nil, fmt.Errorf("failed to attach disk: %w", attachErr)
++		return nil, fmt.Errorf("failed to attach disk: %w", err)
  	}
  	if attached == nil || attached.Data == "" {
 -		return errors.New("failed to find data slice in attached disk")
-+		return nil, nil, errors.New("failed to find data slice in attached disk")
++		return nil, errors.New("failed to find data slice in attached disk")
  	}
  	dataDevPath := "/dev/" + attached.Data
  	defer func() {
--		// Detaching the data slice is enough to detach the whole ASIF.
--		if err := asifutil.DetachASIF(dataDevPath); err != nil {
--			logrus.WithError(err).Warnf("failed to detach %q (%q)", dataDevPath, disk)
-+		if detachErr := asifutil.DetachASIF(dataDevPath); detachErr != nil {
-+			logrus.WithError(detachErr).Warnf("failed to detach %q (%q)", dataDevPath, disk)
- 		}
- 	}()
- 
+@@ -68,19 +72,19 @@ func patchWriteGuestFiles(ctx context.Context, disk string) error {
  	instDir := filepath.Dir(disk)
  	mnt := filepath.Join(instDir, filenames.MntDir)
  	if err := os.MkdirAll(mnt, 0o755); err != nil {
 -		return fmt.Errorf("failed to create mount point %q: %w", mnt, err)
-+		return nil, nil, fmt.Errorf("failed to create mount point %q: %w", mnt, err)
++		return nil, fmt.Errorf("failed to create mount point %q: %w", mnt, err)
  	}
  	defer func() {
--		if err := os.Remove(mnt); err != nil {
--			logrus.WithError(err).Warnf("failed to remove mount point %q", mnt)
-+		if rmErr := os.Remove(mnt); rmErr != nil {
-+			logrus.WithError(rmErr).Warnf("failed to remove mount point %q", mnt)
+ 		if err := os.Remove(mnt); err != nil {
+ 			logrus.WithError(err).Warnf("failed to remove mount point %q", mnt)
  		}
  	}()
 -	return writeGuestFiles(ctx, dataDevPath, mnt)
-+	return writeGuestFiles(ctx, dataDevPath, mnt, tccPerms, guestHomeRelDir)
++	return writeGuestFiles(ctx, dataDevPath, mnt, tccPerms)
  }
  
--// patchFixOwnership attaches the disk image and patches APFS inode
--// records on the raw container device to set root:wheel ownership.
+ // patchFixOwnership attaches the disk image and patches APFS inode
+ // records on the raw container device to set root:wheel ownership.
 -func patchFixOwnership(ctx context.Context, disk string) error {
-+// patchFixOwnership attaches the disk image and patches APFS inode records
-+// on the raw container device to set correct ownership.
-+// rootPaths are set to root:wheel (0:0); userPaths are set to guestUID:staff (guestUID:20).
-+func patchFixOwnership(ctx context.Context, disk string, rootPaths, userPaths []string, guestUID uint32) error {
++func patchFixOwnership(ctx context.Context, disk string, tccPaths []string) error {
  	attached, err := attachImageWithRetry(ctx, disk, 3)
  	if err != nil {
  		return fmt.Errorf("failed to attach disk for ownership fix: %w", err)
-@@ -99,30 +106,38 @@ func patchFixOwnership(ctx context.Context, disk string) error {
- 		return errors.New("diskutil did not report an APFS container device")
- 	}
+@@ -101,16 +105,18 @@ func patchFixOwnership(ctx context.Context, disk string) error {
  
--	// Patch APFS inode records via the raw container device.
--	// The noowners mount stores files with uid=99 (nobody);
+ 	// Patch APFS inode records via the raw container device.
+ 	// The noowners mount stores files with uid=99 (nobody);
 -	// LaunchDaemon plists must be owned by root:wheel for launchd
 -	// to load them, so we patch them to UID 0 / GID 0 directly.
++	// LaunchDaemon plists and TCC database files must be owned by
++	// root:wheel, so we patch them to UID 0 / GID 0 directly.
  	containerDev := "/dev/r" + attached.Container
 -	if err = apfs.Chown(containerDev, apfs.VolRoleData, 0, 0,
-+
-+	// Fixed system files always owned by root:wheel.
-+	systemPaths := []string{
++	rootPaths := []string{
  		"private/var/db/.AppleSetupDone",
  		"Library/User Template/.skipbuddy",
  		"usr/local/sbin",
  		"usr/local/sbin/lima-macos-init.sh",
  		"Library/LaunchDaemons/io.lima-vm.lima-macos-init.plist",
 -	); err != nil {
--		return fmt.Errorf("failed to fix file ownership on disk: %w", err)
 +	}
-+	systemPaths = append(systemPaths, rootPaths...)
-+	if err = apfs.Chown(containerDev, apfs.VolRoleData, 0, 0, systemPaths...); err != nil {
-+		return fmt.Errorf("failed to fix root file ownership on disk: %w", err)
-+	}
-+
-+	// User TCC files owned by the guest user (GID 20 = macOS staff, default for sysadminctl -addUser).
-+	if len(userPaths) > 0 {
-+		if err = apfs.Chown(containerDev, apfs.VolRoleData, guestUID, 20, userPaths...); err != nil {
-+			return fmt.Errorf("failed to fix user file ownership on disk: %w", err)
-+		}
++	rootPaths = append(rootPaths, tccPaths...)
++	if err = apfs.Chown(containerDev, apfs.VolRoleData, 0, 0, rootPaths...); err != nil {
+ 		return fmt.Errorf("failed to fix file ownership on disk: %w", err)
  	}
  
- 	return nil
+@@ -118,11 +124,12 @@ func patchFixOwnership(ctx context.Context, disk string) error {
  }
  
  // writeGuestFiles mounts the data volume with noowners and writes the
 -// LaunchDaemon plist, init script, and setup markers.
 -func writeGuestFiles(ctx context.Context, dataSliceDevice, mnt string) error {
 +// LaunchDaemon plist, init script, setup markers, and optional TCC entries.
-+// Returns rootPaths (system TCC files, need root:wheel) and userPaths (per-user TCC files).
-+func writeGuestFiles(ctx context.Context, dataSliceDevice, mnt string, tccPerms []limatype.TCCPermission, guestHomeRelDir string) (rootPaths, userPaths []string, err error) {
++// Returns the relative paths of TCC files that need root:wheel ownership.
++func writeGuestFiles(ctx context.Context, dataSliceDevice, mnt string, tccPerms []limatype.TCCPermission) ([]string, error) {
  	// Mount with "noowners" so non-root users can write to the volume.
  	if err := osutil.Mount(ctx, "apfs", dataSliceDevice, mnt, []string{"noowners"}); err != nil {
 -		return err
-+		return nil, nil, err
++		return nil, err
  	}
  	defer func() {
  		if err := osutil.Umount(ctx, mnt); err != nil {
-@@ -136,7 +151,7 @@ func writeGuestFiles(ctx context.Context, dataSliceDevice, mnt string) error {
+@@ -136,7 +143,7 @@ func writeGuestFiles(ctx context.Context, dataSliceDevice, mnt string) error {
  	}
  	for _, file := range filesToTouch {
  		if err := osutil.Touch(file); err != nil {
 -			return fmt.Errorf("failed to touch %q: %w", file, err)
-+			return nil, nil, fmt.Errorf("failed to touch %q: %w", file, err)
++			return nil, fmt.Errorf("failed to touch %q: %w", file, err)
  		}
  	}
  
-@@ -150,10 +165,10 @@ fi
+@@ -150,10 +157,10 @@ fi
  exec /Volumes/cidata/lima-guestagent fake-cloud-init
  `
  	if err := os.MkdirAll(filepath.Join(mnt, "usr/local/sbin"), 0o755); err != nil {
 -		return err
-+		return nil, nil, err
++		return nil, err
  	}
  	if err := os.WriteFile(filepath.Join(mnt, "usr/local/sbin/lima-macos-init.sh"), []byte(initSh), 0o755); err != nil {
 -		return err
-+		return nil, nil, err
++		return nil, err
  	}
  
  	const plist = `<?xml version="1.0" encoding="UTF-8"?>
-@@ -176,7 +191,12 @@ exec /Volumes/cidata/lima-guestagent fake-cloud-init
+@@ -176,7 +183,12 @@ exec /Volumes/cidata/lima-guestagent fake-cloud-init
  </plist>
  `
  	if err := os.WriteFile(filepath.Join(mnt, "Library/LaunchDaemons/io.lima-vm.lima-macos-init.plist"), []byte(plist), 0o755); err != nil {
 -		return err
-+		return nil, nil, err
++		return nil, err
  	}
 -	return nil
 +
-+	rp, up, err := patchTCC(ctx, mnt, guestHomeRelDir, tccPerms)
++	tccPaths, err := patchTCC(ctx, mnt, tccPerms)
 +	if err != nil {
-+		return nil, nil, fmt.Errorf("failed to patch TCC database: %w", err)
++		return nil, fmt.Errorf("failed to patch TCC database: %w", err)
 +	}
-+	return rp, up, nil
++	return tccPaths, nil
  }
 diff --git pkg/guestpatch/macos/tcc_darwin.go pkg/guestpatch/macos/tcc_darwin.go
 new file mode 100644
-index 00000000..717f4719
+index 00000000..77e651c9
 --- /dev/null
 +++ pkg/guestpatch/macos/tcc_darwin.go
-@@ -0,0 +1,401 @@
+@@ -0,0 +1,318 @@
 +// SPDX-FileCopyrightText: Copyright The Lima Authors
 +// SPDX-License-Identifier: Apache-2.0
 +
@@ -256,17 +200,13 @@ index 00000000..717f4719
 +)
 +
 +type tccEntry struct {
-+	service                      string
-+	client                       string
-+	clientType                   int    // 0=bundle, 1=path
-+	authValue                    int    // 0=deny, 2=allow
-+	authReason                   int    // 0=use default (4); 3=user-set; 4=admin/system
-+	authVersion                  int    // usually 1; kTCCServicePostEvent uses 2
-+	csreq                        []byte // nil = no csreq (skips code-signing check)
-+	indirectObjectIdentifier     string // "" means use "UNUSED"; for AppleEvents: bundle/path of receiver
-+	indirectObjectIdentifierType int    // 0=bundle, 1=path
-+	indirectObjectCodeIdentity   []byte // csreq of receiver app; nil = NULL
-+	userLevel                    bool   // true = write to per-user TCC DB, false = system TCC DB
++	service     string
++	client      string
++	clientType  int    // 0=bundle, 1=path
++	authValue   int    // 0=deny, 2=allow
++	authReason  int    // 0=use default (4); 3=user-set; 4=admin/system
++	authVersion int    // usually 1; kTCCServicePostEvent uses 2
++	csreq       []byte // nil = no csreq (skips code-signing check)
 +}
 +
 +// csreq blobs generated via:
@@ -282,15 +222,6 @@ index 00000000..717f4719
 +	csreqSSHDKeygen = mustDecodeHex(
 +		"fade0c000000003c0000000100000006000000020000001d" +
 +			"636f6d2e6170706c652e737368642d6b657967656e2d777261707065720000000000000003")
-+	// Receiver csreq blobs for AppleEvents presets.
-+	// Genuine user-consent rows include the receiver's code-signing requirement;
-+	// omitting it (NULL) caused tccd to delete the entries on first boot (dev.9).
-+	csreqFinder = mustDecodeHex(
-+		"fade0c000000002c00000001000000060000000200000010" +
-+			"636f6d2e6170706c652e66696e64657200000003")
-+	csreqSystemEvents = mustDecodeHex(
-+		"fade0c000000003400000001000000060000000200000016" +
-+			"636f6d2e6170706c652e73797374656d6576656e7473000000000003")
 +)
 +
 +func mustDecodeHex(s string) []byte {
@@ -301,9 +232,8 @@ index 00000000..717f4719
 +	return b
 +}
 +
-+// tccPresets maps preset name → one or more TCC entries to insert.
-+// System-level entries (userLevel=false) go into /Library/Application Support/com.apple.TCC/TCC.db.
-+// User-level entries (userLevel=true) go into ~/Library/Application Support/com.apple.TCC/TCC.db.
++// tccPresets maps preset name → one or more TCC entries to insert into the
++// system TCC database (/Library/Application Support/com.apple.TCC/TCC.db).
 +// Captured from macOS 15 after manually granting each permission.
 +var tccPresets = map[string][]tccEntry{
 +	// sshd-full-disk-access: allows the SSH daemon to read any file on the system.
@@ -351,69 +281,20 @@ index 00000000..717f4719
 +			csreq:       csreqTerminal,
 +		},
 +	},
-+	// terminal-apple-events: allows Terminal to send AppleEvents to System Events,
-+	// enabling AppleScript/UI automation from Terminal windows and .command scripts.
-+	// Written into the system TCC DB with auth_reason=4 (system policy).
-+	// indirect_object_code_identity carries the System Events csreq — genuine user-consent
-+	// rows always populate this field; omitting it (dev.9, NULL) caused tccd to delete
-+	// the entries on first boot.
-+	"terminal-apple-events": {
-+		{
-+			service:                      "kTCCServiceAppleEvents",
-+			client:                       "com.apple.Terminal",
-+			clientType:                   0,
-+			authValue:                    2,
-+			authVersion:                  1,
-+			csreq:                        csreqTerminal,
-+			indirectObjectIdentifier:     "com.apple.systemevents",
-+			indirectObjectIdentifierType: 0,
-+			indirectObjectCodeIdentity:   csreqSystemEvents,
-+		},
-+	},
-+	// sshd-apple-events-finder: allows the SSH daemon to send AppleEvents to Finder.
-+	// Required for SSH-based automation (e.g. setting wallpaper via osascript).
-+	// indirect_object_code_identity carries the Finder csreq — same rationale as
-+	// terminal-apple-events above.
-+	"sshd-apple-events-finder": {
-+		{
-+			service:                      "kTCCServiceAppleEvents",
-+			client:                       "/usr/libexec/sshd-keygen-wrapper",
-+			clientType:                   1,
-+			authValue:                    2,
-+			authVersion:                  1,
-+			csreq:                        csreqSSHDKeygen,
-+			indirectObjectIdentifier:     "com.apple.finder",
-+			indirectObjectIdentifierType: 0,
-+			indirectObjectCodeIdentity:   csreqFinder,
-+		},
-+	},
 +}
 +
-+// patchTCC writes TCC permission entries into the system and per-user TCC databases
-+// on the mounted guest disk. It creates directory structures as needed and returns
-+// the relative paths of newly created entries split by ownership:
-+//   - rootPaths: owned by root:wheel (system TCC database files)
-+//   - userPaths: owned by the guest user (user TCC database files)
-+func patchTCC(ctx context.Context, mnt, guestHomeRelDir string, perms []limatype.TCCPermission) (rootPaths, userPaths []string, err error) {
-+	if len(perms) == 0 {
-+		return nil, nil, nil
-+	}
-+
-+	var systemEntries, userEntries []tccEntry
++// buildTCCEntries expands presets and validates custom permissions into
++// concrete TCC database entries.
++func buildTCCEntries(perms []limatype.TCCPermission) ([]tccEntry, error) {
++	var entries []tccEntry
 +	for _, p := range perms {
 +		if p.Preset != "" {
 +			preset, ok := tccPresets[p.Preset]
 +			if !ok {
-+				return nil, nil, fmt.Errorf("unknown TCC preset %q; available: %s",
++				return nil, fmt.Errorf("unknown TCC preset %q; available: %s",
 +					p.Preset, availablePresets())
 +			}
-+			for _, e := range preset {
-+				if e.userLevel {
-+					userEntries = append(userEntries, e)
-+				} else {
-+					systemEntries = append(systemEntries, e)
-+				}
-+			}
++			entries = append(entries, preset...)
 +			continue
 +		}
 +		e := tccEntry{service: p.Service, client: p.Client}
@@ -423,7 +304,7 @@ index 00000000..717f4719
 +		case "path":
 +			e.clientType = 1
 +		default:
-+			return nil, nil, fmt.Errorf("tccPermission clientType %q: expected \"bundle\" or \"path\"", p.ClientType)
++			return nil, fmt.Errorf("tccPermission clientType %q: expected \"bundle\" or \"path\"", p.ClientType)
 +		}
 +		switch p.AuthValue {
 +		case "allow", "":
@@ -431,47 +312,33 @@ index 00000000..717f4719
 +		case "deny":
 +			e.authValue = 0
 +		default:
-+			return nil, nil, fmt.Errorf("tccPermission authValue %q: expected \"allow\" or \"deny\"", p.AuthValue)
++			return nil, fmt.Errorf("tccPermission authValue %q: expected \"allow\" or \"deny\"", p.AuthValue)
 +		}
 +		e.authVersion = 1
-+		if p.Receiver != "" {
-+			e.indirectObjectIdentifier = p.Receiver
-+			switch p.ReceiverType {
-+			case "bundle", "":
-+				e.indirectObjectIdentifierType = 0
-+			case "path":
-+				e.indirectObjectIdentifierType = 1
-+			default:
-+				return nil, nil, fmt.Errorf("tccPermission receiverType %q: expected \"bundle\" or \"path\"", p.ReceiverType)
-+			}
-+			e.userLevel = true
-+		}
-+		if e.userLevel {
-+			userEntries = append(userEntries, e)
-+		} else {
-+			systemEntries = append(systemEntries, e)
-+		}
++		entries = append(entries, e)
++	}
++	return entries, nil
++}
++
++// patchTCC writes TCC permission entries into the system TCC database on the
++// mounted guest disk. It creates directory structures as needed and returns
++// the relative paths of newly created filesystem entries, which the caller
++// must chown to root:wheel.
++func patchTCC(ctx context.Context, mnt string, perms []limatype.TCCPermission) ([]string, error) {
++	if len(perms) == 0 {
++		return nil, nil
 +	}
 +
-+	if len(systemEntries) > 0 {
-+		rp, err := writeTCCDatabase(ctx, mnt, "Library/Application Support/com.apple.TCC", systemEntries)
-+		if err != nil {
-+			return nil, nil, fmt.Errorf("system TCC: %w", err)
-+		}
-+		rootPaths = append(rootPaths, rp...)
++	entries, err := buildTCCEntries(perms)
++	if err != nil {
++		return nil, err
 +	}
 +
-+	if len(userEntries) > 0 && guestHomeRelDir != "" {
-+		up, err := writeTCCDatabase(ctx, mnt,
-+			filepath.Join(guestHomeRelDir, "Library", "Application Support", "com.apple.TCC"),
-+			userEntries)
-+		if err != nil {
-+			return nil, nil, fmt.Errorf("user TCC: %w", err)
-+		}
-+		userPaths = append(userPaths, up...)
++	created, err := writeTCCDatabase(ctx, mnt, "Library/Application Support/com.apple.TCC", entries)
++	if err != nil {
++		return nil, fmt.Errorf("system TCC: %w", err)
 +	}
-+
-+	return rootPaths, userPaths, nil
++	return created, nil
 +}
 +
 +// writeTCCDatabase creates (if needed) the TCC directory at relDir under mnt,
@@ -485,6 +352,10 @@ index 00000000..717f4719
 +
 +	dbPath := filepath.Join(mnt, relDir, "TCC.db")
 +
++	// Schema captured from macOS 15 (admin version 30). tccd migrates older
++	// schema versions forward on first boot — the same path used during macOS
++	// in-place upgrades, where the existing TCC.db persists across the upgrade.
++	// Verified on macOS 15 and macOS 26 guests.
 +	schema := `
 +CREATE TABLE IF NOT EXISTS admin (
 +    key   TEXT PRIMARY KEY NOT NULL,
@@ -552,14 +423,6 @@ index 00000000..717f4719
 +
 +// insertTCCEntry inserts or replaces one row in the TCC access table.
 +func insertTCCEntry(ctx context.Context, dbPath string, e tccEntry) error {
-+	csreqLit := blobLiteral(e.csreq)
-+
-+	indirectID := "UNUSED"
-+	if e.indirectObjectIdentifier != "" {
-+		indirectID = e.indirectObjectIdentifier
-+	}
-+	recvCsreqLit := blobLiteral(e.indirectObjectCodeIdentity)
-+
 +	authReason := e.authReason
 +	if authReason == 0 {
 +		authReason = 4 // default: admin/system set
@@ -569,15 +432,13 @@ index 00000000..717f4719
 +		`INSERT OR REPLACE INTO access
 +		 (service, client, client_type, auth_value, auth_reason, auth_version,
 +		  csreq, indirect_object_identifier_type, indirect_object_identifier,
-+		  indirect_object_code_identity, boot_uuid, last_reminded)
++		  boot_uuid, last_reminded)
 +		 VALUES (%s, %s, %d, %d, %d, %d,
-+		         %s, %d, %s,
-+		         %s, 'UNUSED', CAST(strftime('%%s','now') AS INTEGER));`,
++		         %s, 0, 'UNUSED',
++		         'UNUSED', CAST(strftime('%%s','now') AS INTEGER));`,
 +		sqlQuote(e.service), sqlQuote(e.client),
 +		e.clientType, e.authValue, authReason, e.authVersion,
-+		csreqLit,
-+		e.indirectObjectIdentifierType, sqlQuote(indirectID),
-+		recvCsreqLit,
++		blobLiteral(e.csreq),
 +	)
 +	return runSQLite(ctx, dbPath, sql)
 +}
@@ -639,8 +500,234 @@ index 00000000..717f4719
 +	}
 +	return strings.Join(names, ", ")
 +}
+diff --git pkg/guestpatch/macos/tcc_darwin_test.go pkg/guestpatch/macos/tcc_darwin_test.go
+new file mode 100644
+index 00000000..1da993a3
+--- /dev/null
++++ pkg/guestpatch/macos/tcc_darwin_test.go
+@@ -0,0 +1,220 @@
++// SPDX-FileCopyrightText: Copyright The Lima Authors
++// SPDX-License-Identifier: Apache-2.0
++
++package macos
++
++import (
++	"os"
++	"os/exec"
++	"path/filepath"
++	"slices"
++	"strings"
++	"testing"
++
++	"github.com/google/go-cmp/cmp"
++	"gotest.tools/v3/assert"
++
++	"github.com/lima-vm/lima/v2/pkg/limatype"
++)
++
++// cmpTCCEntry lets go-cmp compare the unexported fields of tccEntry.
++var cmpTCCEntry = cmp.AllowUnexported(tccEntry{})
++
++func TestBuildTCCEntries(t *testing.T) {
++	tests := []struct {
++		name    string
++		perms   []limatype.TCCPermission
++		want    []tccEntry
++		wantErr string
++	}{
++		{
++			name: "preset expands to multiple entries",
++			perms: []limatype.TCCPermission{
++				{Preset: "terminal-accessibility"},
++			},
++			want: tccPresets["terminal-accessibility"],
++		},
++		{
++			name: "unknown preset",
++			perms: []limatype.TCCPermission{
++				{Preset: "no-such-preset"},
++			},
++			wantErr: `unknown TCC preset "no-such-preset"`,
++		},
++		{
++			name: "custom path entry with default authValue",
++			perms: []limatype.TCCPermission{
++				{
++					Service:    "kTCCServiceAccessibility",
++					Client:     "/opt/local/bin/cliclick",
++					ClientType: "path",
++				},
++			},
++			want: []tccEntry{
++				{
++					service:     "kTCCServiceAccessibility",
++					client:      "/opt/local/bin/cliclick",
++					clientType:  1,
++					authValue:   2,
++					authVersion: 1,
++				},
++			},
++		},
++		{
++			name: "custom bundle entry with deny",
++			perms: []limatype.TCCPermission{
++				{
++					Service:    "kTCCServiceMicrophone",
++					Client:     "com.example.app",
++					ClientType: "bundle",
++					AuthValue:  "deny",
++				},
++			},
++			want: []tccEntry{
++				{
++					service:     "kTCCServiceMicrophone",
++					client:      "com.example.app",
++					clientType:  0,
++					authValue:   0,
++					authVersion: 1,
++				},
++			},
++		},
++		{
++			name: "invalid clientType",
++			perms: []limatype.TCCPermission{
++				{Service: "kTCCServiceAccessibility", Client: "x", ClientType: "pathy"},
++			},
++			wantErr: `clientType "pathy"`,
++		},
++		{
++			name: "invalid authValue",
++			perms: []limatype.TCCPermission{
++				{Service: "kTCCServiceAccessibility", Client: "x", ClientType: "path", AuthValue: "maybe"},
++			},
++			wantErr: `authValue "maybe"`,
++		},
++		{
++			name: "preset and custom entries combine in order",
++			perms: []limatype.TCCPermission{
++				{Preset: "sshd-full-disk-access"},
++				{
++					Service:    "kTCCServiceAccessibility",
++					Client:     "/opt/local/bin/cliclick",
++					ClientType: "path",
++					AuthValue:  "allow",
++				},
++			},
++			want: append(append([]tccEntry{}, tccPresets["sshd-full-disk-access"]...), tccEntry{
++				service:     "kTCCServiceAccessibility",
++				client:      "/opt/local/bin/cliclick",
++				clientType:  1,
++				authValue:   2,
++				authVersion: 1,
++			}),
++		},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			got, err := buildTCCEntries(tt.perms)
++			if tt.wantErr != "" {
++				assert.ErrorContains(t, err, tt.wantErr)
++				return
++			}
++			assert.NilError(t, err)
++			assert.DeepEqual(t, got, tt.want, cmpTCCEntry)
++		})
++	}
++}
++
++func TestSQLQuote(t *testing.T) {
++	assert.Equal(t, sqlQuote("plain"), "'plain'")
++	assert.Equal(t, sqlQuote("it's"), "'it''s'")
++	assert.Equal(t, sqlQuote(""), "''")
++	assert.Equal(t, sqlQuote("a'b'c"), "'a''b''c'")
++}
++
++func TestBlobLiteral(t *testing.T) {
++	assert.Equal(t, blobLiteral(nil), "NULL")
++	assert.Equal(t, blobLiteral([]byte{}), "NULL")
++	assert.Equal(t, blobLiteral([]byte{0xfa, 0xde, 0x0c, 0x00}), "X'fade0c00'")
++}
++
++func TestMkdirAllTracked(t *testing.T) {
++	base := t.TempDir()
++
++	// All components created from scratch are reported.
++	created, err := mkdirAllTracked(base, "a/b/c")
++	assert.NilError(t, err)
++	assert.DeepEqual(t, created, []string{"a", filepath.Join("a", "b"), filepath.Join("a", "b", "c")})
++
++	// Pre-existing components are not reported again.
++	created, err = mkdirAllTracked(base, "a/b/d")
++	assert.NilError(t, err)
++	assert.DeepEqual(t, created, []string{filepath.Join("a", "b", "d")})
++
++	// Fully existing path reports nothing.
++	created, err = mkdirAllTracked(base, "a/b/c")
++	assert.NilError(t, err)
++	assert.Assert(t, created == nil)
++}
++
++// TestWriteTCCDatabase writes entries into a fresh database in a temp
++// directory and reads them back with sqlite3 to verify the row contents.
++func TestWriteTCCDatabase(t *testing.T) {
++	if _, err := exec.LookPath("sqlite3"); err != nil {
++		t.Skip("sqlite3 not found in PATH")
++	}
++	ctx := t.Context()
++	base := t.TempDir()
++	relDir := "Library/Application Support/com.apple.TCC"
++
++	entries, err := buildTCCEntries([]limatype.TCCPermission{
++		{Preset: "sshd-full-disk-access"},
++		{
++			Service:    "kTCCServiceAccessibility",
++			Client:     "/opt/local/bin/cliclick",
++			ClientType: "path",
++		},
++	})
++	assert.NilError(t, err)
++
++	created, err := writeTCCDatabase(ctx, base, relDir, entries)
++	assert.NilError(t, err)
++
++	// The DB file itself must be in the created list so the caller chowns it.
++	dbRel := filepath.Join(relDir, "TCC.db")
++	assert.Assert(t, slices.Contains(created, dbRel), "created=%v should contain %q", created, dbRel)
++
++	dbPath := filepath.Join(base, dbRel)
++	_, err = os.Stat(dbPath)
++	assert.NilError(t, err)
++
++	query := func(sql string) string {
++		out, err := exec.CommandContext(ctx, "sqlite3", dbPath, sql).CombinedOutput()
++		assert.NilError(t, err, "sqlite3 query failed: %s", out)
++		return strings.TrimSpace(string(out))
++	}
++
++	// Schema version must be stamped for tccd migration.
++	assert.Equal(t, query(`SELECT value FROM admin WHERE key='version';`), "30")
++
++	// Preset row: csreq blob present, allow, admin/system reason.
++	assert.Equal(t,
++		query(`SELECT client_type, auth_value, auth_reason, csreq IS NOT NULL
++		       FROM access WHERE service='kTCCServiceSystemPolicyAllFiles'
++		       AND client='/usr/libexec/sshd-keygen-wrapper';`),
++		"1|2|4|1")
++
++	// Custom row: no csreq, allow.
++	assert.Equal(t,
++		query(`SELECT client_type, auth_value, auth_reason, csreq IS NULL
++		       FROM access WHERE service='kTCCServiceAccessibility'
++		       AND client='/opt/local/bin/cliclick';`),
++		"1|2|4|1")
++
++	// Re-running is idempotent (INSERT OR REPLACE, CREATE IF NOT EXISTS).
++	_, err = writeTCCDatabase(ctx, base, relDir, entries)
++	assert.NilError(t, err)
++	assert.Equal(t, query(`SELECT COUNT(*) FROM access;`), "2")
++}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 57df90f0..c8224870 100644
+index 57df90f0..f6f6a6b9 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
 @@ -124,6 +124,7 @@ type VZOpts struct {
@@ -651,7 +738,7 @@ index 57df90f0..c8224870 100644
  }
  
  // SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
-@@ -133,6 +134,23 @@ type SuppressFirstLoginSetup struct {
+@@ -133,6 +134,20 @@ type SuppressFirstLoginSetup struct {
  	Plist string `yaml:"plist,omitempty" json:"plist,omitempty"`
  }
  
@@ -661,25 +748,22 @@ index 57df90f0..c8224870 100644
 +
 +// TCCPermission adds one entry to the guest's system TCC database during disk patching.
 +// Set Preset to a built-in name, or set Service/Client/ClientType/AuthValue for a custom entry.
-+// For kTCCServiceAppleEvents entries, also set Receiver and ReceiverType.
 +type TCCPermission struct {
-+	Preset       string `yaml:"preset,omitempty" json:"preset,omitempty"`
-+	Service      string `yaml:"service,omitempty" json:"service,omitempty"`
-+	Client       string `yaml:"client,omitempty" json:"client,omitempty"`
-+	ClientType   string `yaml:"clientType,omitempty" json:"clientType,omitempty"`     // "bundle" or "path"
-+	AuthValue    string `yaml:"authValue,omitempty" json:"authValue,omitempty"`       // "allow" (default) or "deny"
-+	Receiver     string `yaml:"receiver,omitempty" json:"receiver,omitempty"`         // for kTCCServiceAppleEvents: bundle ID or path of the receiving app
-+	ReceiverType string `yaml:"receiverType,omitempty" json:"receiverType,omitempty"` // "bundle" or "path"
++	Preset     string `yaml:"preset,omitempty" json:"preset,omitempty"`
++	Service    string `yaml:"service,omitempty" json:"service,omitempty"`
++	Client     string `yaml:"client,omitempty" json:"client,omitempty"`
++	ClientType string `yaml:"clientType,omitempty" json:"clientType,omitempty"` // "bundle" or "path"
++	AuthValue  string `yaml:"authValue,omitempty" json:"authValue,omitempty"`   // "allow" (default) or "deny"
 +}
 +
  type Rosetta struct {
  	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" jsonschema:"nullable"`
  	BinFmt  *bool `yaml:"binfmt,omitempty" json:"binfmt,omitempty" jsonschema:"nullable"`
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index b9f3f18a..7e57ef72 100644
+index b9f3f18a..0386258a 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -108,6 +108,74 @@ substitution is performed. Copy and adapt the built-in template above, then
+@@ -108,6 +108,73 @@ substitution is performed. Copy and adapt the built-in template above, then
  supply the actual build and version strings for your target OS release if
  needed.
  
@@ -705,8 +789,6 @@ index b9f3f18a..7e57ef72 100644
 +| `sshd-full-disk-access` | Grants Full Disk Access to `/usr/libexec/sshd-keygen-wrapper` |
 +| `lima-guestagent-full-disk-access` | Grants Full Disk Access to the Lima guest agent on the cidata volume |
 +| `terminal-accessibility` | Grants Accessibility + PostEvent to `com.apple.Terminal` |
-+| `terminal-apple-events` | Allows Terminal to send AppleEvents to System Events (AppleScript/UI automation) |
-+| `sshd-apple-events-finder` | Allows the SSH daemon to send AppleEvents to Finder (e.g. `osascript` over SSH) |
 +
 +```yaml
 +vmOpts:
@@ -714,7 +796,6 @@ index b9f3f18a..7e57ef72 100644
 +    guestPatch:
 +      tccPermissions:
 +        - preset: terminal-accessibility
-+        - preset: terminal-apple-events
 +        - preset: sshd-full-disk-access
 +```
 +
@@ -744,12 +825,14 @@ index b9f3f18a..7e57ef72 100644
 +
 +| Field | Values | Notes |
 +|-------|--------|-------|
-+| `service` | TCC service string | e.g. `kTCCServiceAccessibility`, `kTCCServiceSystemPolicyAllFiles`, `kTCCServiceAppleEvents` |
++| `service` | TCC service string | e.g. `kTCCServiceAccessibility`, `kTCCServiceSystemPolicyAllFiles` |
 +| `client` | Bundle ID or path | Bundle ID for Apple-signed apps; absolute path for other binaries |
 +| `clientType` | `bundle` or `path` | |
 +| `authValue` | `allow` (default) or `deny` | |
-+| `receiver` | Bundle ID or path | Required for `kTCCServiceAppleEvents`: the app receiving the events |
-+| `receiverType` | `bundle` (default) or `path` | |
++
++Entries are written to the system TCC database. Per-user TCC permissions
++(e.g. `kTCCServiceAppleEvents`) cannot be pre-seeded: tccd validates and
++removes unrecognised per-user grants on first login.
 +
  ## Caveats
  - No support for turning off the video display.

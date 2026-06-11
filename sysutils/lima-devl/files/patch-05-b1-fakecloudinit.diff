@@ -14,32 +14,46 @@ index 61f82da5..de2a1247 100644
  bootcmd:
    {{- range $cmd := $.BootCmds }}
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 009c5d67..706e2ac3 100644
+index 009c5d67..5cd0f30b 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -151,6 +151,14 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+@@ -119,6 +119,19 @@ func setupEnv(instConfigEnv map[string]string, propagateProxyEnv bool, slirpGate
+ 	return env, nil
+ }
+ 
++// vzSuppressFirstLoginSetup returns vmOpts.vz.suppressFirstLoginSetup,
++// or nil when unset or not applicable (non-Darwin guest, non-VZ driver).
++func vzSuppressFirstLoginSetup(instConfig *limatype.LimaYAML) *limatype.SuppressFirstLoginSetup {
++	if *instConfig.OS != limatype.DARWIN || *instConfig.VMType != limatype.VZ {
++		return nil
++	}
++	var vzOpts limatype.VZOpts
++	if err := limayaml.Convert(instConfig.VMOpts[limatype.VZ], &vzOpts, "vmOpts.vz"); err != nil {
++		return nil
++	}
++	return vzOpts.SuppressFirstLoginSetup
++}
++
+ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, instConfig *limatype.LimaYAML, udpDNSLocalPort, tcpDNSLocalPort, vsockPort int, virtioPort string, noCloudInit, rosettaEnabled, rosettaBinFmt bool) (*TemplateArgs, error) {
+ 	if err := limayaml.Validate(instConfig, false); err != nil {
+ 		return nil, err
+@@ -149,6 +162,8 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+ 		TimeZone:       *instConfig.TimeZone,
+ 		NoCloudInit:    noCloudInit,
  		Param:          instConfig.Param,
++
++		SuppressFirstLoginSetup: vzSuppressFirstLoginSetup(instConfig) != nil,
  	}
  
-+	if *instConfig.OS == limatype.DARWIN && *instConfig.VMType == limatype.VZ {
-+		var vzOpts limatype.VZOpts
-+		if err := limayaml.Convert(instConfig.VMOpts[limatype.VZ], &vzOpts, "vmOpts.vz"); err == nil && vzOpts.SuppressFirstLoginSetup != nil {
-+			args.SuppressFirstLoginSetup = true
-+			args.SuppressFirstLoginSetupPlist = vzOpts.SuppressFirstLoginSetup.Plist
-+		}
-+	}
-+
  	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
- 	var subnet net.IP
- 	var err error
-@@ -398,6 +406,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+@@ -398,6 +413,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
  		return "", err
  	}
  
-+	if args.SuppressFirstLoginSetupPlist != "" {
++	if s := vzSuppressFirstLoginSetup(instConfig); s != nil && s.Plist != "" {
 +		layout = append(layout, iso9660util.Entry{
 +			Path:   "setup-assistant.plist",
-+			Reader: strings.NewReader(args.SuppressFirstLoginSetupPlist),
++			Reader: strings.NewReader(s.Plist),
 +		})
 +	}
 +
@@ -62,15 +76,14 @@ index 9a6cbf7d..9ff3db88 100644
  
  type Growpart struct {
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index 181c49e2..a5aa9a38 100644
+index 181c49e2..2ffa35f2 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
-@@ -117,6 +117,8 @@ type TemplateArgs struct {
+@@ -117,6 +117,7 @@ type TemplateArgs struct {
  	Plain                           bool
  	TimeZone                        string
  	NoCloudInit                     bool
 +	SuppressFirstLoginSetup         bool
-+	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
  }
  
  func ValidateTemplateArgs(args *TemplateArgs) error {
