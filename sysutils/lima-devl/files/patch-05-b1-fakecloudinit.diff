@@ -257,10 +257,10 @@ index 034f84e6..e7bd760f 100644
  	logrus.Infof("Executing command: %v", cmd.Args)
  	if output, err := cmd.CombinedOutput(); err != nil {
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index afb012e8..57df90f0 100644
+index 1662b3c9..eac8083e 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -121,8 +121,16 @@ type QEMUOpts struct {
+@@ -122,8 +122,16 @@ type QEMUOpts struct {
  }
  
  type VZOpts struct {
