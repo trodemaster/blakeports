@@ -1,8 +1,8 @@
 diff --git cmd/limactl/main.go cmd/limactl/main.go
-index f75d2e44..86a2ac0d 100644
+index d00a6fc8..71381883 100644
 --- cmd/limactl/main.go
 +++ cmd/limactl/main.go
-@@ -199,6 +199,7 @@ func newApp() *cobra.Command {
+@@ -202,6 +202,7 @@ func newApp() *cobra.Command {
  		newGenDocCommand(),
  		newGenSchemaCommand(),
  		newSnapshotCommand(),
