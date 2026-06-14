@@ -1,0 +1,659 @@
+diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.go pkg/driver/vz/macos27_dfu_install_darwin_arm64.go
+new file mode 100644
+index 00000000..903c050a
+--- /dev/null
++++ pkg/driver/vz/macos27_dfu_install_darwin_arm64.go
+@@ -0,0 +1,86 @@
++// macos27_dfu_install_darwin_arm64.go
++// macOS 27 beta DFU install workaround.
++//
++// VZMacOSInstaller is broken when the guest IPSW is newer than the host OS.
++// needsDFUInstall detects this case; dfuInstallMacOS handles the install via
++// MobileDevice.framework DFU restore instead.
++//
++// TODO: Remove this file (and the companion .m/.h) once Apple fixes VZMacOSInstaller.
++
++//go:build darwin && arm64 && !no_vz
++
++package vz
++
++/*
++#cgo CFLAGS: -mmacosx-version-min=13.0
++#cgo LDFLAGS: -framework Foundation -framework Virtualization
++
++#import "macos27_dfu_install_darwin_arm64.h"
++
++static void freeErrString(char *s) { free(s); }
++*/
++import "C"
++import (
++	"context"
++	"fmt"
++	"os"
++	"path/filepath"
++	"unsafe"
++
++	"github.com/docker/go-units"
++	"github.com/lima-vm/lima/v2/pkg/limatype"
++	"github.com/lima-vm/lima/v2/pkg/limatype/filenames"
++	"github.com/sirupsen/logrus"
++)
++
++func checkFileExists(path string) error {
++	_, err := os.Stat(path)
++	return err
++}
++
++// needsDFUInstall reports whether installing the IPSW at ipswPath requires the DFU path.
++// Returns true when the guest OS major version is greater than the host OS major version.
++func needsDFUInstall(ipswPath string) (bool, error) {
++	cIpsw := C.CString(ipswPath)
++	defer C.free(unsafe.Pointer(cIpsw))
++
++	guestMajor := int(C.ipswGuestMajorVersion(cIpsw))
++	if guestMajor <= 0 {
++		return false, fmt.Errorf("could not determine guest OS version from IPSW %s", filepath.Base(ipswPath))
++	}
++	hostMajor := int(C.hostMajorOSVersion())
++	logrus.Debugf("DFU install check: guest macOS %d, host macOS %d", guestMajor, hostMajor)
++	return guestMajor > hostMajor, nil
++}
++
++// dfuInstallMacOS installs macOS by booting the VM in DFU mode and using MobileDevice.framework
++// to drive the IPSW restore. The instance directory must already contain vz-identifier,
++// vz-hwmodel, and disk (vz-aux is created if absent).
++func dfuInstallMacOS(_ context.Context, inst *limatype.Instance, ipswPath string) error {
++	// Ensure required files exist before entering CGo.
++	for _, f := range []string{filenames.VzIdentifier, filenames.VzHwModel, filenames.Disk} {
++		p := filepath.Join(inst.Dir, f)
++		if err := checkFileExists(p); err != nil {
++			return fmt.Errorf("DFU install prerequisite missing: %w", err)
++		}
++	}
++
++	memBytes, err := units.RAMInBytes(*inst.Config.Memory)
++	if err != nil {
++		return fmt.Errorf("invalid memory size: %w", err)
++	}
++
++	cDir := C.CString(inst.Dir)
++	defer C.free(unsafe.Pointer(cDir))
++	cIpsw := C.CString(ipswPath)
++	defer C.free(unsafe.Pointer(cIpsw))
++
++	logrus.Infof("DFU install: starting (instDir=%s, ipsw=%s)", inst.Dir, filepath.Base(ipswPath))
++
++	cErr := C.dfuInstall(cDir, cIpsw, C.uint(uint(*inst.Config.CPUs)), C.ulonglong(uint64(memBytes)))
++	if cErr != nil {
++		defer C.freeErrString(cErr)
++		return fmt.Errorf("macOS DFU install failed: %s", C.GoString(cErr))
++	}
++	return nil
++}
+diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.h pkg/driver/vz/macos27_dfu_install_darwin_arm64.h
+new file mode 100644
+index 00000000..7453f819
+--- /dev/null
++++ pkg/driver/vz/macos27_dfu_install_darwin_arm64.h
+@@ -0,0 +1,19 @@
++// macos27_dfu_install_darwin_arm64.h
++// Header for CGo bridge — macOS 27 beta DFU install workaround.
++// TODO: Remove this file once Apple fixes VZMacOSInstaller for cross-version installs.
++
++#pragma once
++#import <Foundation/Foundation.h>
++
++// Returns the host macOS major version (e.g. 26 for macOS 26).
++int hostMajorOSVersion(void);
++
++// Returns the guest macOS major version encoded in the IPSW at ipswPath, or -1 on error.
++int ipswGuestMajorVersion(const char *ipswPath);
++
++// Performs a full macOS install via DFU + MobileDevice.framework restore.
++// Returns NULL on success, or a malloc'd error string on failure (caller must free).
++// instDir is the lima instance directory (contains vz-identifier, vz-hwmodel, vz-aux, disk).
++// cpuCount and memorySizeBytes must match the instance config.
++char *dfuInstall(const char *instDir, const char *ipswPath,
++                 unsigned int cpuCount, unsigned long long memorySizeBytes);
+diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.m pkg/driver/vz/macos27_dfu_install_darwin_arm64.m
+new file mode 100644
+index 00000000..03874652
+--- /dev/null
++++ pkg/driver/vz/macos27_dfu_install_darwin_arm64.m
+@@ -0,0 +1,499 @@
++// macos27_dfu_install_darwin_arm64.m
++// macOS 27 beta DFU install workaround.
++//
++// VZMacOSInstaller is broken when the guest IPSW is newer than the host OS.
++// This uses the DFU restore path instead: boot the VM with _forceDFU, then drive
++// the restore via MobileDevice.framework private SPI (same path as physical Mac DFU).
++//
++// Approach credit: VirtualBuddy PR #688 (insidegui/VirtualBuddy).
++// Code here is an independent implementation — do not copy from that PR.
++//
++// TODO: Remove this file once Apple fixes VZMacOSInstaller for cross-version installs.
++
++#pragma clang diagnostic ignored "-Wunguarded-availability-new"
++
++#import <Foundation/Foundation.h>
++#import <Virtualization/Virtualization.h>
++#include <dlfcn.h>
++#include <dispatch/dispatch.h>
++#include <objc/message.h>
++#include <objc/runtime.h>
++#include <stdio.h>
++
++#import "macos27_dfu_install_darwin_arm64.h"
++
++// ──────────────────────────────────────────────────────────────────────────────
++// MobileDevice.framework SPI — loaded at runtime via dlopen
++// ──────────────────────────────────────────────────────────────────────────────
++
++typedef void *AMRestorableDeviceRef;
++typedef uint64_t AMRestorableClientID;
++typedef enum {
++    AMRestorableDeviceEventFound = 0,
++    AMRestorableDeviceEventLost  = 1,
++} AMRestorableDeviceEvent;
++
++typedef void (*AMDeviceNotificationCallback)(AMRestorableDeviceRef device,
++                                             AMRestorableDeviceEvent event,
++                                             void *context);
++typedef void (*AMRestoreProgressCallback)(AMRestorableDeviceRef device,
++                                          CFDictionaryRef info,
++                                          void *refcon);
++
++typedef AMRestorableClientID (*sym_RegisterForNotifications)(AMDeviceNotificationCallback, void *, CFErrorRef *);
++typedef void                 (*sym_UnregisterForNotifications)(AMRestorableClientID);
++typedef uint64_t             (*sym_GetECID)(AMRestorableDeviceRef);
++typedef int                  (*sym_GetState)(AMRestorableDeviceRef);
++typedef int                  (*sym_Restore)(AMRestorableDeviceRef, CFDictionaryRef,
++                                            AMRestoreProgressCallback, void *);
++
++// Field names match what the LOAD macro generates (PascalCase suffix after "AMRestorableDevice")
++typedef struct {
++    sym_RegisterForNotifications    RegisterForNotifications;
++    sym_UnregisterForNotifications  UnregisterForNotifications;
++    sym_GetECID                     GetECID;
++    sym_GetState                    GetState;
++    sym_Restore                     Restore;
++    AMRestorableClientID           *InvalidClientID; // kAMRestorableInvalidClientID
++} MobileDeviceSymbols;
++
++static MobileDeviceSymbols *loadMobileDevice(NSString **outError) {
++    static MobileDeviceSymbols syms;
++    static BOOL loaded = NO;
++    static NSString *loadError = nil;
++
++    if (loaded) {
++        if (loadError && outError) *outError = loadError;
++        return loadError ? NULL : &syms;
++    }
++    loaded = YES;
++
++    void *md = dlopen("/System/Library/PrivateFrameworks/MobileDevice.framework/MobileDevice",
++                      RTLD_NOW | RTLD_LOCAL);
++    if (!md) {
++        loadError = [NSString stringWithFormat:@"dlopen MobileDevice: %s", dlerror()];
++        if (outError) *outError = loadError;
++        return NULL;
++    }
++
++// LOAD(Suffix) looks up "AMRestorableDevice<Suffix>" and stores it in syms.<Suffix>
++#define LOAD(Suffix) \
++    syms.Suffix = (sym_##Suffix)dlsym(md, "AMRestorableDevice" #Suffix); \
++    if (!syms.Suffix) { \
++        loadError = [NSString stringWithFormat:@"dlsym AMRestorableDevice" #Suffix ": %s", dlerror()]; \
++        if (outError) *outError = loadError; \
++        return NULL; \
++    }
++
++    LOAD(RegisterForNotifications)
++    LOAD(UnregisterForNotifications)
++    LOAD(GetECID)
++    LOAD(GetState)
++
++#undef LOAD
++
++    syms.Restore = (sym_Restore)dlsym(md, "AMRestorableDeviceRestore");
++    if (!syms.Restore) {
++        loadError = [NSString stringWithFormat:@"dlsym AMRestorableDeviceRestore: %s", dlerror()];
++        if (outError) *outError = loadError;
++        return NULL;
++    }
++
++    // Optional — treat 0 as invalid if the symbol is missing
++    syms.InvalidClientID = (AMRestorableClientID *)dlsym(md, "kAMRestorableInvalidClientID");
++
++    return &syms;
++}
++
++// ──────────────────────────────────────────────────────────────────────────────
++// Wait for a specific DFU device by ECID
++// ──────────────────────────────────────────────────────────────────────────────
++
++typedef struct {
++    uint64_t               targetECID;
++    AMRestorableDeviceRef  foundDevice;
++    AMRestorableClientID   clientID;
++    sym_GetECID            GetECID;
++    dispatch_semaphore_t   sema;
++    BOOL                   finalized;
++} WaitForDeviceCtx;
++
++static void waitForDeviceCallback(AMRestorableDeviceRef device,
++                                  AMRestorableDeviceEvent event,
++                                  void *ctx) {
++    WaitForDeviceCtx *wctx = (WaitForDeviceCtx *)ctx;
++    if (wctx->finalized || event != AMRestorableDeviceEventFound) return;
++
++    uint64_t ecid = wctx->GetECID(device);
++    if (ecid != wctx->targetECID) return;
++
++    wctx->finalized = YES;
++    wctx->foundDevice = device;
++    dispatch_semaphore_signal(wctx->sema);
++}
++
++// Returns the device, or NULL on timeout/error.
++static AMRestorableDeviceRef waitForDevice(MobileDeviceSymbols *md,
++                                           uint64_t ecid,
++                                           int timeoutMS,
++                                           NSString **outError) {
++    __block WaitForDeviceCtx ctx = {
++        .targetECID = ecid,
++        .foundDevice = NULL,
++        .GetECID = md->GetECID,
++        .sema = dispatch_semaphore_create(0),
++        .finalized = NO,
++    };
++
++    CFErrorRef cfErr = NULL;
++    AMRestorableClientID clientID =
++        md->RegisterForNotifications(waitForDeviceCallback, &ctx, &cfErr);
++
++    BOOL invalid = (md->InvalidClientID != NULL && clientID == *md->InvalidClientID) ||
++                   (md->InvalidClientID == NULL && clientID == 0);
++    if (invalid) {
++        if (outError) {
++            NSError *err = (__bridge NSError *)cfErr;
++            *outError = [NSString stringWithFormat:@"AMRestorableDeviceRegisterForNotifications failed: %@",
++                         err ? err.localizedDescription : @"unknown error"];
++        }
++        if (cfErr) CFRelease(cfErr);
++        return NULL;
++    }
++    ctx.clientID = clientID;
++
++    dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, (int64_t)timeoutMS * NSEC_PER_MSEC);
++    intptr_t result = dispatch_semaphore_wait(ctx.sema, timeout);
++
++    md->UnregisterForNotifications(clientID);
++
++    if (result != 0) {
++        if (outError)
++            *outError = [NSString stringWithFormat:
++                         @"timed out waiting %dms for DFU device with ECID %llu", timeoutMS, ecid];
++        return NULL;
++    }
++    return ctx.foundDevice;
++}
++
++// ──────────────────────────────────────────────────────────────────────────────
++// Build VZVirtualMachineConfiguration for the DFU installer
++// ──────────────────────────────────────────────────────────────────────────────
++
++static VZVirtualMachine *buildInstallerVM(NSString *instDir,
++                                          unsigned int cpuCount,
++                                          unsigned long long memorySizeBytes,
++                                          NSString **outError) {
++    NSError *err = nil;
++
++    // Boot loader
++    VZMacOSBootLoader *bootLoader = [[VZMacOSBootLoader alloc] init];
++
++    // Machine identifier
++    NSString *identPath = [instDir stringByAppendingPathComponent:@"vz-identifier"];
++    NSData *identData = [NSData dataWithContentsOfFile:identPath];
++    if (!identData) {
++        if (outError)
++            *outError = [NSString stringWithFormat:@"could not read vz-identifier at %@", identPath];
++        return nil;
++    }
++    VZMacMachineIdentifier *machineID =
++        [[VZMacMachineIdentifier alloc] initWithDataRepresentation:identData];
++    if (!machineID) {
++        if (outError) *outError = @"VZMacMachineIdentifier initWithDataRepresentation failed";
++        return nil;
++    }
++
++    // Hardware model
++    NSString *hwModelPath = [instDir stringByAppendingPathComponent:@"vz-hwmodel"];
++    NSData *hwModelData = [NSData dataWithContentsOfFile:hwModelPath];
++    if (!hwModelData) {
++        if (outError)
++            *outError = [NSString stringWithFormat:@"could not read vz-hwmodel at %@", hwModelPath];
++        return nil;
++    }
++    VZMacHardwareModel *hwModel =
++        [[VZMacHardwareModel alloc] initWithDataRepresentation:hwModelData];
++    if (!hwModel) {
++        if (outError) *outError = @"VZMacHardwareModel initWithDataRepresentation failed";
++        return nil;
++    }
++
++    // Auxiliary storage (create if absent)
++    NSString *auxPath = [instDir stringByAppendingPathComponent:@"vz-aux"];
++    NSURL *auxURL = [NSURL fileURLWithPath:auxPath];
++    VZMacAuxiliaryStorage *aux;
++    if ([[NSFileManager defaultManager] fileExistsAtPath:auxPath]) {
++        aux = [[VZMacAuxiliaryStorage alloc] initWithURL:auxURL];
++    } else {
++        aux = [[VZMacAuxiliaryStorage alloc]
++               initCreatingStorageAtURL:auxURL
++               hardwareModel:hwModel
++               options:VZMacAuxiliaryStorageInitializationOptionAllowOverwrite
++               error:&err];
++        if (!aux || err) {
++            if (outError)
++                *outError = [NSString stringWithFormat:@"VZMacAuxiliaryStorage init failed: %@",
++                             err.localizedDescription];
++            return nil;
++        }
++    }
++
++    // Platform
++    VZMacPlatformConfiguration *platform = [[VZMacPlatformConfiguration alloc] init];
++    platform.machineIdentifier = machineID;
++    platform.hardwareModel = hwModel;
++    platform.auxiliaryStorage = aux;
++
++    // Primary disk
++    NSString *diskPath = [instDir stringByAppendingPathComponent:@"disk"];
++    NSURL *diskURL = [NSURL fileURLWithPath:diskPath];
++    VZDiskImageStorageDeviceAttachment *diskAttach =
++        [[VZDiskImageStorageDeviceAttachment alloc] initWithURL:diskURL readOnly:NO error:&err];
++    if (!diskAttach || err) {
++        if (outError)
++            *outError = [NSString stringWithFormat:@"VZDiskImageStorageDeviceAttachment failed: %@",
++                         err.localizedDescription];
++        return nil;
++    }
++    VZVirtioBlockDeviceConfiguration *diskConfig =
++        [[VZVirtioBlockDeviceConfiguration alloc] initWithAttachment:diskAttach];
++
++    // Display — 1920×1200 @ 80 ppi (same as lima default)
++    VZMacGraphicsDeviceConfiguration *graphicsDevice =
++        [[VZMacGraphicsDeviceConfiguration alloc] init];
++    VZMacGraphicsDisplayConfiguration *displayConfig =
++        [[VZMacGraphicsDisplayConfiguration alloc]
++         initWithWidthInPixels:1920 heightInPixels:1200 pixelsPerInch:80];
++    graphicsDevice.displays = @[displayConfig];
++
++    // Input devices
++    VZMacKeyboardConfiguration *keyboard = [[VZMacKeyboardConfiguration alloc] init];
++    VZMacTrackpadConfiguration *trackpad = [[VZMacTrackpadConfiguration alloc] init];
++
++    // Assemble
++    VZVirtualMachineConfiguration *config = [[VZVirtualMachineConfiguration alloc] init];
++    config.bootLoader = bootLoader;
++    config.platform = platform;
++    config.CPUCount = cpuCount;
++    config.memorySize = memorySizeBytes;
++    config.storageDevices = @[diskConfig];
++    config.graphicsDevices = @[graphicsDevice];
++    config.keyboards = @[keyboard];
++    config.pointingDevices = @[trackpad];
++
++    if (![config validateWithError:&err]) {
++        if (outError)
++            *outError = [NSString stringWithFormat:@"VZVirtualMachineConfiguration validation failed: %@",
++                         err.localizedDescription];
++        return nil;
++    }
++
++    dispatch_queue_t queue = dispatch_queue_create(
++        "com.lima.dfu-install",
++        dispatch_queue_attr_make_with_qos_class(NULL, QOS_CLASS_USER_INTERACTIVE, 0));
++    return [[VZVirtualMachine alloc] initWithConfiguration:config queue:queue];
++}
++
++// ──────────────────────────────────────────────────────────────────────────────
++// Extract ECID from the binary plist stored in vz-identifier
++// ──────────────────────────────────────────────────────────────────────────────
++
++static uint64_t ecidFromIdentData(NSData *data, NSString **outError) {
++    NSError *err = nil;
++    id plist = [NSPropertyListSerialization propertyListWithData:data
++                                                         options:NSPropertyListImmutable
++                                                          format:nil
++                                                           error:&err];
++    if (!plist || err || ![plist isKindOfClass:[NSDictionary class]]) {
++        if (outError)
++            *outError = [NSString stringWithFormat:@"failed to parse vz-identifier plist: %@",
++                         err.localizedDescription ?: @"not a dictionary"];
++        return 0;
++    }
++    NSDictionary *dict = (NSDictionary *)plist;
++    NSNumber *ecidNum = dict[@"ECID"];
++    if (!ecidNum) {
++        if (outError) *outError = @"ECID key missing from vz-identifier plist";
++        return 0;
++    }
++    return [ecidNum unsignedLongLongValue];
++}
++
++// ──────────────────────────────────────────────────────────────────────────────
++// Build the restore options dictionary
++// ──────────────────────────────────────────────────────────────────────────────
++
++static NSDictionary *buildRestoreOptions(NSString *ipswPath, NSString *personalizedBundlePath) {
++    return @{
++        @"AuthInstallVariant":                          @"Customer Erase Install (IPSW)",
++        @"AuthInstallSigningServerURL":                 @"https://gs.apple.com:443",
++        @"AuthInstallEnableSso":                        @0,
++        @"AuthInstallPreservePersonalizedBundles":      @0,
++        @"AutoBootDelay":                               @0,
++        @"BootImageType":                               @"User",
++        @"CreateFilesystemPartitions":                  @YES,
++        @"DFUFileType":                                 @"RELEASE",
++        @"EncryptDataPartition":                        @YES,
++        @"FlashNOR":                                    @YES,
++        @"InstallDiags":                                @YES,
++        @"InstallRecoveryOS":                           @YES,
++        @"KernelCacheType":                             @"Release",
++        @"NORImageType":                                @"production",
++        @"PersonalizedRestoreBundlePath":               personalizedBundlePath,
++        @"PostRestoreAction":                           @"Shutdown",
++        @"ReadOnlyRootFilesystem":                      @YES,
++        @"RecoveryOSFailureIsFatal":                    @YES,
++        @"RecoveryOSOnly":                              @NO,
++        @"RecoveryOSUnpack":                            @NO,
++        @"RelaxedImageVerification":                    @NO,
++        @"RestoreBootArgs":                             @"debug=0x14e serial=3 rd=md0 nand-enable-reformat=1 -progress -restore",
++        @"RestoreBundlePath":                           ipswPath,
++        @"SystemImageType":                             @"User",
++        @"UpdateBaseband":                              @YES,
++        @"WaitForDeviceConnectionToFinishStateMachine": @NO,
++    };
++}
++
++// ──────────────────────────────────────────────────────────────────────────────
++// Progress callback during restore
++// ──────────────────────────────────────────────────────────────────────────────
++
++static void restoreProgressCallback(AMRestorableDeviceRef device, CFDictionaryRef info, void *refcon) {
++    (void)device; (void)refcon;
++    NSDictionary *d = (__bridge NSDictionary *)info;
++    NSString *status = d[@"Status"];
++    NSNumber *overall = d[@"OverallProgress"];
++    if (status) {
++        double pct = (overall && [overall doubleValue] >= 0) ? [overall doubleValue] * 100.0 : -1.0;
++        if (pct >= 0) {
++            fprintf(stderr, "DFU restore: %s (%.0f%%)\n", status.UTF8String, pct);
++        } else {
++            fprintf(stderr, "DFU restore: %s\n", status.UTF8String);
++        }
++        fflush(stderr);
++    }
++}
++
++// ──────────────────────────────────────────────────────────────────────────────
++// Public entry points
++// ──────────────────────────────────────────────────────────────────────────────
++
++char *dfuInstall(const char *instDir, const char *ipswPath,
++                 unsigned int cpuCount, unsigned long long memorySizeBytes) {
++    @autoreleasepool {
++        NSString *dir  = [NSString stringWithUTF8String:instDir];
++        NSString *ipsw = [NSString stringWithUTF8String:ipswPath];
++        NSString *errMsg = nil;
++
++        // 1. Load MobileDevice SPI
++        MobileDeviceSymbols *md = loadMobileDevice(&errMsg);
++        if (!md) goto fail;
++
++        // 2. Build and validate the VM configuration
++        VZVirtualMachine *vm = buildInstallerVM(dir, cpuCount, memorySizeBytes, &errMsg);
++        if (!vm) goto fail;
++
++        // 3. Extract ECID from vz-identifier
++        {
++            NSString *identPath = [dir stringByAppendingPathComponent:@"vz-identifier"];
++            NSData *identData = [NSData dataWithContentsOfFile:identPath];
++            uint64_t ecid = ecidFromIdentData(identData, &errMsg);
++            if (ecid == 0) goto fail;
++            fprintf(stderr, "DFU install: VM ECID = %llu\n", ecid);
++
++            // 4. Start the VM in DFU mode
++            {
++                VZMacOSVirtualMachineStartOptions *opts =
++                    [[VZMacOSVirtualMachineStartOptions alloc] init];
++
++                // _forceDFU is a private property.
++                // ObjC property naming: @property BOOL _forceDFU → setter set_ForceDFU:
++                SEL setter = NSSelectorFromString(@"set_ForceDFU:");
++                if ([opts respondsToSelector:setter]) {
++                    ((void (*)(id, SEL, BOOL))objc_msgSend)(opts, setter, YES);
++                    fprintf(stderr, "DFU install: set _forceDFU = YES\n");
++                } else {
++                    fprintf(stderr, "DFU install: WARNING: _forceDFU setter not found\n");
++                }
++
++                __block NSError *startErr = nil;
++                dispatch_semaphore_t startSema = dispatch_semaphore_create(0);
++                [vm startWithOptions:opts completionHandler:^(NSError *err) {
++                    startErr = err;
++                    dispatch_semaphore_signal(startSema);
++                }];
++                dispatch_semaphore_wait(startSema, DISPATCH_TIME_FOREVER);
++
++                if (startErr) {
++                    errMsg = [NSString stringWithFormat:@"VM start (DFU) failed: %@",
++                              startErr.localizedDescription];
++                    goto fail;
++                }
++                fprintf(stderr, "DFU install: VM started in DFU mode\n");
++            }
++
++            // 5. Wait for the VM to appear as a MobileDevice restorable device (up to 60s)
++            AMRestorableDeviceRef device = waitForDevice(md, ecid, 60000, &errMsg);
++            if (!device) goto fail;
++            fprintf(stderr, "DFU install: DFU device found (ECID %llu), starting restore\n", ecid);
++
++            // 6. Personalized bundle scratch dir inside the instance directory
++            NSString *personalizedBundlePath = [dir stringByAppendingPathComponent:
++                [NSString stringWithFormat:@"dfu-personalized-%llu", ecid]];
++            NSError *mkdirErr = nil;
++            if (![[NSFileManager defaultManager] createDirectoryAtPath:personalizedBundlePath
++                                          withIntermediateDirectories:YES
++                                                           attributes:nil
++                                                                error:&mkdirErr]) {
++                errMsg = [NSString stringWithFormat:@"failed to create personalized bundle dir: %@",
++                          mkdirErr.localizedDescription];
++                goto fail;
++            }
++
++            // 7. Drive the restore — blocks until complete
++            NSDictionary *options = buildRestoreOptions(ipsw, personalizedBundlePath);
++            int result = md->Restore(device, (__bridge CFDictionaryRef)options,
++                                     restoreProgressCallback, NULL);
++
++            // Clean up scratch dir regardless of result
++            [[NSFileManager defaultManager] removeItemAtPath:personalizedBundlePath error:nil];
++
++            if (result != 0) {
++                errMsg = [NSString stringWithFormat:@"AMRestorableDeviceRestore returned error %d", result];
++                goto fail;
++            }
++        }
++
++        fprintf(stderr, "DFU install: restore complete\n");
++        return NULL; // success
++
++    fail:
++        if (errMsg) return strdup(errMsg.UTF8String);
++        return strdup("unknown DFU install error");
++    }
++}
++
++int hostMajorOSVersion(void) {
++    NSOperatingSystemVersion v = [[NSProcessInfo processInfo] operatingSystemVersion];
++    return (int)v.majorVersion;
++}
++
++int ipswGuestMajorVersion(const char *ipswPath) {
++    @autoreleasepool {
++        __block int major = -1;
++        dispatch_semaphore_t sema = dispatch_semaphore_create(0);
++
++        NSURL *url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:ipswPath]];
++        [VZMacOSRestoreImage loadFileURL:url completionHandler:^(VZMacOSRestoreImage *image, NSError *error) {
++            if (image && !error) {
++                major = (int)image.operatingSystemVersion.majorVersion;
++            }
++            dispatch_semaphore_signal(sema);
++        }];
++
++        // Wait up to 30s for IPSW metadata
++        dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 30LL * NSEC_PER_SEC));
++        return major;
++    }
++}
+diff --git pkg/driver/vz/vm_darwin_amd64.go pkg/driver/vz/vm_darwin_amd64.go
+index fdd18137..4365afd9 100644
+--- pkg/driver/vz/vm_darwin_amd64.go
++++ pkg/driver/vz/vm_darwin_amd64.go
+@@ -40,3 +40,11 @@ func newMacOSBootLoader() (vz.BootLoader, error) {
+ func installMacOS(_ context.Context, _ *vz.VirtualMachine, _ string) error {
+ 	return errMacOSGuestUnsupported
+ }
++
++func needsDFUInstall(_ string) (bool, error) {
++	return false, errMacOSGuestUnsupported
++}
++
++func dfuInstallMacOS(_ context.Context, _ *limatype.Instance, _ string) error {
++	return errMacOSGuestUnsupported
++}
+diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
+index f6b65254..37d2c0ed 100644
+--- pkg/driver/vz/vz_driver_darwin.go
++++ pkg/driver/vz/vz_driver_darwin.go
+@@ -422,6 +422,16 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
+ 		return err
+ 	}
+ 
++	// macOS 27 beta workaround: VZMacOSInstaller fails when the guest IPSW is
++	// newer than the host OS. Use DFU + MobileDevice.framework restore instead.
++	// TODO: Remove this block once Apple fixes VZMacOSInstaller.
++	if needed, checkErr := needsDFUInstall(ipsw); checkErr != nil {
++		logrus.WithError(checkErr).Warn("Could not check if DFU install is needed; trying standard installer")
++	} else if needed {
++		logrus.Info("Running macOS DFU installer for beta guest (takes a few minutes)")
++		return dfuInstallMacOS(ctx, l.Instance, ipsw)
++	}
++
+ 	logrus.Info("Running macOS installer (takes a few minutes)")
+ 	// FIXME: do we need to run the installer for every new instance,
+ 	// or can we safely reuse the installed disk image?
