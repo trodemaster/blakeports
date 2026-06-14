@@ -92,7 +92,7 @@ index 00000000..903c050a
 +}
 diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.h pkg/driver/vz/macos27_dfu_install_darwin_arm64.h
 new file mode 100644
-index 00000000..7453f819
+index 00000000..ed651d18
 --- /dev/null
 +++ pkg/driver/vz/macos27_dfu_install_darwin_arm64.h
 @@ -0,0 +1,19 @@
@@ -101,7 +101,7 @@ index 00000000..7453f819
 +// TODO: Remove this file once Apple fixes VZMacOSInstaller for cross-version installs.
 +
 +#pragma once
-+#import <Foundation/Foundation.h>
++#include <stdlib.h>
 +
 +// Returns the host macOS major version (e.g. 26 for macOS 26).
 +int hostMajorOSVersion(void);
@@ -117,10 +117,10 @@ index 00000000..7453f819
 +                 unsigned int cpuCount, unsigned long long memorySizeBytes);
 diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.m pkg/driver/vz/macos27_dfu_install_darwin_arm64.m
 new file mode 100644
-index 00000000..03874652
+index 00000000..1d23f2c6
 --- /dev/null
 +++ pkg/driver/vz/macos27_dfu_install_darwin_arm64.m
-@@ -0,0 +1,499 @@
+@@ -0,0 +1,504 @@
 +// macos27_dfu_install_darwin_arm64.m
 +// macOS 27 beta DFU install workaround.
 +//
@@ -530,14 +530,19 @@ index 00000000..03874652
 +                VZMacOSVirtualMachineStartOptions *opts =
 +                    [[VZMacOSVirtualMachineStartOptions alloc] init];
 +
-+                // _forceDFU is a private property.
-+                // ObjC property naming: @property BOOL _forceDFU → setter set_ForceDFU:
-+                SEL setter = NSSelectorFromString(@"set_ForceDFU:");
++                // _forceDFU is a private property on VZMacOSVirtualMachineStartOptions.
++                // The synthesized setter is setForceDFU: (strip leading underscore, capitalize).
++                // Try both forms in case it changes across OS versions.
++                SEL setter = NSSelectorFromString(@"setForceDFU:");
++                if (![opts respondsToSelector:setter]) {
++                    setter = NSSelectorFromString(@"set_ForceDFU:");
++                }
 +                if ([opts respondsToSelector:setter]) {
 +                    ((void (*)(id, SEL, BOOL))objc_msgSend)(opts, setter, YES);
 +                    fprintf(stderr, "DFU install: set _forceDFU = YES\n");
 +                } else {
-+                    fprintf(stderr, "DFU install: WARNING: _forceDFU setter not found\n");
++                    errMsg = @"_forceDFU setter not found on VZMacOSVirtualMachineStartOptions — cannot force DFU mode";
++                    goto fail;
 +                }
 +
 +                __block NSError *startErr = nil;
