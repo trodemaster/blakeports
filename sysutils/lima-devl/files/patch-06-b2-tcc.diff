@@ -613,20 +613,21 @@ index 00000000..717f4719
 +	return strings.Join(names, ", ")
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index afb012e8..4404fbeb 100644
+index c7310a71..8f6da7f2 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -121,8 +121,26 @@ type QEMUOpts struct {
+@@ -124,6 +124,7 @@ type VZOpts struct {
+ 	Rosetta                  Rosetta                  `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
+ 	DiskImageFormat          *image.Type              `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
+ 	SuppressFirstLoginSetup  *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
++	GuestPatch               VZGuestPatch             `yaml:"guestPatch,omitempty" json:"guestPatch,omitempty"`
  }
  
- type VZOpts struct {
--	Rosetta         Rosetta     `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
--	DiskImageFormat *image.Type `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	Rosetta         Rosetta      `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
-+	DiskImageFormat *image.Type  `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	GuestPatch      VZGuestPatch `yaml:"guestPatch,omitempty" json:"guestPatch,omitempty"`
-+}
-+
+ // SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
+@@ -133,6 +134,23 @@ type SuppressFirstLoginSetup struct {
+ 	Plist string `yaml:"plist,omitempty" json:"plist,omitempty"`
+ }
+ 
 +type VZGuestPatch struct {
 +	TCCPermissions []TCCPermission `yaml:"tccPermissions,omitempty" json:"tccPermissions,omitempty" jsonschema:"nullable"`
 +}
@@ -642,16 +643,18 @@ index afb012e8..4404fbeb 100644
 +	AuthValue    string `yaml:"authValue,omitempty" json:"authValue,omitempty"`     // "allow" (default) or "deny"
 +	Receiver     string `yaml:"receiver,omitempty" json:"receiver,omitempty"`       // for kTCCServiceAppleEvents: bundle ID or path of the receiving app
 +	ReceiverType string `yaml:"receiverType,omitempty" json:"receiverType,omitempty"` // "bundle" or "path"
- }
- 
++}
++
  type Rosetta struct {
+ 	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" jsonschema:"nullable"`
+ 	BinFmt  *bool `yaml:"binfmt,omitempty" json:"binfmt,omitempty" jsonschema:"nullable"`
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index ab01f113..33f7c157 100644
+index 7f93ded2..c52433a2 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -33,6 +33,74 @@ limactl shell macos cat /Users/${USER}.guest/password
- - Password-less sudo is disabled, except for `/sbin/shutdown -h now`
- - Several features are not implemented yet. See [Caveats](#caveats) below.
+@@ -108,6 +108,74 @@ substitution is performed. Copy and adapt the built-in template above, then
+ supply the actual build and version strings for your target OS release if
+ needed.
  
 +## Pre-populating TCC permissions
 +
