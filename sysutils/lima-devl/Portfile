@@ -3,8 +3,8 @@
 PortSystem          1.0
 PortGroup           golang 1.0
 
-go.setup            github.com/lima-vm/lima c8251205cebc1d20c6684b7f96c6f8bc629a4a99
-version             2.1.2-dev.20260612
+go.setup            github.com/lima-vm/lima 35de194b27a630a72cca5a54a2090bede607b846
+version             2.1.2-dev.20260613
 go.offline_build    no
 name                lima-devl
 revision            0
@@ -12,11 +12,12 @@ revision            0
 homepage            https://lima-vm.io
 
 # Patch revisions — increment when a patch is regenerated against new upstream
-set g3_rev  10
-set b1_rev  8
-set b2_rev  8
+set g3_rev  11
+set b1_rev  9
+set b2_rev  9
+set b3_rev  2
 
-description         Lima ${version} | G3:r${g3_rev} B1:r${b1_rev} B2:r${b2_rev} | off: O1 (G1 upstream, G4 upstream)
+description         Lima ${version} | G3:r${g3_rev} B1:r${b1_rev} B2:r${b2_rev} B3:r${b3_rev} | off: O1 (G1 upstream, G4 upstream)
 
 long_description    {*}${description}
 
@@ -28,9 +29,9 @@ maintainers         {@trodemaster icloud.com:manuals-unread2u} \
 
 conflicts           lima
 
-checksums           rmd160  82ff938d9783b4f346b0147d5a3d0f2667737916 \
-                    sha256  91bc23174be67e9878bb44b07f18039a4ff135f3a894c5fd6b3ad035f6c4b8e6 \
-                    size    7823276
+checksums           rmd160  2efe35de6b01184d10c531932788e81692330d79 \
+                    sha256  97691eafb98e1759f5e71472201096fbe0f5f9b52e2b858a52d4486a5e57583f \
+                    size    7816926
 
 # Standard patches (shared with the upstream lima port)
 # Feature patches (upstream PR candidates, applied in dependency order)
@@ -38,7 +39,8 @@ patchfiles          patch-Makefile.diff \
                     patch-usrlocalgo.diff \
                     patch-04-g3-screenshot.diff \
                     patch-05-b1-fakecloudinit.diff \
-                    patch-06-b2-tcc.diff
+                    patch-06-b2-tcc.diff \
+                    patch-08-b3-dfu-beta27.diff
 #                     \
 #                    patch-07-o1-pid-timeout.diff
 

@@ -1,8 +1,8 @@
 diff --git cmd/limactl/main.go cmd/limactl/main.go
-index d00a6fc8..71381883 100644
+index 19b9d34f..99001cdf 100644
 --- cmd/limactl/main.go
 +++ cmd/limactl/main.go
-@@ -202,6 +202,7 @@ func newApp() *cobra.Command {
+@@ -199,6 +199,7 @@ func newApp() *cobra.Command {
  		newGenDocCommand(),
  		newGenSchemaCommand(),
  		newSnapshotCommand(),
@@ -348,7 +348,7 @@ index 26da6597..b8eb41f7 100644
 +	r.Handle("/v1/screenshot", http.HandlerFunc(b.GetScreenshot))
  }
 diff --git pkg/hostagent/hostagent.go pkg/hostagent/hostagent.go
-index 2cf8a5ec..d757a01d 100644
+index bc3120ac..f3bc0cfa 100644
 --- pkg/hostagent/hostagent.go
 +++ pkg/hostagent/hostagent.go
 @@ -526,6 +526,19 @@ func (a *HostAgent) startRoutinesAndWait(ctx context.Context, errCh <-chan error
