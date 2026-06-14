@@ -117,10 +117,10 @@ index 00000000..ed651d18
 +                 unsigned int cpuCount, unsigned long long memorySizeBytes);
 diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.m pkg/driver/vz/macos27_dfu_install_darwin_arm64.m
 new file mode 100644
-index 00000000..1d23f2c6
+index 00000000..af036653
 --- /dev/null
 +++ pkg/driver/vz/macos27_dfu_install_darwin_arm64.m
-@@ -0,0 +1,504 @@
+@@ -0,0 +1,586 @@
 +// macos27_dfu_install_darwin_arm64.m
 +// macOS 27 beta DFU install workaround.
 +//
@@ -167,7 +167,10 @@ index 00000000..1d23f2c6
 +typedef void                 (*sym_UnregisterForNotifications)(AMRestorableClientID);
 +typedef uint64_t             (*sym_GetECID)(AMRestorableDeviceRef);
 +typedef int                  (*sym_GetState)(AMRestorableDeviceRef);
-+typedef int                  (*sym_Restore)(AMRestorableDeviceRef, CFDictionaryRef,
++// AMRestorableDeviceRestore returns void and runs asynchronously: it kicks off
++// the restore and reports progress (and the terminal "Successful"/"Failed" status)
++// through the progress callback. Do NOT interpret any return value.
++typedef void                 (*sym_Restore)(AMRestorableDeviceRef, CFDictionaryRef,
 +                                            AMRestoreProgressCallback, void *);
 +
 +// Field names match what the LOAD macro generates (PascalCase suffix after "AMRestorableDevice")
@@ -256,9 +259,14 @@ index 00000000..1d23f2c6
 +}
 +
 +// Returns the device, or NULL on timeout/error.
++// On success, *outClientID receives the live notification registration: the caller
++// MUST keep it registered for the duration of the restore and only unregister
++// afterwards. Unregistering releases the device's backing data (its "device map"),
++// which leaves AMRestorableDeviceRestore unable to read the board config.
 +static AMRestorableDeviceRef waitForDevice(MobileDeviceSymbols *md,
 +                                           uint64_t ecid,
 +                                           int timeoutMS,
++                                           AMRestorableClientID *outClientID,
 +                                           NSString **outError) {
 +    __block WaitForDeviceCtx ctx = {
 +        .targetECID = ecid,
@@ -288,14 +296,17 @@ index 00000000..1d23f2c6
 +    dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, (int64_t)timeoutMS * NSEC_PER_MSEC);
 +    intptr_t result = dispatch_semaphore_wait(ctx.sema, timeout);
 +
-+    md->UnregisterForNotifications(clientID);
-+
 +    if (result != 0) {
++        // Timed out: tear down the registration before bailing.
++        md->UnregisterForNotifications(clientID);
 +        if (outError)
 +            *outError = [NSString stringWithFormat:
 +                         @"timed out waiting %dms for DFU device with ECID %llu", timeoutMS, ecid];
 +        return NULL;
 +    }
++
++    // Hand the live registration back to the caller; it stays alive through the restore.
++    if (outClientID) *outClientID = clientID;
 +    return ctx.foundDevice;
 +}
 +
@@ -306,6 +317,7 @@ index 00000000..1d23f2c6
 +static VZVirtualMachine *buildInstallerVM(NSString *instDir,
 +                                          unsigned int cpuCount,
 +                                          unsigned long long memorySizeBytes,
++                                          dispatch_queue_t *outQueue,
 +                                          NSString **outError) {
 +    NSError *err = nil;
 +
@@ -415,6 +427,9 @@ index 00000000..1d23f2c6
 +    dispatch_queue_t queue = dispatch_queue_create(
 +        "com.lima.dfu-install",
 +        dispatch_queue_attr_make_with_qos_class(NULL, QOS_CLASS_USER_INTERACTIVE, 0));
++    // VZVirtualMachine is not thread-safe: every method call (including
++    // startWithOptions:) must be made on this queue, so hand it back to the caller.
++    if (outQueue) *outQueue = queue;
 +    return [[VZVirtualMachine alloc] initWithConfiguration:config queue:queue];
 +}
 +
@@ -480,21 +495,63 @@ index 00000000..1d23f2c6
 +
 +// ──────────────────────────────────────────────────────────────────────────────
 +// Progress callback during restore
++//
++// The restore is asynchronous. The progress callback receives an info dictionary
++// whose "Status" is "Restoring" while in progress, then "Successful" or "Failed"
++// as the terminal state. We signal the semaphore once a terminal state arrives.
 +// ──────────────────────────────────────────────────────────────────────────────
 +
++typedef struct {
++    dispatch_semaphore_t sema;       // signaled once the restore reaches a terminal state
++    BOOL                 finalized;  // guards against multiple terminal callbacks
++    BOOL                 succeeded;  // result, valid after sema is signaled
++    char                 errBuf[1024]; // failure description, valid when !succeeded
++    int                  lastPct;    // last printed percentage (-2 = nothing printed yet)
++    char                 lastStatus[64]; // last printed status, to suppress duplicate lines
++} RestoreProgressCtx;
++
 +static void restoreProgressCallback(AMRestorableDeviceRef device, CFDictionaryRef info, void *refcon) {
-+    (void)device; (void)refcon;
++    (void)device;
++    RestoreProgressCtx *rctx = (RestoreProgressCtx *)refcon;
 +    NSDictionary *d = (__bridge NSDictionary *)info;
 +    NSString *status = d[@"Status"];
 +    NSNumber *overall = d[@"OverallProgress"];
++
 +    if (status) {
-+        double pct = (overall && [overall doubleValue] >= 0) ? [overall doubleValue] * 100.0 : -1.0;
-+        if (pct >= 0) {
-+            fprintf(stderr, "DFU restore: %s (%.0f%%)\n", status.UTF8String, pct);
-+        } else {
-+            fprintf(stderr, "DFU restore: %s\n", status.UTF8String);
++        int pct = (overall && [overall intValue] >= 0) ? [overall intValue] : -1;
++        // The callback fires continuously; only print when the status or percentage
++        // actually changes, otherwise the log fills with identical "Restoring" lines.
++        BOOL changed = !rctx ||
++                       pct != rctx->lastPct ||
++                       strncmp(rctx->lastStatus, status.UTF8String, sizeof(rctx->lastStatus)) != 0;
++        if (changed) {
++            if (pct >= 0) {
++                fprintf(stderr, "DFU restore: %s (%d%%)\n", status.UTF8String, pct);
++            } else {
++                fprintf(stderr, "DFU restore: %s\n", status.UTF8String);
++            }
++            fflush(stderr);
++            if (rctx) {
++                rctx->lastPct = pct;
++                strlcpy(rctx->lastStatus, status.UTF8String, sizeof(rctx->lastStatus));
++            }
 +        }
-+        fflush(stderr);
++    }
++
++    if (!rctx || rctx->finalized || !status) return;
++
++    if ([status caseInsensitiveCompare:@"Successful"] == NSOrderedSame) {
++        rctx->finalized = YES;
++        rctx->succeeded = YES;
++        dispatch_semaphore_signal(rctx->sema);
++    } else if ([status caseInsensitiveCompare:@"Failed"] == NSOrderedSame) {
++        rctx->finalized = YES;
++        rctx->succeeded = NO;
++        NSError *err = d[@"Error"];
++        NSString *msg = err ? [NSString stringWithFormat:@"restore failed: %@", err.localizedDescription]
++                            : @"restore failed (no error detail provided)";
++        strlcpy(rctx->errBuf, msg.UTF8String, sizeof(rctx->errBuf));
++        dispatch_semaphore_signal(rctx->sema);
 +    }
 +}
 +
@@ -514,7 +571,8 @@ index 00000000..1d23f2c6
 +        if (!md) goto fail;
 +
 +        // 2. Build and validate the VM configuration
-+        VZVirtualMachine *vm = buildInstallerVM(dir, cpuCount, memorySizeBytes, &errMsg);
++        dispatch_queue_t vmQueue = NULL;
++        VZVirtualMachine *vm = buildInstallerVM(dir, cpuCount, memorySizeBytes, &vmQueue, &errMsg);
 +        if (!vm) goto fail;
 +
 +        // 3. Extract ECID from vz-identifier
@@ -531,9 +589,12 @@ index 00000000..1d23f2c6
 +                    [[VZMacOSVirtualMachineStartOptions alloc] init];
 +
 +                // _forceDFU is a private property on VZMacOSVirtualMachineStartOptions.
-+                // The synthesized setter is setForceDFU: (strip leading underscore, capitalize).
-+                // Try both forms in case it changes across OS versions.
-+                SEL setter = NSSelectorFromString(@"setForceDFU:");
++                // Property encoding shows setter = _setForceDFU: (Apple uses _ prefix on private setter).
++                // Fall back to setForceDFU: / set_ForceDFU: for other OS versions.
++                SEL setter = NSSelectorFromString(@"_setForceDFU:");
++                if (![opts respondsToSelector:setter]) {
++                    setter = NSSelectorFromString(@"setForceDFU:");
++                }
 +                if (![opts respondsToSelector:setter]) {
 +                    setter = NSSelectorFromString(@"set_ForceDFU:");
 +                }
@@ -547,10 +608,15 @@ index 00000000..1d23f2c6
 +
 +                __block NSError *startErr = nil;
 +                dispatch_semaphore_t startSema = dispatch_semaphore_create(0);
-+                [vm startWithOptions:opts completionHandler:^(NSError *err) {
-+                    startErr = err;
-+                    dispatch_semaphore_signal(startSema);
-+                }];
++                // VZVirtualMachine methods must run on the queue the VM was created with.
++                // startWithOptions: returns immediately; the completion handler is delivered
++                // on the same queue once the start finishes, so this does not deadlock.
++                dispatch_sync(vmQueue, ^{
++                    [vm startWithOptions:opts completionHandler:^(NSError *err) {
++                        startErr = err;
++                        dispatch_semaphore_signal(startSema);
++                    }];
++                });
 +                dispatch_semaphore_wait(startSema, DISPATCH_TIME_FOREVER);
 +
 +                if (startErr) {
@@ -561,8 +627,11 @@ index 00000000..1d23f2c6
 +                fprintf(stderr, "DFU install: VM started in DFU mode\n");
 +            }
 +
-+            // 5. Wait for the VM to appear as a MobileDevice restorable device (up to 60s)
-+            AMRestorableDeviceRef device = waitForDevice(md, ecid, 60000, &errMsg);
++            // 5. Wait for the VM to appear as a MobileDevice restorable device (up to 60s).
++            //    The notification registration must stay alive through the restore, or the
++            //    device loses its backing data ("NULL device map") and the restore fails.
++            AMRestorableClientID clientID = 0;
++            AMRestorableDeviceRef device = waitForDevice(md, ecid, 60000, &clientID, &errMsg);
 +            if (!device) goto fail;
 +            fprintf(stderr, "DFU install: DFU device found (ECID %llu), starting restore\n", ecid);
 +
@@ -576,19 +645,32 @@ index 00000000..1d23f2c6
 +                                                                error:&mkdirErr]) {
 +                errMsg = [NSString stringWithFormat:@"failed to create personalized bundle dir: %@",
 +                          mkdirErr.localizedDescription];
++                md->UnregisterForNotifications(clientID);
 +                goto fail;
 +            }
 +
-+            // 7. Drive the restore — blocks until complete
++            // 7. Drive the restore. AMRestorableDeviceRestore is asynchronous and
++            //    returns void; it reports progress and the terminal status via the
++            //    callback. We launch it and block until the callback signals done.
 +            NSDictionary *options = buildRestoreOptions(ipsw, personalizedBundlePath);
-+            int result = md->Restore(device, (__bridge CFDictionaryRef)options,
-+                                     restoreProgressCallback, NULL);
++            RestoreProgressCtx rctx = {
++                .sema = dispatch_semaphore_create(0),
++                .finalized = NO,
++                .succeeded = NO,
++                .errBuf = {0},
++                .lastPct = -2,
++                .lastStatus = {0},
++            };
++            md->Restore(device, (__bridge CFDictionaryRef)options,
++                        restoreProgressCallback, &rctx);
++            dispatch_semaphore_wait(rctx.sema, DISPATCH_TIME_FOREVER);
 +
-+            // Clean up scratch dir regardless of result
++            // Restore done (or failed): release scratch dir and the notification registration.
 +            [[NSFileManager defaultManager] removeItemAtPath:personalizedBundlePath error:nil];
++            md->UnregisterForNotifications(clientID);
 +
-+            if (result != 0) {
-+                errMsg = [NSString stringWithFormat:@"AMRestorableDeviceRestore returned error %d", result];
++            if (!rctx.succeeded) {
++                errMsg = [NSString stringWithUTF8String:rctx.errBuf];
 +                goto fail;
 +            }
 +        }

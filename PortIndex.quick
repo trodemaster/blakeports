@@ -12,10 +12,10 @@ lima 6879
 bstring 7685
 xorg-server-devel 8294
 lima-devl 9213
-netatalk4 9768
-py39-meson 10321
-py310-meson 11157
-py311-meson 12001
-py312-meson 12845
-py313-meson 13689
-py314-meson 14533
+netatalk4 9782
+py39-meson 10335
+py310-meson 11171
+py311-meson 12015
+py312-meson 12859
+py313-meson 13703
+py314-meson 14547
