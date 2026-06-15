@@ -129,10 +129,10 @@ index 269d85fa..b500eb2a 100644
  	// Validate returns error if the current driver isn't support for given config
 diff --git pkg/driver/vz/screenshot_darwin.go pkg/driver/vz/screenshot_darwin.go
 new file mode 100644
-index 00000000..a8dc54b2
+index 00000000..3b1c7ea6
 --- /dev/null
 +++ pkg/driver/vz/screenshot_darwin.go
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,112 @@
 +// SPDX-FileCopyrightText: Copyright The Lima Authors
 +// SPDX-License-Identifier: Apache-2.0
 +
@@ -144,6 +144,8 @@ index 00000000..a8dc54b2
 +#cgo darwin CFLAGS: -mmacosx-version-min=11 -x objective-c -fno-objc-arc
 +#cgo darwin LDFLAGS: -lobjc -framework Foundation -framework AppKit -framework CoreGraphics -framework ImageIO
 +#include <stdlib.h>
++#include <string.h>
++#include <dispatch/dispatch.h>
 +#include <AppKit/AppKit.h>
 +#include <CoreGraphics/CoreGraphics.h>
 +#include <ImageIO/ImageIO.h>
@@ -158,7 +160,12 @@ index 00000000..a8dc54b2
 +    __block int resultLen = 0;
 +
 +    NSString *utiStr = [NSString stringWithUTF8String:uti];
-+    dispatch_sync(dispatch_get_main_queue(), ^{
++
++    // dispatch_sync to the main queue is required for window server access.
++    // CaptureScreenshot is always called from a Go goroutine, which is never
++    // the main thread, so no deadlock is possible in normal Lima operation.
++    // The isMainThread guard is a safety net for unexpected call paths.
++    void (^captureBlock)(void) = ^{
 +        NSWindow *target = nil;
 +        for (NSWindow *w in [NSApplication sharedApplication].windows) {
 +            if ([w isKindOfClass:[NSPanel class]]) continue;
@@ -183,15 +190,26 @@ index 00000000..a8dc54b2
 +            (__bridge CFStringRef)utiStr,
 +            1, NULL
 +        );
++        if (!dst) {
++            CGImageRelease(img);
++            return;
++        }
 +        CGImageDestinationAddImage(dst, img, NULL);
-+        CGImageDestinationFinalize(dst);
++        bool ok = CGImageDestinationFinalize(dst);
 +        CFRelease(dst);
 +        CGImageRelease(img);
++        if (!ok) return;
 +
 +        resultLen = (int)data.length;
 +        result = malloc(resultLen);
 +        memcpy(result, data.bytes, resultLen);
-+    });
++    };
++
++    if ([NSThread isMainThread]) {
++        captureBlock();
++    } else {
++        dispatch_sync(dispatch_get_main_queue(), captureBlock);
++    }
 +
 +    *outLen = resultLen;
 +    return result;
@@ -228,10 +246,10 @@ index 00000000..a8dc54b2
 +	return C.GoBytes(ptr, outLen), nil
 +}
 diff --git pkg/hostagent/api/client/client.go pkg/hostagent/api/client/client.go
-index a71d25a9..27298121 100644
+index a71d25a9..e1e7ee36 100644
 --- pkg/hostagent/api/client/client.go
 +++ pkg/hostagent/api/client/client.go
-@@ -9,7 +9,9 @@ package client
+@@ -9,8 +9,11 @@ package client
  import (
  	"context"
  	"encoding/json"
@@ -239,9 +257,11 @@ index a71d25a9..27298121 100644
  	"fmt"
 +	"io"
  	"net/http"
++	"net/url"
  
  	"github.com/lima-vm/lima/v2/pkg/hostagent/api"
-@@ -19,6 +21,8 @@ import (
+ 	"github.com/lima-vm/lima/v2/pkg/httpclientutil"
+@@ -19,6 +22,8 @@ import (
  type HostAgentClient interface {
  	HTTPClient() *http.Client
  	Info(context.Context) (*api.Info, error)
@@ -250,7 +270,7 @@ index a71d25a9..27298121 100644
  }
  
  // NewHostAgentClient creates a client.
-@@ -65,3 +69,27 @@ func (c *client) Info(ctx context.Context) (*api.Info, error) {
+@@ -65,3 +70,41 @@ func (c *client) Info(ctx context.Context) (*api.Info, error) {
  	}
  	return &info, nil
  }
@@ -259,7 +279,11 @@ index a71d25a9..27298121 100644
 +	if format == "" {
 +		format = "png"
 +	}
-+	u := fmt.Sprintf("http://%s/%s/screenshot?format=%s", c.dummyHost, c.version, format)
++	if format != "png" && format != "bmp" {
++		return nil, fmt.Errorf("unsupported format %q: must be png or bmp", format)
++	}
++	params := url.Values{"format": {format}}
++	u := fmt.Sprintf("http://%s/%s/screenshot?%s", c.dummyHost, c.version, params.Encode())
 +	resp, err := httpclientutil.Get(ctx, c.HTTPClient(), u)
 +	if err != nil {
 +		var httpErr *httpclientutil.HTTPStatusError
@@ -268,7 +292,9 @@ index a71d25a9..27298121 100644
 +			case http.StatusNotFound:
 +				return nil, errors.New("hostagent does not support screenshot — restart the instance to pick up the latest hostagent binary")
 +			case http.StatusNotImplemented:
-+				return nil, errors.New("this VM's driver does not support screenshots")
++				// httpErr.Error() extracts ErrorJSON.Message from the body, which
++				// includes the driver name set by the hostagent.
++				return nil, httpErr
 +			case http.StatusUnprocessableEntity:
 +				return nil, errors.New("VM has no display configured — set video.display (e.g., \"default\") in the instance config")
 +			}
@@ -276,24 +302,34 @@ index a71d25a9..27298121 100644
 +		return nil, err
 +	}
 +	defer resp.Body.Close()
-+	return io.ReadAll(resp.Body)
++	const maxScreenshotSize = 32 << 20 // 32 MB
++	data, err := io.ReadAll(io.LimitReader(resp.Body, maxScreenshotSize+1))
++	if err != nil {
++		return nil, err
++	}
++	if len(data) > maxScreenshotSize {
++		return nil, fmt.Errorf("screenshot response exceeds %d MB limit", maxScreenshotSize>>20)
++	}
++	return data, nil
 +}
 diff --git pkg/hostagent/api/server/server.go pkg/hostagent/api/server/server.go
-index 26da6597..b8eb41f7 100644
+index 26da6597..9eece8ec 100644
 --- pkg/hostagent/api/server/server.go
 +++ pkg/hostagent/api/server/server.go
-@@ -6,8 +6,10 @@ package server
+@@ -6,8 +6,12 @@ package server
  import (
  	"context"
  	"encoding/json"
 +	"errors"
++	"fmt"
  	"net/http"
++	"strings"
  
 +	"github.com/lima-vm/lima/v2/pkg/driver"
  	"github.com/lima-vm/lima/v2/pkg/hostagent"
  	"github.com/lima-vm/lima/v2/pkg/httputil"
  )
-@@ -17,8 +19,9 @@ type Backend struct {
+@@ -17,8 +21,9 @@ type Backend struct {
  }
  
  func (b *Backend) onError(w http.ResponseWriter, err error, ec int) {
@@ -304,13 +340,14 @@ index 26da6597..b8eb41f7 100644
  	// err may potentially contain credential info (in a future version),
  	// but it is safe to return the err to the client, because we do not expose the socket to the internet
  	e := httputil.ErrorJSON{
-@@ -53,6 +56,42 @@ func (b *Backend) GetInfo(w http.ResponseWriter, r *http.Request) {
+@@ -53,6 +58,47 @@ func (b *Backend) GetInfo(w http.ResponseWriter, r *http.Request) {
  	_, _ = w.Write(m)
  }
  
 +// GetScreenshot is the handler for GET /v1/screenshot.
 +func (b *Backend) GetScreenshot(w http.ResponseWriter, r *http.Request) {
 +	if r.Method != http.MethodGet {
++		w.Header().Set("Allow", "GET")
 +		w.WriteHeader(http.StatusMethodNotAllowed)
 +		return
 +	}
@@ -318,9 +355,13 @@ index 26da6597..b8eb41f7 100644
 +	ctx, cancel := context.WithCancel(ctx)
 +	defer cancel()
 +
-+	format := r.URL.Query().Get("format")
++	format := strings.ToLower(r.URL.Query().Get("format"))
 +	if format == "" {
 +		format = "png"
++	}
++	if format != "png" && format != "bmp" {
++		b.onError(w, fmt.Errorf("unsupported format %q: must be png or bmp", format), http.StatusBadRequest)
++		return
 +	}
 +	data, err := b.Agent.Screenshot(ctx, format)
 +	if err != nil {
