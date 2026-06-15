@@ -12,7 +12,7 @@ revision            0
 homepage            https://lima-vm.io
 
 # Patch revisions — increment when a patch is regenerated against new upstream
-set g3_rev  11
+set g3_rev  12
 set b1_rev  9
 set b2_rev  10
 set b3_rev  5
