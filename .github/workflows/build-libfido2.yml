@@ -17,15 +17,15 @@ on:
       run_macos15:
         description: 'macOS 15 (Sequoia)'
         required: false
-        default: true
+        default: false
         type: boolean
       run_macos26:
         description: 'macOS 26 (Tahoe)'
         required: false
         default: true
         type: boolean
-      run_macos26_beta:
-        description: 'macOS 26 Beta (Tahoe Beta)'
+      run_macos27_beta:
+        description: 'macOS 27 Beta (Tahoe Beta)'
         required: false
         default: false
         type: boolean
@@ -88,8 +88,8 @@ jobs:
 
           # For non-workflow_dispatch events (push/PR), default to modern platforms
           if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
-            MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"security/libfido2"},'
-            MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"security/libfido2"}'
+            MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"security/libfido2"},'
+            MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"security/libfido2"}'
             FIRST=false
           else
             # For workflow_dispatch, check individual platform selections
@@ -109,9 +109,9 @@ jobs:
             fi
 
             # macOS 26 Beta
-            if [[ "${{ inputs.run_macos26_beta }}" == "true" ]]; then
+            if [[ "${{ inputs.run_macos27_beta }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"macOS_26_beta","runner":"macOS_26_beta","type":"modern","port":"security/libfido2"}'
+              MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"security/libfido2"}'
               FIRST=false
             fi
 
@@ -173,8 +173,8 @@ jobs:
 
             # If no platforms selected, default to modern platforms
             if [[ "$FIRST" == "true" ]]; then
-              MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"security/libfido2"},'
-              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"security/libfido2"}'
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"security/libfido2"},'
+              MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"security/libfido2"}'
             fi
           fi
 
