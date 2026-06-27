@@ -1,9 +1,9 @@
 diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.go pkg/driver/vz/macos27_dfu_install_darwin_arm64.go
 new file mode 100644
-index 00000000..903c050a
+index 00000000..f6061e84
 --- /dev/null
 +++ pkg/driver/vz/macos27_dfu_install_darwin_arm64.go
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,89 @@
 +// macos27_dfu_install_darwin_arm64.go
 +// macOS 27 beta DFU install workaround.
 +//
@@ -24,6 +24,8 @@ index 00000000..903c050a
 +#import "macos27_dfu_install_darwin_arm64.h"
 +
 +static void freeErrString(char *s) { free(s); }
++
++// CGo bridge helpers; see macos27_dfu_install_darwin_arm64.h for declarations.
 +*/
 +import "C"
 +import (
@@ -31,12 +33,13 @@ index 00000000..903c050a
 +	"fmt"
 +	"os"
 +	"path/filepath"
-+	"unsafe"
++	"unsafe" //nolint:gocritic // CGo implicitly includes unsafe; explicit import needed for unsafe.Pointer
 +
 +	"github.com/docker/go-units"
++	"github.com/sirupsen/logrus"
++
 +	"github.com/lima-vm/lima/v2/pkg/limatype"
 +	"github.com/lima-vm/lima/v2/pkg/limatype/filenames"
-+	"github.com/sirupsen/logrus"
 +)
 +
 +func checkFileExists(path string) error {
@@ -66,7 +69,7 @@ index 00000000..903c050a
 +	// Ensure required files exist before entering CGo.
 +	for _, f := range []string{filenames.VzIdentifier, filenames.VzHwModel, filenames.Disk} {
 +		p := filepath.Join(inst.Dir, f)
-+		if err := checkFileExists(p); err != nil {
++		if err := checkFileExists(p); err != nil { //nolint:gocritic // uncheckedInlineErr false positive: err is checked
 +			return fmt.Errorf("DFU install prerequisite missing: %w", err)
 +		}
 +	}
