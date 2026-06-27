@@ -3,8 +3,8 @@
 PortSystem          1.0
 PortGroup           golang 1.0
 
-go.setup            github.com/lima-vm/lima 35de194b27a630a72cca5a54a2090bede607b846
-version             2.1.2-dev.20260613
+go.setup            github.com/lima-vm/lima 4d1c1b2ae24e19c02bfce8e8e2960255cd724b65
+version             2.1.3-dev.20260627
 go.offline_build    no
 name                lima-devl
 revision            0
@@ -12,12 +12,13 @@ revision            0
 homepage            https://lima-vm.io
 
 # Patch revisions — increment when a patch is regenerated against new upstream
-set g3_rev  12
-set b1_rev  9
-set b2_rev  10
-set b3_rev  5
+set g3_rev  13
+set b1_rev  16
+set b2_rev  11
+set b3_rev  6
+set m1_rev  1
 
-description         Lima ${version} | G3:r${g3_rev} B1:r${b1_rev} B2:r${b2_rev} B3:r${b3_rev} | off: O1 (G1 upstream, G4 upstream)
+description         Lima ${version} | G3:r${g3_rev} B1:r${b1_rev} B2:r${b2_rev} B3:r${b3_rev} M1:r${m1_rev} | off: O1 (G1 upstream, G4 upstream)
 
 long_description    {*}${description}
 
@@ -29,17 +30,19 @@ maintainers         {@trodemaster icloud.com:manuals-unread2u} \
 
 conflicts           lima
 
-checksums           rmd160  2efe35de6b01184d10c531932788e81692330d79 \
-                    sha256  97691eafb98e1759f5e71472201096fbe0f5f9b52e2b858a52d4486a5e57583f \
-                    size    7816926
+checksums           rmd160  09a958bcbdec9855f1a60079a4c5e05b938d525f \
+                    sha256  618397da27a9effce144802c828c156cf241b177fb98e414b423a2e566e68866 \
+                    size    7817520
 
 # Standard patches (shared with the upstream lima port)
 # Feature patches (upstream PR candidates, applied in dependency order)
+# macOS 27 workarounds applied last — NOT for upstream submission
 patchfiles          patch-Makefile.diff \
                     patch-usrlocalgo.diff \
                     patch-04-g3-screenshot.diff \
                     patch-05-b1-fakecloudinit.diff \
                     patch-06-b2-tcc.diff \
+                    patch-09-m1-fakecloudinit-macos27.diff \
                     patch-08-b3-dfu-beta27.diff
 #                     \
 #                    patch-07-o1-pid-timeout.diff

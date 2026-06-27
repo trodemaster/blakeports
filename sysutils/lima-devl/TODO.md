@@ -1,53 +1,83 @@
 # lima-devl — Upstream PR & Port Tracking
 
 Status of feature patches carried by this port and their upstream submission.
-Patch revs: see `g3_rev` / `b1_rev` / `b2_rev` in the Portfile.
+Patch revs: see `g3_rev` / `b1_rev` / `b2_rev` / `b3_rev` / `m1_rev` in the Portfile.
 
 ## Feature status
 
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
-| G1 (`patch-01`) | VZ thread pinning | local only |
-| G4 (`patch-02`) | VZ window title | **merged** (PR #5084) |
 | G3 (`patch-04`) | `limactl screenshot` | **PR #5098 open** — reviewer comments resolved, awaiting approval |
-| B1 (`patch-05`) | `suppressFirstLoginSetup` | ready for submission (r7) |
-| B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (r7), depends on B1 |
+| B1 (`patch-05`) | `suppressFirstLoginSetup` | ready for submission |
+| B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (depends on B1) |
+| M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
+| B3 (`patch-08`) | DFU install workaround for macOS 27 beta | **NOT for upstream** — macOS 27-beta only |
 | O1 (`patch-07`) | PID timeout | disabled in Portfile |
+
+`patch-01-g1-thread-pin.diff` merged upstream in PR #5036 and removed from port.
+`patch-02-g4-window-title.diff` merged upstream in PR #5084 and removed from port.
+
+## Patch ordering (applied last = macOS 27 block)
+
+```
+patch-Makefile.diff
+patch-usrlocalgo.diff
+patch-04-g3-screenshot.diff          ← upstream candidate
+patch-05-b1-fakecloudinit.diff       ← upstream candidate
+patch-06-b2-tcc.diff                 ← upstream candidate (depends on B1)
+patch-09-m1-fakecloudinit-macos27.diff  ← macOS 27-beta workaround, NOT upstream
+patch-08-b3-dfu-beta27.diff             ← macOS 27-beta workaround, NOT upstream
+```
+
+## Branch topology (as of 2026-06-27)
+
+| Branch | Based on | Commits above base | Role |
+|--------|----------|--------------------|------|
+| `upstream-pr/g3-screenshot-clean` | origin/master | 1 | upstream PR branch |
+| `upstream-pr/b1-fakecloudinit` | origin/master | 7 | upstream PR branch (clean) |
+| `upstream-pr/b2-tcc` = `macports/b2-on-b1` | b1-tip | 3 | stacked on B1 for patching; use b1-tip as B2 patch base |
+| `macports/m1-fakecloudinit-macos27` | b1-tip | 5 | macOS 27 workarounds stacked on B1 |
+| `upstream-pr/b3-dfu-beta27` | origin/master | 6 | macOS 27 DFU workaround |
+
+Patch generation commands:
+- patch-04: `git diff --no-prefix origin/master..upstream-pr/g3-screenshot-clean`
+- patch-05: `git diff --no-prefix origin/master..upstream-pr/b1-fakecloudinit`
+- patch-06: `git diff --no-prefix upstream-pr/b1-fakecloudinit..upstream-pr/b2-tcc`
+- patch-09: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/m1-fakecloudinit-macos27`
+- patch-08: `git diff --no-prefix origin/master..upstream-pr/b3-dfu-beta27`
 
 ## TODO
 
 ### Upstream PRs
-- [ ] G3 / PR #5098: merge pending. `Lints` (lima-vm.io link check) and
-      `Windows QEMU` (proxy.golang.org TLS timeout) failures are infra flakes —
+- [ ] G3 / PR #5098: merge pending. `Lints` and `Windows QEMU` failures are infra flakes —
       re-run, don't chase.
-- [ ] B1: create `upstream-pr/b1-suppress-first-login` branch from patch-05,
-      sign off (DCO), submit after G3 merges. PR description must state tested
-      guest versions: macOS 15, macOS 26.
-- [ ] B2: submit after B1 merges (shares lima_yaml.go / macos.md hunks).
-      PR description must cover: TCC schema v30 + tccd forward-migration
-      rationale, per-user TCC limitation (tccd revokes per-user grants on
-      first login — by design, not supported), tested on macOS 15 + 26.
+- [ ] B1: create upstream PR branch from `upstream-pr/b1-fakecloudinit`, sign off (DCO),
+      submit after G3 merges. PR description must state tested guest versions: macOS 15, macOS 26.
+- [ ] B2: submit after B1 merges.
+      PR description must cover: TCC schema v30 + tccd forward-migration rationale,
+      presets shipped (sshd-full-disk-access, lima-guestagent-full-disk-access, terminal-accessibility),
+      per-user TCC deferred (tccd revokes per-user grants on first login — by design),
+      tested on macOS 15 + 26.
+
+### macOS 27 workarounds (M1 + B3)
+- [ ] Revisit M1 (fakecloudinit) and B3 (DFU) when macOS 27 is released:
+      - M1 may be partially upstreamable if ISRootMigrator behavior is documented
+      - B3 may be upstreamable or resolved by Apple fixing VZMacOSInstaller
+- [ ] Test TCC patching against a macOS 27-beta guest (template exists in lima_mac, untested).
 
 ### Verification
-- [ ] Rebuild a VM from r7 patches (b1_rev 7 / b2_rev 7, pushed 2026-06-11)
-      to confirm behavior after the design-review cuts: dscl check reverted to
-      FileExists, per-user TCC path removed, plist flow via
-      vzSuppressFirstLoginSetup(). `make rebuild-26` in lima_mac.
-- [ ] Test TCC patching against a macOS 27-beta guest (template exists in
-      lima_mac, untested). Strengthens schema-migration claim to 3 generations.
+- [ ] Rebuild a VM using the new patch set to confirm behavior: B1+B2+M1 patching.
 
 ### CI maintenance
-- [ ] `golangci/golangci-lint-action@v8` runs on Node 20 (deprecated).
-      GitHub forces Node 24 on 2026-06-16 and removes Node 20 from runners on
-      2026-09-16. Verify the action works under Node 24 or bump the version.
+- [ ] Verify golangci/golangci-lint-action works under Node 24 (GitHub forced it 2026-06-16).
 
 ### Deferred / not planned
-- Per-user TCC database pre-seeding: cut in r7 — proven non-functional
+- Per-user TCC database pre-seeding: removed from B2 — proven non-functional
   (tccd validates and removes unrecognized per-user grants on first login).
   Revisit only if tccd behavior changes in a future macOS.
 - AppleEvents presets (`terminal-apple-events`, `sshd-apple-events-finder`):
-  removed with the per-user path. Wallpaper automation is handled by the
-  cliclick approval flow in lima_mac configure.sh instead.
+  removed from B2 — system DB entries for AppleEvents require special handling
+  and the use cases are covered by custom entries in lima.yaml.
 
 ## Workflow reminders
 - Regenerate patches from git commit ranges, never hand-edit

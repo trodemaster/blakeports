@@ -1,0 +1,115 @@
+diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+index 9d52c38d..2037e862 100644
+--- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
++++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+@@ -276,6 +276,12 @@ func suppressFirstLoginScreens(mnt string, uid int, homedir string) error {
+ 		// The LastPreLoginTasksPerformedBuild / *Version and LastSeen* version stamps
+ 		// are what macOS actually checks to decide whether setup is already complete;
+ 		// without them macOS resets MiniBuddyLaunchReason to 13 on first GUI login.
++		// SkipiCloudSetup / SkipiCloudStorageSetup are macOS 27+ explicit skip signals
++		// for the Apple Account / iCloud sign-in pane; DidSeeCloudSetup alone is
++		// insufficient on macOS 27. The additional LastSeen* keys cover new macOS 27
++		// panes (Apple Intelligence, New Features, Glass Tint, Siri, Storage Services);
++		// without them mini-buddy shows the Apple Account dialog as a prerequisite for
++		// the Intelligence pane. Unknown keys are safely ignored on older OS versions.
+ 		setupAssistantPlist = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+ <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+ <plist version="1.0">
+@@ -296,19 +302,35 @@ func suppressFirstLoginScreens(mnt string, uid int, homedir string) error {
+ 	<key>DidSeeTermsOfAddress</key><true/>
+ 	<key>DidSeeTouchIDSetup</key><true/>
+ 	<key>DidSeeiCloudLoginForStorageServices</key><true/>
++	<key>InitialAccountOnMac</key><true/>
++	<key>InitialAccountSetupDate</key><date>2026-01-01T00:00:00Z</date>
++	<key>InitialSetupBuildVersion</key><string>%s</string>
++	<key>InitialSetupProductVersion</key><string>%s</string>
+ 	<key>LastPreLoginTasksPerformedBuild</key><string>%s</string>
+ 	<key>LastPreLoginTasksPerformedVersion</key><string>%s</string>
+ 	<key>LastSeenAgeRangeSelectionProductVersion</key><string>%s</string>
+ 	<key>LastSeenBuddyBuildVersion</key><string>%s</string>
+ 	<key>LastSeenCloudProductVersion</key><string>%s</string>
+ 	<key>LastSeenDiagnosticsProductVersion</key><string>%s</string>
++	<key>LastSeenGlassTintUpsellProductVersion</key><string>%s</string>
++	<key>LastSeenIntelligenceProductVersion</key><string>%s</string>
++	<key>LastSeenNewFeaturesProductVersion</key><string>%s</string>
++	<key>LastSeenSiriProductVersion</key><string>%s</string>
++	<key>LastSeenStorageServicesProductVersion</key><string>%s</string>
++	<key>LastSeenSyncProductVersion</key><string>%s</string>
++	<key>LastSeeniCloudStorageServicesProductVersion</key><string>%s</string>
+ 	<key>MiniBuddyLaunchReason</key><integer>0</integer>
++	<key>MiniBuddyLaunchedPostMigration</key><true/>
+ 	<key>MiniBuddyShouldLaunchToResumeSetup</key><false/>
+ 	<key>SkipExpressSettingsUpdating</key><true/>
+ 	<key>SkipFirstLoginOptimization</key><true/>
++	<key>SkipiCloudSetup</key><true/>
++	<key>SkipiCloudStorageSetup</key><true/>
+ </dict>
+ </plist>
+-`, buildVersion, productVersion, productVersion, buildVersion, productVersion, productVersion)
++`, buildVersion, productVersion, buildVersion, productVersion, productVersion, buildVersion,
++			productVersion, productVersion, productVersion, productVersion, productVersion, productVersion,
++			productVersion, productVersion, productVersion)
+ 	}
+ 
+ 	saPlist := filepath.Join(prefsDir, "com.apple.SetupAssistant.plist")
+@@ -319,6 +341,32 @@ func suppressFirstLoginScreens(mnt string, uid int, homedir string) error {
+ 		logrus.WithError(err).Warnf("Failed to chown SetupAssistant plist %q", saPlist)
+ 	}
+ 
++	// GlobalPreferences — write AppleLanguagesSchemaVersion for macOS 27+.
++	// ISRootMigrator (a UAU plugin new in macOS 27) reads this key at first GUI login
++	// via NSUserDefaults, which searches the system domain (/Library/Preferences/) as a
++	// fallback when the user's own cfprefsd domain is empty (as it always is on first login
++	// for a new account). Writing to the system domain via "defaults write" goes through
++	// cfprefsd daemon without requiring a user session, and the daemon persists it across
++	// boots. Direct writes to ~/Library/Preferences/.GlobalPreferences.plist are silently
++	// discarded: cfprefsd rebuilds the user domain from its own database on first login,
++	// ignoring any pre-existing plist file. 5400 is the macOS 27.0 schema version;
++	// ISRootMigrator interprets it as "already migrated" and skips the Apple Account dialog.
++	// On macOS 26 and earlier, ISRootMigrator does not exist, so this is a no-op.
++	if gpVerOut, err := exec.Command("sw_vers", "-productVersion").Output(); err == nil {
++		gpVer := strings.TrimSpace(string(gpVerOut))
++		if majorStr := strings.SplitN(gpVer, ".", 2)[0]; majorStr != "" {
++			if major, err := strconv.Atoi(majorStr); err == nil && major >= 27 {
++				cmd := exec.Command("defaults", "write", "/Library/Preferences/.GlobalPreferences",
++					"AppleLanguagesSchemaVersion", "-int", "5400")
++				if out, err := cmd.CombinedOutput(); err != nil {
++					logrus.WithError(err).Warnf("Failed to write AppleLanguagesSchemaVersion to system domain (output=%q)", string(out))
++				} else {
++					logrus.Infof("Wrote AppleLanguagesSchemaVersion=5400 to system .GlobalPreferences domain")
++				}
++			}
++		}
++	}
++
+ 	// System-wide SoftwareUpdate preferences — pre-configure update settings so the
+ 	// "Update Mac Automatically" dialog is skipped on first login.
+ 	// Using 'defaults write' (via exec) rather than os.WriteFile so that cfprefsd
+@@ -358,6 +406,27 @@ func createUser(ctx context.Context, u *cloudinittypes.User, suppressFirstLoginS
+ 	// which would cause a filesystem-existence check to skip user account creation.
+ 	if cmd := exec.CommandContext(ctx, "dscl", ".", "-read", "/Users/"+u.Name, "RecordName"); cmd.Run() == nil {
+ 		logrus.Debugf("user %q already exists in directory services, skipping creation", u.Name)
++		if suppressFirstLoginSetup {
++			// User was pre-created before fakecloudinit ran (observed on macOS 27 where
++			// early-boot processes may initialize directory services before LaunchDaemons).
++			// Suppress first-login dialogs, but only on the first run: once mini-buddy has
++			// launched (Boot 2+) it writes InitialAccountOnMac and other markers; re-writing
++			// the SA plist would overwrite those and trigger dialogs on every subsequent boot.
++			saPlistPath := filepath.Join(homedir, "Library/Preferences/com.apple.SetupAssistant.plist")
++			if _, statErr := os.Stat(saPlistPath); os.IsNotExist(statErr) {
++				// SA plist not yet written — resolve UID with u.UID as fallback so we never
++				// chown the file to root when user.Lookup fails during early-boot opendirectoryd init.
++				uid, _ := strconv.Atoi(u.UID)
++				if sysUser, err := user.Lookup(u.Name); err == nil {
++					if actualUID, err := strconv.Atoi(sysUser.Uid); err == nil {
++						uid = actualUID
++					}
++				}
++				if err := suppressFirstLoginScreens(mnt, uid, homedir); err != nil {
++					logrus.WithError(err).Warnf("Failed to suppress first-login screens for pre-existing user %q", u.Name)
++				}
++			}
++		}
+ 		return nil
+ 	}
+ 	if u.UID == "" {
