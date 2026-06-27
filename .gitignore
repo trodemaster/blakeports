@@ -5,3 +5,7 @@ work
 # Docker runner ephemeral config (tokens, IPs, etc.)
 docker/config/
 .envrc
+
+# macports-cache local config and build artifact
+tools/macports-cache/config.mk
+tools/macports-cache/macports-cache
