@@ -27,7 +27,7 @@ on:
       run_macos27_beta:
         description: 'macOS 27 Beta (Tahoe Beta)'
         required: false
-        default: false
+        default: true
         type: boolean
 
 defaults:
