@@ -25,7 +25,7 @@ on:
         default: true
         type: boolean
       run_macos27_beta:
-        description: 'macOS 27 Beta (Tahoe Beta)'
+        description: 'macOS 27 Beta (Golden Gate)'
         required: false
         default: true
         type: boolean
