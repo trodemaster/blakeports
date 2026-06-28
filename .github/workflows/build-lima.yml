@@ -14,20 +14,20 @@ on:
         required: false
         default: 'main'
         type: string
-      run_macos15:
-        description: 'macOS 15 (Sequoia)'
+      run_macos27_beta:
+        description: 'macOS 27 Beta (Golden Gate)'
         required: false
-        default: false
+        default: true
         type: boolean
       run_macos26:
         description: 'macOS 26 (Tahoe)'
         required: false
         default: true
         type: boolean
-      run_macos27_beta:
-        description: 'macOS 27 Beta (Golden Gate)'
+      run_macos15:
+        description: 'macOS 15 (Sequoia)'
         required: false
-        default: true
+        default: false
         type: boolean
 
 defaults:
