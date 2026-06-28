@@ -1,8 +1,8 @@
 diff --git .golangci.yml .golangci.yml
-index f69631bf..911218a1 100644
+index f69631bf..70634c41 100644
 --- .golangci.yml
 +++ .golangci.yml
-@@ -160,6 +160,19 @@ linters:
+@@ -160,6 +160,25 @@ linters:
        - revive
        path: pkg/(hostagent|guestagent)/api/
        text: avoid meaningless package names
@@ -11,6 +11,12 @@ index f69631bf..911218a1 100644
 +    - linters:
 +      - gci
 +      path: pkg/driver/vz/macos27_dfu_install_darwin_arm64\.go
++    # CGo file: gocritic dupImport false positive — import "C" and "unsafe" serve
++    # distinct purposes; gocritic incorrectly treats them as duplicate imports.
++    - linters:
++      - gocritic
++      path: pkg/driver/vz/macos27_dfu_install_darwin_arm64\.go
++      text: dupImport
 +    # Pre-existing nolint directives for deprecated gRPC API that staticcheck
 +    # no longer flags on arm64 macOS. Exclude from nolintlint until upstream cleans up.
 +    - linters:
@@ -24,7 +30,7 @@ index f69631bf..911218a1 100644
    max-issues-per-linter: 0
 diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.go pkg/driver/vz/macos27_dfu_install_darwin_arm64.go
 new file mode 100644
-index 00000000..1842269f
+index 00000000..0b454256
 --- /dev/null
 +++ pkg/driver/vz/macos27_dfu_install_darwin_arm64.go
 @@ -0,0 +1,89 @@
@@ -51,7 +57,7 @@ index 00000000..1842269f
 +
 +// CGo bridge helpers; see macos27_dfu_install_darwin_arm64.h for declarations.
 +*/
-+import "C" //nolint:gocritic // dupImport false positive: CGo requires standalone import "C"; "unsafe" is a separate explicit import
++import "C"
 +import (
 +	"context"
 +	"fmt"
