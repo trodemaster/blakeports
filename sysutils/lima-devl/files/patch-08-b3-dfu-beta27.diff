@@ -1,18 +1,17 @@
 diff --git .golangci.yml .golangci.yml
-index f69631bf..70634c41 100644
+index f69631bf..bfd10f8b 100644
 --- .golangci.yml
 +++ .golangci.yml
-@@ -160,6 +160,25 @@ linters:
+@@ -160,6 +160,24 @@ linters:
        - revive
        path: pkg/(hostagent|guestagent)/api/
        text: avoid meaningless package names
-+    # CGo file: import "C" must be standalone after its preamble comment block,
-+    # which gci does not handle correctly. Exclude from gci formatter.
++    # CGo file: import "C" must be standalone after its preamble comment block.
++    # gci, gofumpt, and gocritic cannot handle this correctly; exclude all three.
 +    - linters:
 +      - gci
++      - gofumpt
 +      path: pkg/driver/vz/macos27_dfu_install_darwin_arm64\.go
-+    # CGo file: gocritic dupImport false positive — import "C" and "unsafe" serve
-+    # distinct purposes; gocritic incorrectly treats them as duplicate imports.
 +    - linters:
 +      - gocritic
 +      path: pkg/driver/vz/macos27_dfu_install_darwin_arm64\.go
