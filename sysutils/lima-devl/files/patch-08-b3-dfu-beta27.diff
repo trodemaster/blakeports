@@ -1,3 +1,27 @@
+diff --git .golangci.yml .golangci.yml
+index f69631bf..911218a1 100644
+--- .golangci.yml
++++ .golangci.yml
+@@ -160,6 +160,19 @@ linters:
+       - revive
+       path: pkg/(hostagent|guestagent)/api/
+       text: avoid meaningless package names
++    # CGo file: import "C" must be standalone after its preamble comment block,
++    # which gci does not handle correctly. Exclude from gci formatter.
++    - linters:
++      - gci
++      path: pkg/driver/vz/macos27_dfu_install_darwin_arm64\.go
++    # Pre-existing nolint directives for deprecated gRPC API that staticcheck
++    # no longer flags on arm64 macOS. Exclude from nolintlint until upstream cleans up.
++    - linters:
++      - nolintlint
++      path: pkg/driver/external/client/client\.go
++    - linters:
++      - nolintlint
++      path: pkg/guestagent/api/client/credentials\.go
+ issues:
+   # Maximum issues count per one linter.
+   max-issues-per-linter: 0
 diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.go pkg/driver/vz/macos27_dfu_install_darwin_arm64.go
 new file mode 100644
 index 00000000..f6061e84
