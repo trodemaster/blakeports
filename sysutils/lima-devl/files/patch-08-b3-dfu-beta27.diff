@@ -24,7 +24,7 @@ index f69631bf..911218a1 100644
    max-issues-per-linter: 0
 diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.go pkg/driver/vz/macos27_dfu_install_darwin_arm64.go
 new file mode 100644
-index 00000000..f6061e84
+index 00000000..1842269f
 --- /dev/null
 +++ pkg/driver/vz/macos27_dfu_install_darwin_arm64.go
 @@ -0,0 +1,89 @@
@@ -51,13 +51,13 @@ index 00000000..f6061e84
 +
 +// CGo bridge helpers; see macos27_dfu_install_darwin_arm64.h for declarations.
 +*/
-+import "C"
++import "C" //nolint:gocritic // dupImport false positive: CGo requires standalone import "C"; "unsafe" is a separate explicit import
 +import (
 +	"context"
 +	"fmt"
 +	"os"
 +	"path/filepath"
-+	"unsafe" //nolint:gocritic // CGo implicitly includes unsafe; explicit import needed for unsafe.Pointer
++	"unsafe"
 +
 +	"github.com/docker/go-units"
 +	"github.com/sirupsen/logrus"
