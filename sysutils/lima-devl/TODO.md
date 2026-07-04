@@ -7,8 +7,7 @@ Patch revs: see `g3_rev` / `b1_rev` / `b2_rev` / `b3_rev` / `m1_rev` in the Port
 
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
-| G3 (`patch-04`) | `limactl screenshot` | **PR #5098 open** — reviewer comments resolved, awaiting approval |
-| B1 (`patch-05`) | `suppressFirstLoginSetup` | ready for submission |
+| B1 (`patch-05`) | `suppressFirstLoginSetup` | **Issue #5186 open** — awaiting maintainer feedback before PR |
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (depends on B1) |
 | M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
 | B3 (`patch-08`) | DFU install workaround for macOS 27 beta | **NOT for upstream** — macOS 27-beta only |
@@ -16,6 +15,7 @@ Patch revs: see `g3_rev` / `b1_rev` / `b2_rev` / `b3_rev` / `m1_rev` in the Port
 
 `patch-01-g1-thread-pin.diff` merged upstream in PR #5036 and removed from port.
 `patch-02-g4-window-title.diff` merged upstream in PR #5084 and removed from port.
+`patch-04-g3-screenshot.diff` merged upstream in PR #5098 (2026-06-28) and removed from port.
 
 ## Patch ordering (applied last = macOS 27 block)
 
@@ -49,10 +49,10 @@ Patch generation commands:
 ## TODO
 
 ### Upstream PRs
-- [ ] G3 / PR #5098: merge pending. `Lints` and `Windows QEMU` failures are infra flakes —
-      re-run, don't chase.
-- [ ] B1: create upstream PR branch from `upstream-pr/b1-fakecloudinit`, sign off (DCO),
-      submit after G3 merges. PR description must state tested guest versions: macOS 15, macOS 26.
+- [x] G3 / PR #5098: merged 2026-06-28.
+- [ ] B1: issue #5186 open (2026-07-04). Once there's some acceptance of the feature concept,
+      create upstream PR branch from `upstream-pr/b1-fakecloudinit`, sign off (DCO), reference
+      the issue in the PR body. PR description must state tested guest versions: macOS 15, macOS 26.
 - [ ] B2: submit after B1 merges.
       PR description must cover: TCC schema v30 + tccd forward-migration rationale,
       presets shipped (sshd-full-disk-access, lima-guestagent-full-disk-access, terminal-accessibility),
