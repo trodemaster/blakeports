@@ -1,8 +1,8 @@
 diff --git .golangci.yml .golangci.yml
-index f69631bf..bfd10f8b 100644
+index f69631bf..aaf42db6 100644
 --- .golangci.yml
 +++ .golangci.yml
-@@ -160,6 +160,24 @@ linters:
+@@ -160,6 +160,16 @@ linters:
        - revive
        path: pkg/(hostagent|guestagent)/api/
        text: avoid meaningless package names
@@ -16,14 +16,6 @@ index f69631bf..bfd10f8b 100644
 +      - gocritic
 +      path: pkg/driver/vz/macos27_dfu_install_darwin_arm64\.go
 +      text: dupImport
-+    # Pre-existing nolint directives for deprecated gRPC API that staticcheck
-+    # no longer flags on arm64 macOS. Exclude from nolintlint until upstream cleans up.
-+    - linters:
-+      - nolintlint
-+      path: pkg/driver/external/client/client\.go
-+    - linters:
-+      - nolintlint
-+      path: pkg/guestagent/api/client/credentials\.go
  issues:
    # Maximum issues count per one linter.
    max-issues-per-linter: 0
@@ -756,10 +748,10 @@ index fdd18137..4365afd9 100644
 +	return errMacOSGuestUnsupported
 +}
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index f6b65254..37d2c0ed 100644
+index 132902b6..70267ede 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
-@@ -422,6 +422,16 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
+@@ -429,6 +429,16 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
  		return err
  	}
  

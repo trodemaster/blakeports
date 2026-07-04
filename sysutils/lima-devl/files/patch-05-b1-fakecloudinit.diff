@@ -15,14 +15,16 @@ index 5c617282..810d14fc 100644
  bootcmd:
  {{- if $nicHeal }}
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 009c5d67..a9408749 100644
+index 24366b9c..5b4cc483 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -148,7 +148,24 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+@@ -148,9 +148,26 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
  		Plain:          *instConfig.Plain,
  		TimeZone:       *instConfig.TimeZone,
  		NoCloudInit:    noCloudInit,
 -		Param:          instConfig.Param,
+-		LegacyBIOS:     *instConfig.Firmware.LegacyBIOS,
+-		TPM:            *instConfig.TPM,
 +		SuppressFirstLoginSetup: func() bool {
 +			var vzOpts limatype.VZOpts
 +			if err := limayaml.Convert(instConfig.VMOpts[limatype.VZ], &vzOpts, "vmOpts.vz"); err != nil {
@@ -40,11 +42,13 @@ index 009c5d67..a9408749 100644
 +			}
 +			return vzOpts.SuppressFirstLoginSetup.Plist
 +		}(),
-+		Param: instConfig.Param,
++		Param:      instConfig.Param,
++		LegacyBIOS: *instConfig.Firmware.LegacyBIOS,
++		TPM:        *instConfig.TPM,
  	}
  
  	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
-@@ -398,6 +415,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+@@ -408,6 +425,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
  		return "", err
  	}
  
@@ -74,18 +78,18 @@ index 9a6cbf7d..9ff3db88 100644
  
  type Growpart struct {
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index 181c49e2..a5aa9a38 100644
+index 061941a7..2c2b6bdd 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
-@@ -117,6 +117,8 @@ type TemplateArgs struct {
- 	Plain                           bool
- 	TimeZone                        string
- 	NoCloudInit                     bool
+@@ -135,6 +135,8 @@ type TemplateArgs struct {
+ 	LegacyBIOS                      bool
+ 	IsWindowsServer                 bool
+ 	TPM                             bool
 +	SuppressFirstLoginSetup         bool
 +	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
  }
  
- func ValidateTemplateArgs(args *TemplateArgs) error {
+ func (t *TemplateArgs) generateWindowsInitialPassword() error {
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 index 249d1510..55d03970 100644
 --- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
@@ -276,18 +280,18 @@ index 249d1510..55d03970 100644
  	logrus.Infof("Executing command: %v", cmd.Args)
  	if output, err := cmd.CombinedOutput(); err != nil {
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index afb012e8..c7310a71 100644
+index a74f3cb4..7d232471 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -121,8 +121,16 @@ type QEMUOpts struct {
+@@ -124,8 +124,16 @@ type QEMUOpts struct {
  }
  
  type VZOpts struct {
 -	Rosetta         Rosetta     `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
 -	DiskImageFormat *image.Type `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	Rosetta                  Rosetta                  `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
-+	DiskImageFormat          *image.Type              `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	SuppressFirstLoginSetup  *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
++	Rosetta                 Rosetta                  `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
++	DiskImageFormat         *image.Type              `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
++	SuppressFirstLoginSetup *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
 +}
 +
 +// SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
