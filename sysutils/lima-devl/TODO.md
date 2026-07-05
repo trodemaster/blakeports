@@ -64,6 +64,18 @@ Patch generation commands:
       - M1 may be partially upstreamable if ISRootMigrator behavior is documented
       - B3 may be upstreamable or resolved by Apple fixing VZMacOSInstaller
 - [ ] Test TCC patching against a macOS 27-beta guest (template exists in lima_mac, untested).
+- Related flakiness observed 2026-07-05 (not in the M1 patch itself — in `lima_mac`'s
+  `configure.sh`, which runs after Lima's own fakecloudinit as a provisioning script):
+  on a macOS 27 beta guest, Setup Assistant hung at the first-boot progress screen
+  (`Setup Assistant -MiniBuddyYes`, near-zero CPU) and a `defaults write NSGlobalDomain`
+  call in `configure_screensaver` blocked indefinitely on the same cfprefsd round-trip,
+  stalling Lima's "boot scripts must have finished" gate for the whole build. Not seen on
+  macOS 26 or 15. Fixed defensively in `lima_mac` (commit `bcd1434`) by wrapping
+  `configure_setup_assistant`/`configure_screensaver` with a 60s timeout — see
+  `lima_mac/CLAUDE.md`'s caveats list. Same failure class (cfprefsd/Setup Assistant
+  flakiness on macOS 27 beta) as what M1's guest-side Setup Assistant plist writes in
+  `fakecloudinit_darwin.go` work around; worth keeping in mind if `ISRootMigrator`
+  behavior is investigated for the M1 upstreamability question above.
 
 ### Verification
 - [ ] Rebuild a VM using the new patch set to confirm behavior: B1+B2+M1 patching.
