@@ -1,0 +1,174 @@
+name: Build axpbox
+
+on:
+  push:
+    paths: ['emulators/axpbox/**']
+    branches: [main]
+  pull_request:
+    paths: ['emulators/axpbox/**']
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: false
+        default: 'main'
+        type: string
+      run_macos27_beta:
+        description: 'macOS 27 Beta (Golden Gate)'
+        required: false
+        default: true
+        type: boolean
+      run_macos26:
+        description: 'macOS 26 (Tahoe)'
+        required: false
+        default: true
+        type: boolean
+      run_macos15:
+        description: 'macOS 15 (Sequoia)'
+        required: false
+        default: false
+        type: boolean
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          MATRIX='{"include":['
+          FIRST=true
+
+          # For non-workflow_dispatch events (push/PR), default to modern platforms
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/axpbox"},'
+            MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"emulators/axpbox"}'
+            FIRST=false
+          else
+            # macOS 15
+            if [[ "${{ inputs.run_macos15 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"emulators/axpbox"}'
+              FIRST=false
+            fi
+
+            # macOS 26
+            if [[ "${{ inputs.run_macos26 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/axpbox"}'
+              FIRST=false
+            fi
+
+            # macOS 26 Beta
+            if [[ "${{ inputs.run_macos27_beta }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"emulators/axpbox"}'
+              FIRST=false
+            fi
+
+            # If no platforms selected, default to modern platforms
+            if [[ "$FIRST" == "true" ]]; then
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/axpbox"},'
+              MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"emulators/axpbox"}'
+            fi
+          fi
+
+          MATRIX+=']}'
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix for trigger: ${{ github.event_name }}"
+          echo "$MATRIX" | jq '.'
+
+  build-axpbox:
+    needs: setup-matrix
+    name: build-axpbox (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Gather system information
+        id: system-info
+        continue-on-error: true
+        run: |
+          echo "Running on: ${{ matrix.platform }}"
+          echo "Building port: axpbox"
+          echo "Building from branch: ${{ inputs.branch || github.ref_name }}"
+
+          eval $(./scripts/getsysteminfo)
+
+          echo "macos_version=${MACOS_VERSION}" >> $GITHUB_OUTPUT
+          echo "macos_major=${MACOS_MAJOR}" >> $GITHUB_OUTPUT
+          echo "macos_minor=${MACOS_MINOR}" >> $GITHUB_OUTPUT
+          echo "macos_build=${MACOS_BUILD}" >> $GITHUB_OUTPUT
+          echo "arch=${ARCH}" >> $GITHUB_OUTPUT
+          echo "xcode_version=${XCODE_VERSION}" >> $GITHUB_OUTPUT
+          echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
+
+          echo ""
+          echo "System Information:"
+          sw_vers || echo "Could not determine macOS version"
+          echo ""
+          echo "Xcode Version: ${XCODE_VERSION}"
+          echo "Command Line Tools: ${CLT_VERSION}"
+          echo "Architecture: ${ARCH}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Setup MacPorts and BlakePorts Environment
+        run: ./scripts/installmacports
+
+      - name: Lint portfile
+        run: |
+          source ./setupenv.bash
+          port lint --nitpick ${{ matrix.port }}
+
+      - name: Clean existing installation
+        run: |
+          source ./setupenv.bash
+          if port installed axpbox 2>/dev/null | grep -q "axpbox @"; then
+            echo "Removing existing axpbox installation..."
+            sudo port uninstall axpbox
+            sudo port clean --dist axpbox || true
+          else
+            echo "No existing axpbox installation found"
+          fi
+
+      - name: Install dependencies
+        run: ./scripts/install-deps axpbox
+
+      - name: Build port
+        run: |
+          source ./setupenv.bash
+          sudo port -kv install axpbox
+
+      - name: Verify installation
+        run: |
+          source ./setupenv.bash
+          port installed axpbox
+          echo ""
+          echo "axpbox binary:"
+          ls -la /opt/local/bin/axpbox
+          echo ""
+          echo "axpbox usage:"
+          /opt/local/bin/axpbox || true
+          echo ""
+          echo "Linked libraries:"
+          otool -L /opt/local/bin/axpbox
+
+      - name: Clean port work directory
+        if: always()
+        run: |
+          source ./setupenv.bash
+          sudo port clean --work axpbox
