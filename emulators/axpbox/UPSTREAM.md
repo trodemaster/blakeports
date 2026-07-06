@@ -141,6 +141,32 @@ be woken portably (closing a listening socket does not reliably unblock
 `accept()` on all platforms, notably macOS), and the process is exiting
 anyway.
 
+**Verification (repro + fix, macOS 26 arm64, 2026-07-05):**
+
+- Repro procedure: boot to SRM, connect telnet clients to both serial
+  ports (construction blocks on `accept()` until then), disconnect both
+  clients so the serial threads re-enter `accept()`
+  (`-SRL-I-WAITFOR: Waiting for a new connection...` in the log), then
+  send SIGTERM.
+- Unpatched binary: 100% reproducible SIGABRT (exit code 134), crash
+  report shows `CSerial::stop_threads → std::terminate → abort` with
+  both serial threads in `__accept`. Reproduced twice on separate runs.
+- Patched binary, same procedure: exit code 0, no crash report, log
+  shows the complete graceful path:
+  `Exiting gracefully: User requested shutdown (sdl.cpp:1035)` →
+  `Stop threads: cpu0 srl0 srl1 ide0 ide1 ali kbd` →
+  `%FLS-I-SAVEST: Flash state saved to rom/flash.rom` →
+  `%DPR-I-SAVEST: DPR state saved to rom/dpr.rom`.
+- Side effect worth mentioning in the PR: because shutdown now completes
+  instead of aborting, Flash/DPR NVRAM state is actually persisted on
+  exit — SRM environment variables survive across runs. Before the fix
+  (and on macOS before patch 2), the save-state code was unreachable on
+  this path.
+- Note the SIGTERM→graceful chain: SDL installs SIGINT/SIGTERM handlers
+  by default and converts them to SDL_QUIT, which the GUI event loop
+  turns into the graceful-exit exception (sdl.cpp:1035). So "kill <pid>"
+  exercises the same code path as closing the window.
+
 ## Submission checklist
 
 - [ ] Fork lenticularis39/axpbox, branch from `main` (note: `main` is at
