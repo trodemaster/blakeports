@@ -1,0 +1,16 @@
+--- src/Serial.cpp.orig
++++ src/Serial.cpp
+@@ -137,6 +137,13 @@
+     printf(" %s", buffer);
+     if (!acceptingSocket) {
+       myThread->join();
++    } else {
++      /* The thread is blocked in accept() and cannot be woken portably
++         (closing the listening socket does not reliably unblock accept()
++         on all platforms). We are shutting down, so detach it: resetting
++         a still-joinable std::thread calls std::terminate(), which turns
++         every shutdown with a waiting serial port into an abort. */
++      myThread->detach();
+     }
+     myThread = nullptr;
+   }

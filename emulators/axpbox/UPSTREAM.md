@@ -108,18 +108,52 @@ just set `myThreadDead`.
   `run_gui_step`): intermittent SIGSEGV in `palette_change` — keep the
   eager init and the NULL guard together.
 
+## Patch 3: SIGABRT in CSerial::stop_threads() during shutdown
+
+**File:** `files/patch-serial-stop-threads.diff` (touches `src/Serial.cpp`)
+
+**Problem:** `CSerial::stop_threads()` only joins the serial thread when it
+is NOT blocked in `accept()`:
+
+```cpp
+if (!acceptingSocket) {
+  myThread->join();
+}
+myThread = nullptr;   // joinable thread destroyed -> std::terminate()
+```
+
+If shutdown happens while a serial port is waiting for a (re)connection
+(`acceptingSocket == true` — e.g. a telnet client disconnected), the
+`unique_ptr` reset destroys a still-joinable `std::thread`, which per the
+C++ standard calls `std::terminate()` → `abort()` (SIGABRT). Observed
+stack: main thread in `main_sim → CSystem::stop_threads →
+CSerial::stop_threads + 112 → std::terminate → abort`, with both serial
+threads sitting in `__accept`.
+
+**Not macOS-specific** — this aborts on any platform whenever the emulator
+shuts down while a serial port is in the waiting state. It surfaces more
+readily with patch 2 because clean shutdown paths (SDL_QUIT from window
+close or SDL's signal handlers) now actually execute on macOS instead of
+being swallowed by the device thread's catch block.
+
+**Fix:** `detach()` the thread when it's blocked in `accept()` — it cannot
+be woken portably (closing a listening socket does not reliably unblock
+`accept()` on all platforms, notably macOS), and the process is exiting
+anyway.
+
 ## Submission checklist
 
 - [ ] Fork lenticularis39/axpbox, branch from `main` (note: `main` is at
-      1.1.3-dev — `CMakeLists.txt` says `VERSION 1.1.3`; re-verify both
+      1.1.3-dev — `CMakeLists.txt` says `VERSION 1.1.3`; re-verify the
       patches apply/behave there, the touched code is unchanged since
       v1.1.2 as of 2026-05)
-- [ ] Apply both patches (they are `-p0` MacPorts-style diffs; use
+- [ ] Apply the patches (they are `-p0` MacPorts-style diffs; use
       `patch -p0 < ...` from the repo root, then commit as normal git
       changes)
-- [ ] Two separate PRs or one? Suggest two: the CMake detection fix is
-      trivially reviewable on its own; the threading change deserves its
-      own discussion
+- [ ] Separate PRs suggested: the CMake detection fix and the serial
+      shutdown fix are each trivially reviewable on their own (and the
+      serial fix is platform-independent); the threading change deserves
+      its own discussion
 - [ ] Reference upstream context: README already lists "SDL keyboard
       (partly works, but easily breaks)" under known issues; wiki VGA
       page documents the SDL GUI as supported — macOS is just broken

@@ -35,8 +35,13 @@ depends_lib         port:libpcap \
 # window creation, event pump) on the process main thread and throws
 # NSInternalInconsistencyException otherwise. Drive the GUI loop from
 # CSystem::Run() on the main thread instead.
+# patch-serial-stop-threads.diff: CSerial::stop_threads() resets a
+# still-joinable std::thread when the serial thread is blocked in accept(),
+# which calls std::terminate() and aborts every shutdown that happens while
+# a serial port is waiting for a (re)connection. Detach the thread instead.
 patchfiles          patch-cmake-sdl-detection.diff \
-                    patch-macos-gui-main-thread.diff
+                    patch-macos-gui-main-thread.diff \
+                    patch-serial-stop-threads.diff
 
 configure.args-append \
                     -DCMAKE_BUILD_TYPE=Release \
