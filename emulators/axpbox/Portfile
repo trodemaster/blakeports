@@ -6,7 +6,6 @@ PortGroup           cmake 1.1
 
 github.setup        lenticularis39 axpbox 1.1.2 v
 github.tarball_from archive
-revision            0
 
 categories          emulators
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
@@ -17,17 +16,23 @@ long_description    AXPbox is a fork of the discontinued es40 emulator. It emula
                     the DEC Alpha AXP architecture and can run any guest operating \
                     system that uses the OpenVMS or Tru64 PALcode, such as OpenVMS \
                     and some versions of NetBSD. It supports SCSI, IDE, serial \
-                    ports, and Ethernet (via pcap).
+                    ports, Ethernet (via pcap), and VGA graphics (via SDL).
 
 checksums           rmd160  26cf832f82db5dc78a1802c187abf1dfb2098ac6 \
                     sha256  7e45fd7e1a8bb71e1634133b9d4e91cf08bf0ac1a6aac7a66716311d84854383 \
                     size    421271
 
-depends_lib         port:libpcap
+depends_lib         port:libpcap \
+                    port:libsdl
+
+# Upstream's SDL/SDL.h detection (a bare check_include_file call) breaks on
+# macOS: SDL 1.2's SDL_main.h does '#define main SDL_main' for __MACOSX__,
+# which conflicts with the probe's own int main(void) test program. Patch it
+# to use find_path instead, matching the working pcap/find_package pattern.
+patchfiles          patch-cmake-sdl-detection.diff
 
 configure.args-append \
                     -DCMAKE_BUILD_TYPE=Release \
-                    -DDISABLE_SDL=yes \
                     -DDISABLE_X11=yes
 
 notes "

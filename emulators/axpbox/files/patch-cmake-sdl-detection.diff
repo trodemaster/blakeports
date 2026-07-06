@@ -1,0 +1,22 @@
+--- CMakeLists.txt	2026-07-05 17:52:07
++++ CMakeLists.txt	2026-07-05 17:52:16
+@@ -116,7 +116,18 @@
+ 
+ # Features
+ check_include_file("pcap.h" HAVE_PCAP)
+-check_include_file("SDL/SDL.h" HAVE_SDL)
++# check_include_file compiles a trivial "int main(void)" test program, which
++# conflicts with SDL 1.2's SDL_main.h ('#define main SDL_main' on
++# __MACOSX__/__WIN32__) and always fails on macOS regardless of whether
++# SDL/SDL.h is actually available. Use find_path instead: it only checks for
++# the header's existence and correctly honors CMAKE_SYSTEM_PREFIX_PATH.
++find_path(SDL_INCLUDE_DIR NAMES SDL/SDL.h)
++if(SDL_INCLUDE_DIR)
++    set(HAVE_SDL 1)
++    include_directories(${SDL_INCLUDE_DIR})
++else()
++    set(HAVE_SDL 0)
++endif()
+ check_include_file("X11/X.h" HAVE_X11)
+ # Large file support (fopen64 / disk files > 2 GB)
+ AXPBOX_TEST_LARGE_FILES(HAVE_LARGE_FILES)
