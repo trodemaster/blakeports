@@ -25,11 +25,18 @@ checksums           rmd160  26cf832f82db5dc78a1802c187abf1dfb2098ac6 \
 depends_lib         port:libpcap \
                     port:libsdl
 
-# Upstream's SDL/SDL.h detection (a bare check_include_file call) breaks on
-# macOS: SDL 1.2's SDL_main.h does '#define main SDL_main' for __MACOSX__,
-# which conflicts with the probe's own int main(void) test program. Patch it
-# to use find_path instead, matching the working pcap/find_package pattern.
-patchfiles          patch-cmake-sdl-detection.diff
+# patch-cmake-sdl-detection.diff: upstream's SDL/SDL.h detection (a bare
+# check_include_file call) breaks on macOS: SDL 1.2's SDL_main.h does
+# '#define main SDL_main' for __MACOSX__, which conflicts with the probe's
+# own int main(void) test program. Patch it to use find_path instead,
+# matching the working pcap/find_package pattern.
+# patch-macos-gui-main-thread.diff: upstream runs the SDL GUI loop on the
+# VGA device's worker thread, but Cocoa requires all GUI calls (menu setup,
+# window creation, event pump) on the process main thread and throws
+# NSInternalInconsistencyException otherwise. Drive the GUI loop from
+# CSystem::Run() on the main thread instead.
+patchfiles          patch-cmake-sdl-detection.diff \
+                    patch-macos-gui-main-thread.diff
 
 configure.args-append \
                     -DCMAKE_BUILD_TYPE=Release \

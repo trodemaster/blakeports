@@ -1,0 +1,200 @@
+--- src/SystemComponent.hpp.orig
++++ src/SystemComponent.hpp
+@@ -51,6 +51,11 @@
+   virtual void start_threads(){};
+   virtual void stop_threads(){};
+ 
++  /* Run one iteration of the component's GUI loop on the calling thread.
++     Returns true if a step was executed. Used on macOS, where Cocoa
++     requires all GUI calls to happen on the process main thread. */
++  virtual bool run_gui_step() { return false; };
++
+   char *devid_string;
+ 
+ protected:
+--- src/System.cpp.orig
++++ src/System.cpp
+@@ -265,7 +265,19 @@
+   for (k = 0;; k++) {
+     if (got_sigint)
+       FAILURE(Graceful, "CTRL-C detected");
+-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
++    bool gui_stepped = false;
++#if defined(__APPLE__)
++    /* On macOS, Cocoa requires all GUI calls to happen on the process
++       main thread, so drive the VGA card's GUI loop from here rather
++       than from a device thread. A GUI step sleeps ~100ms internally,
++       preserving this loop's cadence. */
++    for (i = 0; i < iNumComponents; i++) {
++      if (acComponents[i]->run_gui_step())
++        gui_stepped = true;
++    }
++#endif
++    if (!gui_stepped)
++      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+     for (i = 0; i < iNumComponents; i++)
+       acComponents[i]->check_state();
+ #if !defined(HIDE_COUNTER)
+--- src/Cirrus.hpp.orig
++++ src/Cirrus.hpp
+@@ -65,6 +65,7 @@
+   virtual void init();
+   virtual void start_threads();
+   virtual void stop_threads();
++  virtual bool run_gui_step();
+ 
+   virtual u8 get_actl_palette_idx(u8 index);
+   virtual void redraw_area(unsigned x0, unsigned y0, unsigned width,
+@@ -122,6 +123,7 @@
+   std::unique_ptr<std::thread> myThread;
+   std::atomic_bool myThreadDead{false};
+   bool StopThread;
++  bool GuiInitialized = false;
+ 
+   /// The state structure contains all elements that need to be saved to the
+   /// statefile
+--- src/Cirrus.cpp.orig
++++ src/Cirrus.cpp
+@@ -344,11 +344,53 @@
+  * Create and start thread.
+  **/
+ void CCirrus::start_threads() {
++#if defined(__APPLE__)
++  /* Cocoa requires all GUI calls on the process main thread; the GUI
++     loop is driven from CSystem::Run() via run_gui_step() instead of
++     a device thread. Initialize the GUI eagerly here (start_threads
++     runs on the main thread) so the SDL screen exists before the CPU
++     threads are released and the guest VGA BIOS starts programming
++     the card. */
++  printf(" cirrus(main)");
++  StopThread = false;
++  if (!GuiInitialized) {
++    bx_gui->init(state.x_tilesize, state.y_tilesize);
++    GuiInitialized = true;
++  }
++#else
+   if (!myThread) {
+     printf(" cirrus");
+     StopThread = false;
+     myThread = std::make_unique<std::thread>([this](){ this->run(); });
++  }
++#endif
++}
++
++/**
++ * Run one iteration of the GUI loop on the calling thread. This is
++ * one pass of the run() loop body, used on macOS where the GUI must
++ * be driven from the process main thread.
++ **/
++bool CCirrus::run_gui_step() {
++  if (StopThread)
++    return false;
++  if (!GuiInitialized) {
++    bx_gui->init(state.x_tilesize, state.y_tilesize);
++    GuiInitialized = true;
++  }
++  // Handle GUI events (100 times per second)
++  for (int i = 0; i < 10; i++) {
++    bx_gui->lock();
++    bx_gui->handle_events();
++    bx_gui->unlock();
++    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+   }
++  // Update the screen (10 times per second)
++  bx_gui->lock();
++  update();
++  bx_gui->flush();
++  bx_gui->unlock();
++  return true;
+ }
+ 
+ /**
+--- src/S3Trio64.hpp.orig
++++ src/S3Trio64.hpp
+@@ -69,6 +69,7 @@
+   virtual void init();
+   virtual void start_threads();
+   virtual void stop_threads();
++  virtual bool run_gui_step();
+ 
+ private:
+   u32 mem_read(u32 address, int dsize);
+@@ -122,6 +123,7 @@
+   std::unique_ptr<std::thread> myThread;
+   std::atomic_bool myThreadDead{false};
+   bool StopThread;
++  bool GuiInitialized = false;
+ 
+   /// The state structure contains all elements that need to be saved to the
+   /// statefile.
+--- src/S3Trio64.cpp.orig
++++ src/S3Trio64.cpp
+@@ -342,11 +342,53 @@
+  * Create and start thread.
+  **/
+ void CS3Trio64::start_threads() {
++#if defined(__APPLE__)
++  /* Cocoa requires all GUI calls on the process main thread; the GUI
++     loop is driven from CSystem::Run() via run_gui_step() instead of
++     a device thread. Initialize the GUI eagerly here (start_threads
++     runs on the main thread) so the SDL screen exists before the CPU
++     threads are released and the guest VGA BIOS starts programming
++     the card. */
++  printf(" s3(main)");
++  StopThread = false;
++  if (!GuiInitialized) {
++    bx_gui->init(state.x_tilesize, state.y_tilesize);
++    GuiInitialized = true;
++  }
++#else
+   if (!myThread) {
+     printf(" s3");
+     StopThread = false;
+     myThread = std::make_unique<std::thread>([this](){ this->run(); });
++  }
++#endif
++}
++
++/**
++ * Run one iteration of the GUI loop on the calling thread. This is
++ * one pass of the run() loop body, used on macOS where the GUI must
++ * be driven from the process main thread.
++ **/
++bool CS3Trio64::run_gui_step() {
++  if (StopThread)
++    return false;
++  if (!GuiInitialized) {
++    bx_gui->init(state.x_tilesize, state.y_tilesize);
++    GuiInitialized = true;
++  }
++  // Handle GUI events (100 times per second)
++  for (int i = 0; i < 10; i++) {
++    bx_gui->lock();
++    bx_gui->handle_events();
++    bx_gui->unlock();
++    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+   }
++  // Update the screen (10 times per second)
++  bx_gui->lock();
++  update();
++  bx_gui->flush();
++  bx_gui->unlock();
++  return true;
+ }
+ 
+ /**
+--- src/gui/sdl.cpp.orig
++++ src/gui/sdl.cpp
+@@ -1086,6 +1086,12 @@
+   unsigned char palblue = blue & 0xFF;
+ 
+   if (index > 255)
++    return 0;
++
++  /* The CPU thread can reach this through VGA DAC register writes before
++     the screen surface exists (or while dimension_update() is replacing
++     it); don't crash on a missed palette write. */
++  if (!sdl_screen)
+     return 0;
+ 
+   palette[index] = SDL_MapRGB(sdl_screen->format, palred, palgreen, palblue);
