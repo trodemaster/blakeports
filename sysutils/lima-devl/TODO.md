@@ -7,7 +7,7 @@ Patch revs: see `g3_rev` / `b1_rev` / `b2_rev` / `b3_rev` / `m1_rev` in the Port
 
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
-| B1 (`patch-05`) | `suppressFirstLoginSetup` | **Issue #5186 open** — awaiting maintainer feedback before PR |
+| B1 (`patch-05`) | `suppressFirstLoginSetup` | **Issue #5186 open** — feedback received 2026-07-06, PR welcomed; schema move to `osOpts.darwin` done, PR not yet opened |
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (depends on B1) |
 | M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
 | B3 (`patch-08`) | DFU install workaround for macOS 27 beta | **NOT for upstream** — macOS 27-beta only |
@@ -34,7 +34,7 @@ patch-08-b3-dfu-beta27.diff             ← macOS 27-beta workaround, NOT upstre
 | Branch | Based on | Commits above base | Role |
 |--------|----------|--------------------|------|
 | `upstream-pr/g3-screenshot-clean` | origin/master | 1 | upstream PR branch |
-| `upstream-pr/b1-fakecloudinit` | origin/master | 7 | upstream PR branch (clean) |
+| `upstream-pr/b1-fakecloudinit` | origin/master | 9 | upstream PR branch (clean); tip = schema move to `osOpts.darwin` |
 | `upstream-pr/b2-tcc` = `macports/b2-on-b1` | b1-tip | 3 | stacked on B1 for patching; use b1-tip as B2 patch base |
 | `macports/m1-fakecloudinit-macos27` | b1-tip | 5 | macOS 27 workarounds stacked on B1 |
 | `upstream-pr/b3-dfu-beta27` | origin/master | 6 | macOS 27 DFU workaround |
@@ -50,9 +50,22 @@ Patch generation commands:
 
 ### Upstream PRs
 - [x] G3 / PR #5098: merged 2026-06-28.
-- [ ] B1: issue #5186 open (2026-07-04). Once there's some acceptance of the feature concept,
-      create upstream PR branch from `upstream-pr/b1-fakecloudinit`, sign off (DCO), reference
-      the issue in the PR body. PR description must state tested guest versions: macOS 15, macOS 26.
+- [ ] B1: issue #5186 open (2026-07-04). Maintainer (AkihiroSuda) feedback 2026-07-06:
+      feature concept accepted for macOS 15/26 ("feel free to submit a PR"); can't
+      test/review the macOS 27 native-provisioning path until macOS 27 GA (out of scope
+      for this feature). One required change before submitting: move the config from
+      `vmOpts.vz.suppressFirstLoginSetup` to `osOpts.darwin.suppressFirstLoginSetup`,
+      mirroring the existing `WindowsOpts`/`osOpts` pattern (`lima_yaml.go` L350-354).
+      Done: new `DarwinOpts` type added, `VZOpts.SuppressFirstLoginSetup` removed, all
+      call sites (`pkg/cidata/cidata.go`, docs) repointed. Commit `477f30c5`, pushed to
+      `trodemaster/upstream-pr/b1-fakecloudinit`. Verified via `go build ./...`,
+      `go vet ./...`, `go test ./pkg/limatype/... ./pkg/limayaml/... ./pkg/cidata/...`,
+      and `golangci-lint run` (0 issues) — all clean, no local VM rebuild needed.
+      Next: open the upstream PR (sign off DCO, reference #5186 in the PR body, state
+      tested guest versions: macOS 15, macOS 26) — this is what actually triggers CI
+      (`test.yml` only runs on push to master/release or on `pull_request`, not on a
+      plain fork branch push). Holding off on opening the PR for now per 2026-07-06
+      decision.
 - [ ] B2: submit after B1 merges.
       PR description must cover: TCC schema v30 + tccd forward-migration rationale,
       presets shipped (sshd-full-disk-access, lima-guestagent-full-disk-access, terminal-accessibility),
