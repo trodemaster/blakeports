@@ -9,3 +9,8 @@ docker/config/
 # macports-cache local config and build artifact
 tools/macports-cache/config.mk
 tools/macports-cache/macports-cache
+
+# port index
+PortIndex
+PortIndex*
+
