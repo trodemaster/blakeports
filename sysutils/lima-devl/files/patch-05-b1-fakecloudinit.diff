@@ -15,7 +15,7 @@ index 5c617282..810d14fc 100644
  bootcmd:
  {{- if $nicHeal }}
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 24366b9c..5b4cc483 100644
+index 24366b9c..2fda34fe 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
 @@ -148,9 +148,26 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
@@ -26,21 +26,21 @@ index 24366b9c..5b4cc483 100644
 -		LegacyBIOS:     *instConfig.Firmware.LegacyBIOS,
 -		TPM:            *instConfig.TPM,
 +		SuppressFirstLoginSetup: func() bool {
-+			var vzOpts limatype.VZOpts
-+			if err := limayaml.Convert(instConfig.VMOpts[limatype.VZ], &vzOpts, "vmOpts.vz"); err != nil {
++			var darwinOpts limatype.DarwinOpts
++			if err := limayaml.Convert(instConfig.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.darwin"); err != nil {
 +				return false
 +			}
-+			return vzOpts.SuppressFirstLoginSetup != nil
++			return darwinOpts.SuppressFirstLoginSetup != nil
 +		}(),
 +		SuppressFirstLoginSetupPlist: func() string {
-+			var vzOpts limatype.VZOpts
-+			if err := limayaml.Convert(instConfig.VMOpts[limatype.VZ], &vzOpts, "vmOpts.vz"); err != nil {
++			var darwinOpts limatype.DarwinOpts
++			if err := limayaml.Convert(instConfig.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.darwin"); err != nil {
 +				return ""
 +			}
-+			if vzOpts.SuppressFirstLoginSetup == nil {
++			if darwinOpts.SuppressFirstLoginSetup == nil {
 +				return ""
 +			}
-+			return vzOpts.SuppressFirstLoginSetup.Plist
++			return darwinOpts.SuppressFirstLoginSetup.Plist
 +		}(),
 +		Param:      instConfig.Param,
 +		LegacyBIOS: *instConfig.Firmware.LegacyBIOS,
@@ -63,7 +63,7 @@ index 24366b9c..5b4cc483 100644
  	if err != nil {
  		return "", fmt.Errorf("failed to get boot scripts: %w", err)
 diff --git pkg/cidata/cloudinittypes/userdata.go pkg/cidata/cloudinittypes/userdata.go
-index 9a6cbf7d..9ff3db88 100644
+index 9a6cbf7d..0a126cff 100644
 --- pkg/cidata/cloudinittypes/userdata.go
 +++ pkg/cidata/cloudinittypes/userdata.go
 @@ -24,6 +24,10 @@ type UserData struct {
@@ -72,7 +72,7 @@ index 9a6cbf7d..9ff3db88 100644
  	BootCmd []string `yaml:"bootcmd,omitempty"`
 +
 +	// SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
-+	// Controlled by vmOpts.vz.suppressFirstLoginSetup in the Lima instance config.
++	// Controlled by osOpts.darwin.suppressFirstLoginSetup in the Lima instance config.
 +	SuppressFirstLoginSetup bool `yaml:"suppress_first_login_setup,omitempty"`
  }
  
@@ -280,17 +280,14 @@ index 249d1510..55d03970 100644
  	logrus.Infof("Executing command: %v", cmd.Args)
  	if output, err := cmd.CombinedOutput(); err != nil {
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index a74f3cb4..7d232471 100644
+index a74f3cb4..4118a7af 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -124,8 +124,16 @@ type QEMUOpts struct {
+@@ -353,6 +353,17 @@ type WindowsOpts struct {
+ 	VirtioWin []File `yaml:"virtioWin,omitempty" json:"virtioWin,omitempty"`
  }
  
- type VZOpts struct {
--	Rosetta         Rosetta     `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
--	DiskImageFormat *image.Type `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	Rosetta                 Rosetta                  `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
-+	DiskImageFormat         *image.Type              `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
++type DarwinOpts struct {
 +	SuppressFirstLoginSetup *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
 +}
 +
@@ -299,11 +296,13 @@ index a74f3cb4..7d232471 100644
 +// content if non-empty; otherwise the built-in plist is used.
 +type SuppressFirstLoginSetup struct {
 +	Plist string `yaml:"plist,omitempty" json:"plist,omitempty"`
- }
- 
- type Rosetta struct {
++}
++
+ func NewOS(osname string) OS {
+ 	switch osname {
+ 	case "linux":
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index ab01f113..7f93ded2 100644
+index ab01f113..1908ae5b 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -33,6 +33,81 @@ limactl shell macos cat /Users/${USER}.guest/password
@@ -314,13 +313,13 @@ index ab01f113..7f93ded2 100644
 +
 +By default, macOS shows a series of setup wizard screens (Setup Assistant /
 +mini-buddy) on the first GUI login. For automated or headless-style macOS VMs
-+this is inconvenient. Set `vmOpts.vz.suppressFirstLoginSetup` to have Lima
++this is inconvenient. Set `osOpts.darwin.suppressFirstLoginSetup` to have Lima
 +pre-populate the relevant preference plists during provisioning, before any GUI
 +session starts, so the setup screens are skipped automatically:
 +
 +```yaml
-+vmOpts:
-+  vz:
++osOpts:
++  darwin:
 +    suppressFirstLoginSetup: {}
 +```
 +
@@ -342,8 +341,8 @@ index ab01f113..7f93ded2 100644
 +GUI login.
 +
 +```yaml
-+vmOpts:
-+  vz:
++osOpts:
++  darwin:
 +    suppressFirstLoginSetup:
 +      plist: |
 +        <?xml version="1.0" encoding="UTF-8"?>

@@ -1,0 +1,135 @@
+diff --git pkg/driver/vz/clipboard_darwin.go pkg/driver/vz/clipboard_darwin.go
+new file mode 100644
+index 00000000..2cb56943
+--- /dev/null
++++ pkg/driver/vz/clipboard_darwin.go
+@@ -0,0 +1,63 @@
++//go:build darwin && !no_vz
++
++// SPDX-FileCopyrightText: Copyright The Lima Authors
++// SPDX-License-Identifier: Apache-2.0
++
++package vz
++
++import (
++	"github.com/Code-Hex/vz/v3"
++	"github.com/sirupsen/logrus"
++
++	"github.com/lima-vm/lima/v2/pkg/limatype"
++	"github.com/lima-vm/lima/v2/pkg/limayaml"
++)
++
++// attachClipboard configures the VZ SPICE agent port for host-guest clipboard
++// sharing. This only sets up the host side of the channel; a SPICE
++// vdagent-compatible agent must be running in the guest for clipboard sharing
++// to actually work. Lima does not ship or install that guest agent.
++func attachClipboard(inst *limatype.Instance, vmConfig *vz.VirtualMachineConfiguration) error {
++	if *inst.Config.OS != limatype.DARWIN {
++		return nil
++	}
++
++	var darwinOpts limatype.DarwinOpts
++	if err := limayaml.Convert(inst.Config.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.darwin"); err != nil {
++		return err
++	}
++	if darwinOpts.Clipboard == nil || !*darwinOpts.Clipboard {
++		return nil
++	}
++
++	portName, err := vz.SpiceAgentPortAttachmentName()
++	if err != nil {
++		logrus.Warnf("osOpts.darwin.clipboard is enabled, but the SPICE agent port name could not be determined: %v", err)
++		return nil
++	}
++	spiceAgent, err := vz.NewSpiceAgentPortAttachment()
++	if err != nil {
++		logrus.Warnf("osOpts.darwin.clipboard is enabled, but the SPICE agent port attachment could not be created: %v", err)
++		return nil
++	}
++	spiceAgent.SetSharesClipboard(true)
++
++	portConfig, err := vz.NewVirtioConsolePortConfiguration(
++		vz.WithVirtioConsolePortConfigurationName(portName),
++		vz.WithVirtioConsolePortConfigurationAttachment(spiceAgent),
++	)
++	if err != nil {
++		return err
++	}
++
++	consoleDevice, err := vz.NewVirtioConsoleDeviceConfiguration()
++	if err != nil {
++		return err
++	}
++	consoleDevice.SetVirtioConsolePortConfiguration(0, portConfig)
++
++	vmConfig.SetConsoleDevicesVirtualMachineConfiguration([]vz.ConsoleDeviceConfiguration{
++		consoleDevice,
++	})
++	return nil
++}
+diff --git pkg/driver/vz/vm_darwin.go pkg/driver/vz/vm_darwin.go
+index eae59b71..15980ec4 100644
+--- pkg/driver/vz/vm_darwin.go
++++ pkg/driver/vz/vm_darwin.go
+@@ -224,6 +224,10 @@ func createVM(ctx context.Context, inst *limatype.Instance) (*vz.VirtualMachine,
+ 		return nil, err
+ 	}
+ 
++	if err = attachClipboard(inst, vmConfig); err != nil {
++		return nil, err
++	}
++
+ 	if err = attachNetwork(ctx, inst, vmConfig); err != nil {
+ 		return nil, err
+ 	}
+diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
+index 4118a7af..85039c50 100644
+--- pkg/limatype/lima_yaml.go
++++ pkg/limatype/lima_yaml.go
+@@ -355,6 +355,12 @@ type WindowsOpts struct {
+ 
+ type DarwinOpts struct {
+ 	SuppressFirstLoginSetup *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
++
++	// Clipboard enables host-guest clipboard sharing (Darwin guests only, vz driver only).
++	// Requires macOS 15+ on both host and guest, and a SPICE vdagent-compatible
++	// guest agent listening on the port named by VZSpiceAgentPortAttachment.
++	// Lima does not ship or install that guest agent.
++	Clipboard *bool `yaml:"clipboard,omitempty" json:"clipboard,omitempty" jsonschema:"nullable"` // default: false
+ }
+ 
+ // SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
+diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
+index 1908ae5b..007cf963 100644
+--- website/content/en/docs/usage/guests/macos.md
++++ website/content/en/docs/usage/guests/macos.md
+@@ -108,6 +108,29 @@ substitution is performed. Copy and adapt the built-in template above, then
+ supply the actual build and version strings for your target OS release if
+ needed.
+ 
++## Clipboard sharing
++
++| ⚡ Requirement | macOS >= 15, on both host and guest |
++|-------------------|-----------------------------|
++
++Set `osOpts.darwin.clipboard` to attach a
++[SPICE agent port](https://developer.apple.com/documentation/virtualization/vzspiceagentportattachment)
++for host-guest clipboard sharing:
++
++```yaml
++osOpts:
++  darwin:
++    clipboard: true
++```
++
++This only configures the host side of the channel. A SPICE vdagent-compatible
++agent must also be running in the guest — Lima does not ship or install one.
++[utmapp/vd_agent](https://github.com/utmapp/vd_agent) provides a macOS build of
++such an agent (a `spice-vdagentd` LaunchDaemon plus a per-user `spice-vdagent`
++LaunchAgent) that can be built and installed manually.
++
++**Default:** unset — clipboard sharing is disabled.
++
+ ## Caveats
+ - No support for turning off the video display.
+ - No support for automatic port forwarding.
