@@ -1,15 +1,15 @@
 # lima-devl — Upstream PR & Port Tracking
 
 Status of feature patches carried by this port and their upstream submission.
-Patch revs: see `g3_rev` / `b1_rev` / `b2_rev` / `b3_rev` / `b4_rev` / `m1_rev` in the Portfile.
+Patch revs: see `b1_rev` / `b2_rev` / `b3_rev` / `m1_rev` in the Portfile (B4 is parked, no `b4_rev`).
 
 ## Feature status
 
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
-| B1 (`patch-05`) | `suppressFirstLoginSetup` | **Issue #5186 open** — feedback received 2026-07-06, PR welcomed; schema move to `osOpts.darwin` done, PR not yet opened |
+| B1 (`patch-05`) | `suppressFirstLoginSetup` | **Issue #5186 open** — PR welcomed; schema move + conventions alignment done 2026-07-11, PR not yet opened |
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (depends on B1) |
-| B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **not yet an issue** — validating locally first; depends on B1 |
+| B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11); depends on B1 |
 | M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
 | B3 (`patch-08`) | DFU install workaround for macOS 27 beta | **NOT for upstream** — macOS 27-beta only |
 | O1 (`patch-07`) | PID timeout | disabled in Portfile |
@@ -23,24 +23,35 @@ Patch revs: see `g3_rev` / `b1_rev` / `b2_rev` / `b3_rev` / `b4_rev` / `m1_rev` 
 ```
 patch-Makefile.diff
 patch-usrlocalgo.diff
-patch-04-g3-screenshot.diff          ← upstream candidate
 patch-05-b1-fakecloudinit.diff       ← upstream candidate
 patch-06-b2-tcc.diff                 ← upstream candidate (depends on B1)
-patch-10-b4-macos-clipboard.diff     ← validating locally (depends on B1)
 patch-09-m1-fakecloudinit-macos27.diff  ← macOS 27-beta workaround, NOT upstream
 patch-08-b3-dfu-beta27.diff             ← macOS 27-beta workaround, NOT upstream
 ```
 
-## Branch topology (as of 2026-07-08)
+`patch-10-b4-macos-clipboard.diff` still exists in `files/` and the `upstream-pr/b4-macos-clipboard`
+git branch is kept, but the patch is **not** in the Portfile's `patchfiles` list (commented out,
+2026-07-11) — see the B4 entry below for why it's parked. `patch-04-g3-screenshot.diff` is gone
+entirely (merged upstream, removed from `files/` and `patchfiles`).
+
+## Branch topology (as of 2026-07-11, master = 47f138a2)
 
 | Branch | Based on | Commits above base | Role |
 |--------|----------|--------------------|------|
-| `upstream-pr/g3-screenshot-clean` | origin/master | 1 | upstream PR branch |
-| `upstream-pr/b1-fakecloudinit` | go.setup commit (13b850b0) | 9 | upstream PR branch (clean); tip = schema move to `osOpts.darwin` |
-| `upstream-pr/b2-tcc` = `macports/b2-on-b1` | b1-tip | 3 | stacked on B1 for patching; use b1-tip as B2 patch base |
-| `upstream-pr/b4-macos-clipboard` | b1-tip | 1 | stacked on B1 for patching (needs `DarwinOpts`); host-side clipboard only |
-| `macports/m1-fakecloudinit-macos27` | b1-tip | 5 | macOS 27 workarounds stacked on B1 |
-| `upstream-pr/b3-dfu-beta27` | origin/master | 6 | macOS 27 DFU workaround |
+| `upstream-pr/b1-fakecloudinit` | origin/master (= go.setup 47f138a2) | 9 | upstream PR branch (clean); tip = conventions-alignment commit `e0620438` |
+| `macports/b2-on-b1` | b1-tip | 3 | stacked on B1 for patching; use b1-tip as B2 patch base (`upstream-pr/b2-tcc` is a stale pre-rebase duplicate, unused) |
+| `upstream-pr/b4-macos-clipboard` | b1-tip | 1 | parked (clipboard non-functional from CLI binary); kept for future |
+| `macports/m1-fakecloudinit-macos27` | b1-tip | 7 | macOS 27 workarounds stacked on B1; first commit = the OpenDirectory/dscl user-existence check (moved out of B1 on 2026-07-11 for PR scope focus) |
+| `upstream-pr/b3-dfu-beta27` | origin/master | 12 | macOS 27 DFU workaround |
+
+**2026-07-11 restructure (meeting #5186 review asks):** rebased everything onto master
+`47f138a2`; added conventions-alignment commit to B1 (single `limayaml.Convert` for
+`osOpts.darwin` before the `TemplateArgs` literal matching the WindowsOpts pattern, all
+`%q` → `%#q`, `OsOpts` added to the VZ driver's `knownYamlProperties` so `osOpts.darwin`
+configs no longer log "vmType vz: ignoring [OsOpts]", template tidy); moved the
+OpenDirectory/dscl commit from B1 into M1's base (its real justification is the macOS 27
+pre-existing-user path; keeps the upstream PR single-feature). B1's diff now contains
+zero macOS 27 / TCC / dscl content.
 
 **2026-07-08 fix:** `patch-05`/`patch-06` had gone stale — they still put `suppressFirstLoginSetup`
 under `VZOpts` (the pre-#5186-feedback location) even though the `upstream-pr/b1-fakecloudinit`
@@ -53,17 +64,16 @@ conflict in `lima_yaml.go` resolved by keeping `VZOpts.GuestPatch` and dropping 
 `SuppressFirstLoginSetup`/`VZOpts` duplication) and regenerating patch-06. Bumped `b1_rev`→2,
 `b2_rev`→2. Full 5-patch chain (05, 06, 10, 09, 08) dry-run verified clean in sequence.
 
-Patch generation commands:
-- patch-04: `git diff --no-prefix origin/master..upstream-pr/g3-screenshot-clean`
-- patch-05: `git diff --no-prefix 13b850b0a62d7b3de68450771e64346fa1ecb9d6..upstream-pr/b1-fakecloudinit`
+Patch generation commands (as of 2026-07-11, go.setup == origin/master == 47f138a2):
+- patch-05: `git diff --no-prefix origin/master..upstream-pr/b1-fakecloudinit`
 - patch-06: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/b2-on-b1`
-- patch-10: `git diff --no-prefix upstream-pr/b1-fakecloudinit..upstream-pr/b4-macos-clipboard`
+- patch-10: `git diff --no-prefix upstream-pr/b1-fakecloudinit..upstream-pr/b4-macos-clipboard` (parked, not in patchfiles)
 - patch-09: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/m1-fakecloudinit-macos27`
 - patch-08: `git diff --no-prefix origin/master..upstream-pr/b3-dfu-beta27`
 
-Note: patch-05's base is pinned to the `go.setup` commit (not `origin/master`), since B1 hasn't
-been rebased onto current upstream master yet and the two have diverged. Regenerate against
-whatever `go.setup` points to, not against a live `origin/master` that may have moved further.
+Note: if `go.setup` and `origin/master` ever diverge again (master moves before the next
+sync), regenerate patch-05/patch-08 against whatever `go.setup` points to, not a live
+`origin/master` that may have moved further.
 
 ## TODO
 
@@ -76,15 +86,23 @@ whatever `go.setup` points to, not against a live `origin/master` that may have 
       `vmOpts.vz.suppressFirstLoginSetup` to `osOpts.darwin.suppressFirstLoginSetup`,
       mirroring the existing `WindowsOpts`/`osOpts` pattern (`lima_yaml.go` L350-354).
       Done: new `DarwinOpts` type added, `VZOpts.SuppressFirstLoginSetup` removed, all
-      call sites (`pkg/cidata/cidata.go`, docs) repointed. Commit `477f30c5`, pushed to
-      `trodemaster/upstream-pr/b1-fakecloudinit`. Verified via `go build ./...`,
-      `go vet ./...`, `go test ./pkg/limatype/... ./pkg/limayaml/... ./pkg/cidata/...`,
-      and `golangci-lint run` (0 issues) — all clean, no local VM rebuild needed.
-      Next: open the upstream PR (sign off DCO, reference #5186 in the PR body, state
-      tested guest versions: macOS 15, macOS 26) — this is what actually triggers CI
-      (`test.yml` only runs on push to master/release or on `pull_request`, not on a
-      plain fork branch push). Holding off on opening the PR for now per 2026-07-06
-      decision.
+      call sites (`pkg/cidata/cidata.go`, docs) repointed (commit `477f30c5`).
+      **2026-07-11 review-readiness pass** (revisiting #5186 asks — stick to existing
+      constructs, single-feature PR): rebased onto master `47f138a2` and added a
+      conventions commit (`e0620438`) — single `limayaml.Convert` for `osOpts.darwin`
+      before the `TemplateArgs` literal (matches the WindowsOpts pattern at
+      `pkg/driver/qemu/qemu.go` / `pkg/instance/start.go`, error propagated, gated on
+      `OS == darwin`), all `%q` → `%#q` per house style, `OsOpts` added to the VZ
+      driver's `knownYamlProperties` (fixes spurious "vmType vz: ignoring [OsOpts]"
+      warning), user-data template tidy. Moved the OpenDirectory/dscl user-existence
+      commit out of B1 into M1 (its justification is macOS 27 pre-existing users — out
+      of scope per maintainer). B1 diff is now 376 lines, zero macOS 27/TCC content.
+      Trodemaster fork branch is now STALE (pre-rebase) — force-push with
+      `--force-with-lease` before opening the PR.
+      Next: squash to a single signed-off commit on a fresh branch from origin/master,
+      draft PR body (plain prose, reference #5186, tested guest versions macOS 15 + 26,
+      `Assisted-by: Claude Code (Sonnet 4.7 & Sonnet 5)`), show Blake for review, then
+      push and open the PR — the PR is what triggers upstream CI.
 - [ ] B2: submit after B1 merges.
       PR description must cover: TCC schema v30 + tccd forward-migration rationale,
       presets shipped (sshd-full-disk-access, lima-guestagent-full-disk-access, terminal-accessibility),
@@ -111,12 +129,54 @@ whatever `go.setup` points to, not against a live `origin/master` that may have 
       `build-lima-devl.yml` GitHub Actions workflow instead, which does a real
       `sudo port -kv install lima-devl` on self-hosted macOS runners (15/26/27-beta) plus
       `port lint` and `golangci-lint` — this is the CI blakeports actually uses for this port.
-      Next: push this patch, let build-lima-devl.yml validate the MacPorts build, then Blake
-      manually installs the UTM vd_agent guest tools in a real macOS 15+/26 guest and tests
-      whether clipboard sharing actually works end-to-end. Only after that succeeds does it
-      make sense to draft the Obsidian issue and open a real upstream PR (issue-first, per
-      the lima-devl skill's substantial-feature workflow) — no point proposing this publicly
-      before confirming it functions.
+      **2026-07-11: end-to-end test done, clipboard sharing does not work — parked.**
+      Tested on a real macos-26 guest with utmapp/vd_agent 0.22.1 installed. Two real bugs
+      found and fixed locally (not yet upstreamed as separate patches, since the underlying
+      feature doesn't work anyway):
+        1. `osOpts.darwin.clipboard: true` must actually be set in the guest yaml — obvious
+           in hindsight, but easy to silently no-op since the field is a no-op when unset.
+        2. utmapp/vd_agent's own `com.redhat.spice.vdagentd.plist` hardcodes
+           `-s /dev/tty.com.redhat.spice.0` (a Linux/QEMU-SPICE convention path), but Apple's
+           VZ framework actually names the guest device `/dev/tty.virtio`. vdagentd crash-loops
+           against the wrong path until this is patched — this bug lives in vd_agent's macOS
+           packaging, not in lima-devl; worth an upstream issue against utmapp/vd_agent
+           separately, but out of scope here. (Resets on every vd_agent package reinstall.)
+      With both fixed — vdagentd running clean with no errors, guest agent connected to the
+      socket, confirmed via manual GUI copy/paste in the actual VM window (not just SSH
+      pbcopy/pbpaste) — clipboard content still does not sync in either direction.
+      Verbose debug logging (`spice-vdagentd -d -d`, `spice-vdagent -d`, both `-x` foreground)
+      proved the actual virtio-serial channel carries **zero bytes** in either direction: the
+      guest's own startup clipboard-grab message never gets any host-side response, and a host
+      `pbcopy` produces no guest-side log activity at all. No error, no exception, no TCC
+      prompt/denial anywhere on the host (checked via `log show` across the full test window).
+      Reviewed `clipboard_darwin.go` line-by-line against Apple's own header-comment
+      requirements in the Code-Hex/vz source (`virtualization_13.m`) — it correctly satisfies
+      both documented constraints (`attachment` set to `VZSpiceAgentPortAttachment`,
+      `isConsole` left at the required `false`). Diffed against UTM's actual open-source
+      reference implementation (`Configuration/UTMAppleConfigurationVirtualization.swift`,
+      github.com/utmapp/UTM) — structurally identical, same object graph, same call order.
+      Checked UTM's entitlements (`Platform/macOS/macOS.entitlements` and the
+      Developer-ID `macOS-unsigned.entitlements` variant) for anything Lima's `limactl`
+      lacks: `com.apple.vm.device-access` and `com.apple.vm.networking` are present in the
+      MAS build but confirmed via Apple's own docs to be USB-passthrough-specific
+      (`IOUSBHostDevice`) and irrelevant to `VZSpiceAgentPortAttachment`; UTM's
+      Developer-ID/unsigned variant doesn't carry either and isn't gated differently for
+      clipboard, so entitlements are ruled out as the cause.
+      The one remaining structural difference: UTM is a real, bundled `.app`
+      (`com.apple.security.app-sandbox`, `CFBundleIdentifier`, launched from
+      `UTM.app/Contents/MacOS/UTM`); `limactl`/`hostagent` is a bare CLI binary with no
+      bundle structure. Working hypothesis (unconfirmed — would need an app-bundle
+      experiment or an Apple DTS answer to verify) is that Apple's Virtualization.framework
+      requires actual app-bundle identity before its internal SPICE clipboard-pump logic
+      activates, silently no-opping otherwise rather than raising an error — matching every
+      symptom observed (clean attach, clean guest connection, zero bytes, no error).
+      **Lima's maintainers are strongly against shipping `limactl`/hostagent as an app
+      bundle**, so even if this hypothesis is correct there is no fix path available within
+      Lima's CLI-only architecture — this is being treated as a design-level blocker, not a
+      bug to iterate on. Decision 2026-07-11: park B4, do not open an issue or PR, do not
+      pursue further debugging or an Apple Feedback report for now.
+      `upstream-pr/b4-macos-clipboard` and `patch-10-b4-macos-clipboard.diff` are left as-is,
+      unmerged, in case Apple's framework behavior changes in a future macOS release.
 
 ### macOS 27 workarounds (M1 + B3)
 - [ ] Revisit M1 (fakecloudinit) and B3 (DFU) when macOS 27 is released:

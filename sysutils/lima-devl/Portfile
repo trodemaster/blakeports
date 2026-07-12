@@ -3,8 +3,8 @@
 PortSystem          1.0
 PortGroup           golang 1.0
 
-go.setup            github.com/lima-vm/lima 13b850b0a62d7b3de68450771e64346fa1ecb9d6
-version             2.2.0-dev.20260628
+go.setup            github.com/lima-vm/lima 47f138a24f541c11766f5f822dead4f4fe18f406
+version             2.2.0-dev.20260711
 go.offline_build    no
 name                lima-devl
 revision            0
@@ -15,10 +15,9 @@ homepage            https://lima-vm.io
 set b1_rev  2
 set b2_rev  2
 set b3_rev  1
-set b4_rev  1
-set m1_rev  1
+set m1_rev  2
 
-description         Lima ${version} | B1:r${b1_rev} B2:r${b2_rev} B3:r${b3_rev} B4:r${b4_rev} M1:r${m1_rev} | off: O1 (G1, G3, G4 upstream)
+description         Lima ${version} | B1:r${b1_rev} B2:r${b2_rev} B3:r${b3_rev} M1:r${m1_rev} | off: O1, B4 (G1, G3, G4 upstream)
 
 long_description    {*}${description}
 
@@ -30,9 +29,9 @@ maintainers         {@trodemaster icloud.com:manuals-unread2u} \
 
 conflicts           lima
 
-checksums           rmd160  e74596e514afb4ada807d0127a9982bd21c82659 \
-                    sha256  9c1ab16426c91217c12057dc6fed85caf82d7964ac334bbe3b598ead2c94b278 \
-                    size    7835652
+checksums           rmd160  517b9e693c1f0a280c3761c29ef71c0142d9b44c \
+                    sha256  2971c000d175fad9f7a1b2727e33b54f6f5dd7d4bbfb8bebdd868066dbcadfd8 \
+                    size    7848078
 
 # Standard patches (shared with the upstream lima port)
 # Feature patches (upstream PR candidates, applied in dependency order)
@@ -41,11 +40,11 @@ patchfiles          patch-Makefile.diff \
                     patch-usrlocalgo.diff \
                     patch-05-b1-fakecloudinit.diff \
                     patch-06-b2-tcc.diff \
-                    patch-10-b4-macos-clipboard.diff \
                     patch-09-m1-fakecloudinit-macos27.diff \
                     patch-08-b3-dfu-beta27.diff
 #                     \
-#                    patch-07-o1-pid-timeout.diff
+#                    patch-07-o1-pid-timeout.diff \
+#                    patch-10-b4-macos-clipboard.diff
 
 build.cmd           make
 build.args-append   native

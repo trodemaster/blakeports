@@ -1,54 +1,50 @@
 diff --git pkg/cidata/cidata.TEMPLATE.d/user-data pkg/cidata/cidata.TEMPLATE.d/user-data
-index 5c617282..810d14fc 100644
+index 5c617282..6cc62751 100644
 --- pkg/cidata/cidata.TEMPLATE.d/user-data
 +++ pkg/cidata/cidata.TEMPLATE.d/user-data
-@@ -173,6 +173,11 @@ ca_certs:
+@@ -172,6 +172,10 @@ ca_certs:
+   {{- end }}
  {{- end }}
  
- {{- $nicHeal := and (eq .OS "Linux") .Networks }}
-+
 +{{- if .SuppressFirstLoginSetup }}
 +suppress_first_login_setup: true
 +{{- end }}
 +
+ {{- $nicHeal := and (eq .OS "Linux") .Networks }}
  {{- if or .BootCmds $nicHeal }}
  bootcmd:
- {{- if $nicHeal }}
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 24366b9c..2fda34fe 100644
+index 865771c0..e49d6d74 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -148,9 +148,26 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
- 		Plain:          *instConfig.Plain,
- 		TimeZone:       *instConfig.TimeZone,
- 		NoCloudInit:    noCloudInit,
--		Param:          instConfig.Param,
--		LegacyBIOS:     *instConfig.Firmware.LegacyBIOS,
--		TPM:            *instConfig.TPM,
-+		SuppressFirstLoginSetup: func() bool {
-+			var darwinOpts limatype.DarwinOpts
-+			if err := limayaml.Convert(instConfig.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.darwin"); err != nil {
-+				return false
-+			}
-+			return darwinOpts.SuppressFirstLoginSetup != nil
-+		}(),
-+		SuppressFirstLoginSetupPlist: func() string {
-+			var darwinOpts limatype.DarwinOpts
-+			if err := limayaml.Convert(instConfig.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.darwin"); err != nil {
-+				return ""
-+			}
-+			if darwinOpts.SuppressFirstLoginSetup == nil {
-+				return ""
-+			}
-+			return darwinOpts.SuppressFirstLoginSetup.Plist
-+		}(),
-+		Param:      instConfig.Param,
-+		LegacyBIOS: *instConfig.Firmware.LegacyBIOS,
-+		TPM:        *instConfig.TPM,
+@@ -124,6 +124,16 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+ 		return nil, err
+ 	}
+ 	archive := "nerdctl-full.tgz"
++	var darwinOpts limatype.DarwinOpts
++	if *instConfig.OS == limatype.DARWIN {
++		if err := limayaml.Convert(instConfig.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.darwin"); err != nil {
++			return nil, err
++		}
++	}
++	var suppressFirstLoginSetupPlist string
++	if darwinOpts.SuppressFirstLoginSetup != nil {
++		suppressFirstLoginSetupPlist = darwinOpts.SuppressFirstLoginSetup.Plist
++	}
+ 	args := TemplateArgs{
+ 		Debug:              debugutil.Debug,
+ 		OS:                 *instConfig.OS,
+@@ -152,6 +162,9 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+ 		Param:          instConfig.Param,
+ 		LegacyBIOS:     *instConfig.Firmware.LegacyBIOS,
+ 		TPM:            *instConfig.TPM,
++
++		SuppressFirstLoginSetup:      darwinOpts.SuppressFirstLoginSetup != nil,
++		SuppressFirstLoginSetupPlist: suppressFirstLoginSetupPlist,
  	}
  
  	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
-@@ -408,6 +425,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+@@ -409,6 +422,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
  		return "", err
  	}
  
@@ -78,10 +74,10 @@ index 9a6cbf7d..0a126cff 100644
  
  type Growpart struct {
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index 061941a7..2c2b6bdd 100644
+index e57c7972..27d8661a 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
-@@ -135,6 +135,8 @@ type TemplateArgs struct {
+@@ -136,6 +136,8 @@ type TemplateArgs struct {
  	LegacyBIOS                      bool
  	IsWindowsServer                 bool
  	TPM                             bool
@@ -90,30 +86,32 @@ index 061941a7..2c2b6bdd 100644
  }
  
  func (t *TemplateArgs) generateWindowsInitialPassword() error {
+diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
+index 82a45746..c863b2d7 100644
+--- pkg/driver/vz/vz_driver_darwin.go
++++ pkg/driver/vz/vz_driver_darwin.go
+@@ -66,6 +66,7 @@ var knownYamlProperties = []string{
+ 	"NestedVirtualization",
+ 	"Networks",
+ 	"OS",
++	"OsOpts",
+ 	"Param",
+ 	"Plain",
+ 	"PortForwards",
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-index 249d1510..55d03970 100644
+index 249d1510..654fca80 100644
 --- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 +++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-@@ -22,7 +22,6 @@ import (
- 	"github.com/sirupsen/logrus"
- 
- 	"github.com/lima-vm/lima/v2/pkg/cidata/cloudinittypes"
--	"github.com/lima-vm/lima/v2/pkg/osutil"
- )
- 
- func Run(ctx context.Context) error {
-@@ -117,8 +116,8 @@ func processUserData(ctx context.Context, mnt string) error {
+@@ -117,7 +117,7 @@ func processUserData(ctx context.Context, mnt string) error {
  		}
  	}
  	for _, u := range userData.Users {
 -		if err := createUser(ctx, &u); err != nil {
--			errs = append(errs, fmt.Errorf("failed to create user %#q: %w", u.Name, err))
 +		if err := createUser(ctx, &u, userData.SuppressFirstLoginSetup, mnt); err != nil {
-+			errs = append(errs, fmt.Errorf("failed to create user %q: %w", u.Name, err))
+ 			errs = append(errs, fmt.Errorf("failed to create user %#q: %w", u.Name, err))
  		}
  	}
- 	for _, entry := range userData.WriteFiles {
-@@ -219,13 +218,146 @@ func populateHomeDir(ctx context.Context, uid int, homedir string) error {
+@@ -219,7 +219,137 @@ func populateHomeDir(ctx context.Context, uid int, homedir string) error {
  	return nil
  }
  
@@ -135,10 +133,10 @@ index 249d1510..55d03970 100644
 +func suppressFirstLoginScreens(ctx context.Context, mnt string, uid int, homedir string) error {
 +	prefsDir := filepath.Join(homedir, "Library/Preferences")
 +	if err := os.MkdirAll(prefsDir, 0o700); err != nil {
-+		return fmt.Errorf("failed to create Preferences dir %q: %w", prefsDir, err)
++		return fmt.Errorf("failed to create Preferences dir %#q: %w", prefsDir, err)
 +	}
 +	if err := os.Chown(prefsDir, uid, -1); err != nil {
-+		logrus.WithError(err).Warnf("Failed to chown Preferences dir %q", prefsDir)
++		logrus.WithError(err).Warnf("Failed to chown Preferences dir %#q", prefsDir)
 +	}
 +
 +	// Use a custom plist from the cidata volume if provided, otherwise fall back
@@ -148,7 +146,7 @@ index 249d1510..55d03970 100644
 +	if customPlistPath := filepath.Join(mnt, "setup-assistant.plist"); mnt != "" {
 +		if data, err := os.ReadFile(customPlistPath); err == nil {
 +			setupAssistantPlist = string(data)
-+			logrus.Infof("Using custom SetupAssistant plist from %q", customPlistPath)
++			logrus.Infof("Using custom SetupAssistant plist from %#q", customPlistPath)
 +		}
 +	}
 +	if setupAssistantPlist == "" {
@@ -213,10 +211,10 @@ index 249d1510..55d03970 100644
 +
 +	saPlist := filepath.Join(prefsDir, "com.apple.SetupAssistant.plist")
 +	if err := os.WriteFile(saPlist, []byte(setupAssistantPlist), 0o600); err != nil {
-+		return fmt.Errorf("failed to write SetupAssistant plist %q: %w", saPlist, err)
++		return fmt.Errorf("failed to write SetupAssistant plist %#q: %w", saPlist, err)
 +	}
 +	if err := os.Chown(saPlist, uid, -1); err != nil {
-+		logrus.WithError(err).Warnf("Failed to chown SetupAssistant plist %q", saPlist)
++		logrus.WithError(err).Warnf("Failed to chown SetupAssistant plist %#q", saPlist)
 +	}
 +
 +	// System-wide SoftwareUpdate preferences — pre-configure update settings so the
@@ -240,11 +238,11 @@ index 249d1510..55d03970 100644
 +		cmd := exec.CommandContext(ctx, "defaults", args...)
 +		if output, err := cmd.CombinedOutput(); err != nil {
 +			// Non-fatal: the dialog is annoying but does not block VM operation.
-+			logrus.WithError(err).Warnf("Failed to set SoftwareUpdate pref %v (output=%q)", pref[0], output)
++			logrus.WithError(err).Warnf("Failed to set SoftwareUpdate pref %v (output=%#q)", pref[0], output)
 +		}
 +	}
 +
-+	logrus.Infof("Suppressed first-login setup screens for uid %d in %q", uid, homedir)
++	logrus.Infof("Suppressed first-login setup screens for uid %d in %#q", uid, homedir)
 +	return nil
 +}
 +
@@ -252,18 +250,7 @@ index 249d1510..55d03970 100644
  	homedir := u.Homedir
  	if homedir == "" {
  		return fmt.Errorf("homedir is required for user %#q", u.Name)
- 	}
--	if osutil.FileExists(homedir) {
--		logrus.Debugf("homedir %#q already exists, skipping user creation for user %#q", homedir, u.Name)
-+	// Check OpenDirectory rather than the filesystem: disk patching may pre-create
-+	// the home directory tree (e.g. for per-user TCC database setup) before first boot,
-+	// which would cause a filesystem-existence check to skip user account creation.
-+	if cmd := exec.CommandContext(ctx, "dscl", ".", "-read", "/Users/"+u.Name, "RecordName"); cmd.Run() == nil {
-+		logrus.Debugf("user %q already exists in directory services, skipping creation", u.Name)
- 		return nil
- 	}
- 	if u.UID == "" {
-@@ -281,6 +413,15 @@ func createUser(ctx context.Context, u *cloudinittypes.User) error {
+@@ -281,6 +411,15 @@ func createUser(ctx context.Context, u *cloudinittypes.User) error {
  		return fmt.Errorf("failed to populate home directory for user %#q: %w", u.Name, err)
  	}
  
@@ -272,7 +259,7 @@ index 249d1510..55d03970 100644
 +		// cfprefsd reads these fresh at first login so macOS does not reset them.
 +		if err = suppressFirstLoginScreens(ctx, mnt, uid, homedir); err != nil {
 +			// Non-fatal: SSH provisioning (configure.sh) can still handle it if needed.
-+			logrus.WithError(err).Warnf("Failed to suppress first-login screens for user %q", u.Name)
++			logrus.WithError(err).Warnf("Failed to suppress first-login screens for user %#q", u.Name)
 +		}
 +	}
 +
@@ -280,10 +267,10 @@ index 249d1510..55d03970 100644
  	logrus.Infof("Executing command: %v", cmd.Args)
  	if output, err := cmd.CombinedOutput(); err != nil {
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index a74f3cb4..4118a7af 100644
+index 4f3fc01c..ce4fb040 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -353,6 +353,17 @@ type WindowsOpts struct {
+@@ -354,6 +354,17 @@ type WindowsOpts struct {
  	VirtioWin []File `yaml:"virtioWin,omitempty" json:"virtioWin,omitempty"`
  }
  
@@ -302,7 +289,7 @@ index a74f3cb4..4118a7af 100644
  	switch osname {
  	case "linux":
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index ab01f113..1908ae5b 100644
+index 76967d34..ad930a5f 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -33,6 +33,81 @@ limactl shell macos cat /Users/${USER}.guest/password
