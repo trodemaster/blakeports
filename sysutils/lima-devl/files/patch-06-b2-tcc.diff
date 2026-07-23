@@ -1,5 +1,5 @@
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index c863b2d7..cea1c938 100644
+index ffc170d9..175436c2 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -95,6 +95,7 @@ type LimaVzDriver struct {
@@ -10,7 +10,7 @@ index c863b2d7..cea1c938 100644
  
  	machine                    *virtualMachineWrapper
  	waitSSHLocalPortAccessible <-chan any
-@@ -155,6 +156,7 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) *dr
+@@ -159,6 +160,7 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) (*d
  	} else {
  		l.diskImageFormat = raw.Type
  	}
@@ -18,7 +18,7 @@ index c863b2d7..cea1c938 100644
  
  	return &driver.ConfiguredDriver{
  		Driver: l,
-@@ -378,7 +380,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+@@ -382,7 +384,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  		patchedMarker := disk + ".patched" // empty file
  		if !osutil.FileExists(patchedMarker) {
  			logrus.Infof("Patching macOS disk %#q", disk)
@@ -462,10 +462,10 @@ index 00000000..c7f417a0
 +	return strings.Join(names, ", ")
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index ce4fb040..74ff95eb 100644
+index a7681b0e..46d94a4a 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -124,8 +124,23 @@ type QEMUOpts struct {
+@@ -125,8 +125,23 @@ type QEMUOpts struct {
  }
  
  type VZOpts struct {
@@ -492,7 +492,7 @@ index ce4fb040..74ff95eb 100644
  
  type Rosetta struct {
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index ad930a5f..cda15cc9 100644
+index 7695f30a..556d1f7c 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -108,6 +108,69 @@ substitution is performed. Copy and adapt the built-in template above, then

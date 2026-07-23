@@ -34,15 +34,27 @@ git branch is kept, but the patch is **not** in the Portfile's `patchfiles` list
 2026-07-11) — see the B4 entry below for why it's parked. `patch-04-g3-screenshot.diff` is gone
 entirely (merged upstream, removed from `files/` and `patchfiles`).
 
-## Branch topology (as of 2026-07-11, master = 47f138a2)
+## Branch topology (as of 2026-07-23, master = b48d0187)
 
 | Branch | Based on | Commits above base | Role |
 |--------|----------|--------------------|------|
-| `upstream-pr/b1-fakecloudinit` | origin/master (= go.setup 47f138a2) | 9 | upstream PR branch (clean); tip = conventions-alignment commit `e0620438` |
+| `upstream-pr/b1-fakecloudinit` | origin/master (= go.setup b48d0187) | 9 | upstream PR branch (clean); tip = conventions-alignment commit `a41d63da` |
 | `macports/b2-on-b1` | b1-tip | 3 | stacked on B1 for patching; use b1-tip as B2 patch base (`upstream-pr/b2-tcc` is a stale pre-rebase duplicate, unused) |
 | `upstream-pr/b4-macos-clipboard` | b1-tip | 1 | parked (clipboard non-functional from CLI binary); kept for future |
 | `macports/m1-fakecloudinit-macos27` | b1-tip | 7 | macOS 27 workarounds stacked on B1; first commit = the OpenDirectory/dscl user-existence check (moved out of B1 on 2026-07-11 for PR scope focus) |
 | `upstream-pr/b3-dfu-beta27` | origin/master | 12 | macOS 27 DFU workaround |
+
+**2026-07-23 sync:** fetched upstream (`35de194b` → `b48d0187`, 118 new commits) and rebased
+every branch. All six (B1, B2, M1, B3, O1, B4) rebased with zero conflicts — no
+duplicate-content skips needed this round. Regenerated patch-05/06/07/08/10 (small
+context-line deltas from the rebase); patch-09 (M1) came out byte-identical, since
+`fakecloudinit_darwin.go` wasn't touched by any of the 118 new upstream commits. Found and
+fixed a stale patch-generation command for B4 in this doc (line 70 below still said
+`origin/master..upstream-pr/b4-macos-clipboard`, but B4 is stacked on B1 like B2/M1 — using
+the wrong base bloated the regenerated patch to 21K by re-including B1's own content before
+the fix). All 6 active + 2 disabled patches dry-run clean, in sequence, against a fresh
+archive of the new master. Bumped `b1_rev`→3, `b2_rev`→3, `b3_rev`→2 (m1_rev unchanged,
+patch content identical).
 
 **2026-07-11 restructure (meeting #5186 review asks):** rebased everything onto master
 `47f138a2`; added conventions-alignment commit to B1 (single `limayaml.Convert` for
@@ -64,12 +76,13 @@ conflict in `lima_yaml.go` resolved by keeping `VZOpts.GuestPatch` and dropping 
 `SuppressFirstLoginSetup`/`VZOpts` duplication) and regenerating patch-06. Bumped `b1_rev`→2,
 `b2_rev`→2. Full 5-patch chain (05, 06, 10, 09, 08) dry-run verified clean in sequence.
 
-Patch generation commands (as of 2026-07-11, go.setup == origin/master == 47f138a2):
+Patch generation commands (as of 2026-07-23, go.setup == origin/master == b48d0187):
 - patch-05: `git diff --no-prefix origin/master..upstream-pr/b1-fakecloudinit`
 - patch-06: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/b2-on-b1`
-- patch-10: `git diff --no-prefix upstream-pr/b1-fakecloudinit..upstream-pr/b4-macos-clipboard` (parked, not in patchfiles)
+- patch-10: `git diff --no-prefix upstream-pr/b1-fakecloudinit..upstream-pr/b4-macos-clipboard` (parked, not in patchfiles — stacked on B1, NOT origin/master, despite what an earlier revision of this doc said)
 - patch-09: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/m1-fakecloudinit-macos27`
 - patch-08: `git diff --no-prefix origin/master..upstream-pr/b3-dfu-beta27`
+- patch-07: `git diff --no-prefix origin/master..upstream-pr/o1-pid-timeout` (independent, parked)
 
 Note: if `go.setup` and `origin/master` ever diverge again (master moves before the next
 sync), regenerate patch-05/patch-08 against whatever `go.setup` points to, not a live
@@ -195,6 +208,13 @@ sync), regenerate patch-05/patch-08 against whatever `go.setup` points to, not a
   flakiness on macOS 27 beta) as what M1's guest-side Setup Assistant plist writes in
   `fakecloudinit_darwin.go` work around; worth keeping in mind if `ISRootMigrator`
   behavior is investigated for the M1 upstreamability question above.
+
+### GUI / display ideas (not started)
+- [ ] VZ GUI fullscreen mode includes the macOS menu bar — investigate whether the
+      Virtualization.framework display surface can be presented without it (or whether
+      this is a host-side `NSWindow`/`NSApplication` presentation option in `limactl`'s
+      own GUI code rather than something VZ controls). Not yet scoped: no upstream issue,
+      no branch.
 
 ### Verification
 - [ ] Rebuild a VM using the new patch set to confirm behavior: B1+B2+M1 patching.

@@ -1,8 +1,8 @@
 diff --git pkg/instance/start.go pkg/instance/start.go
-index 8b3f15b3..fd2b2488 100644
+index 6a425f00..49514853 100644
 --- pkg/instance/start.go
 +++ pkg/instance/start.go
-@@ -332,7 +332,7 @@ func Start(ctx context.Context, inst *limatype.Instance, launchHostAgentForegrou
+@@ -339,7 +339,7 @@ func Start(ctx context.Context, inst *limatype.Instance, launchHostAgentForegrou
  
  func waitHostAgentStart(_ context.Context, haPIDPath, haStderrPath string) error {
  	begin := time.Now()
@@ -11,7 +11,7 @@ index 8b3f15b3..fd2b2488 100644
  	deadline := begin.Add(deadlineDuration)
  	for {
  		if _, err := os.Stat(haPIDPath); !errors.Is(err, os.ErrNotExist) {
-@@ -341,6 +341,7 @@ func waitHostAgentStart(_ context.Context, haPIDPath, haStderrPath string) error
+@@ -348,6 +348,7 @@ func waitHostAgentStart(_ context.Context, haPIDPath, haStderrPath string) error
  		if time.Now().After(deadline) {
  			return fmt.Errorf("hostagent (%#q) did not start up in %v (hint: see %#q)", haPIDPath, deadlineDuration, haStderrPath)
  		}

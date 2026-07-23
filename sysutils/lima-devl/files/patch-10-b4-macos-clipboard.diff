@@ -83,10 +83,10 @@ index eae59b71..15980ec4 100644
  		return nil, err
  	}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index ce4fb040..bf484fcb 100644
+index a7681b0e..0a7587b9 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -356,6 +356,12 @@ type WindowsOpts struct {
+@@ -352,6 +352,12 @@ type WindowsOpts struct {
  
  type DarwinOpts struct {
  	SuppressFirstLoginSetup *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
@@ -100,7 +100,7 @@ index ce4fb040..bf484fcb 100644
  
  // SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index ad930a5f..76617f9f 100644
+index 7695f30a..292304d3 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -108,6 +108,29 @@ substitution is performed. Copy and adapt the built-in template above, then

@@ -748,10 +748,10 @@ index fdd18137..4365afd9 100644
 +	return errMacOSGuestUnsupported
 +}
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index 82a45746..5d0a53fa 100644
+index d0704901..072a460a 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
-@@ -429,6 +429,16 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
+@@ -433,6 +433,16 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
  		return err
  	}
  

@@ -1,8 +1,8 @@
 diff --git pkg/cidata/cidata.TEMPLATE.d/user-data pkg/cidata/cidata.TEMPLATE.d/user-data
-index 5c617282..6cc62751 100644
+index 0ea47961..968a5720 100644
 --- pkg/cidata/cidata.TEMPLATE.d/user-data
 +++ pkg/cidata/cidata.TEMPLATE.d/user-data
-@@ -172,6 +172,10 @@ ca_certs:
+@@ -183,6 +183,10 @@ ca_certs:
    {{- end }}
  {{- end }}
  
@@ -14,7 +14,7 @@ index 5c617282..6cc62751 100644
  {{- if or .BootCmds $nicHeal }}
  bootcmd:
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 865771c0..e49d6d74 100644
+index 6ed8267a..1af3b0c5 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
 @@ -124,6 +124,16 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
@@ -34,7 +34,7 @@ index 865771c0..e49d6d74 100644
  	args := TemplateArgs{
  		Debug:              debugutil.Debug,
  		OS:                 *instConfig.OS,
-@@ -152,6 +162,9 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+@@ -153,6 +163,9 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
  		Param:          instConfig.Param,
  		LegacyBIOS:     *instConfig.Firmware.LegacyBIOS,
  		TPM:            *instConfig.TPM,
@@ -44,7 +44,7 @@ index 865771c0..e49d6d74 100644
  	}
  
  	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
-@@ -409,6 +422,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+@@ -410,6 +423,13 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
  		return "", err
  	}
  
@@ -74,10 +74,10 @@ index 9a6cbf7d..0a126cff 100644
  
  type Growpart struct {
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index e57c7972..27d8661a 100644
+index 1f6f9a88..4d6234dc 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
-@@ -136,6 +136,8 @@ type TemplateArgs struct {
+@@ -137,6 +137,8 @@ type TemplateArgs struct {
  	LegacyBIOS                      bool
  	IsWindowsServer                 bool
  	TPM                             bool
@@ -87,7 +87,7 @@ index e57c7972..27d8661a 100644
  
  func (t *TemplateArgs) generateWindowsInitialPassword() error {
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index 82a45746..c863b2d7 100644
+index d0704901..ffc170d9 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -66,6 +66,7 @@ var knownYamlProperties = []string{
@@ -267,10 +267,10 @@ index 249d1510..654fca80 100644
  	logrus.Infof("Executing command: %v", cmd.Args)
  	if output, err := cmd.CombinedOutput(); err != nil {
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 4f3fc01c..ce4fb040 100644
+index 0b797b62..a7681b0e 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -354,6 +354,17 @@ type WindowsOpts struct {
+@@ -350,6 +350,17 @@ type WindowsOpts struct {
  	VirtioWin []File `yaml:"virtioWin,omitempty" json:"virtioWin,omitempty"`
  }
  
@@ -289,11 +289,11 @@ index 4f3fc01c..ce4fb040 100644
  	switch osname {
  	case "linux":
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 76967d34..ad930a5f 100644
+index 48e212dd..7695f30a 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -33,6 +33,81 @@ limactl shell macos cat /Users/${USER}.guest/password
- - Password-less sudo is disabled, except for `/sbin/shutdown -h now`
+ - Password-less sudo is disabled, except for `/sbin/shutdown -h now` (see [Sudo](/docs/config/sudo/) — this is not currently configurable on macOS)
  - Several features are not implemented yet. See [Caveats](#caveats) below.
  
 +## Suppressing first-login setup screens
