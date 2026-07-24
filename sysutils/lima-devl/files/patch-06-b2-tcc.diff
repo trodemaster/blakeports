@@ -492,7 +492,7 @@ index a7681b0e..46d94a4a 100644
  
  type Rosetta struct {
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 7695f30a..556d1f7c 100644
+index 9b0441a7..0db53d0b 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -108,6 +108,69 @@ substitution is performed. Copy and adapt the built-in template above, then

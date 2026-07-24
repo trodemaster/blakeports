@@ -14,7 +14,7 @@ index 0ea47961..968a5720 100644
  {{- if or .BootCmds $nicHeal }}
  bootcmd:
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 6ed8267a..1af3b0c5 100644
+index 6ed8267a..d4791487 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
 @@ -124,6 +124,16 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
@@ -23,7 +23,7 @@ index 6ed8267a..1af3b0c5 100644
  	archive := "nerdctl-full.tgz"
 +	var darwinOpts limatype.DarwinOpts
 +	if *instConfig.OS == limatype.DARWIN {
-+		if err := limayaml.Convert(instConfig.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.darwin"); err != nil {
++		if err := limayaml.Convert(instConfig.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.Darwin"); err != nil {
 +			return nil, err
 +		}
 +	}
@@ -59,7 +59,7 @@ index 6ed8267a..1af3b0c5 100644
  	if err != nil {
  		return "", fmt.Errorf("failed to get boot scripts: %w", err)
 diff --git pkg/cidata/cloudinittypes/userdata.go pkg/cidata/cloudinittypes/userdata.go
-index 9a6cbf7d..0a126cff 100644
+index 9a6cbf7d..22a71e56 100644
 --- pkg/cidata/cloudinittypes/userdata.go
 +++ pkg/cidata/cloudinittypes/userdata.go
 @@ -24,6 +24,10 @@ type UserData struct {
@@ -68,7 +68,7 @@ index 9a6cbf7d..0a126cff 100644
  	BootCmd []string `yaml:"bootcmd,omitempty"`
 +
 +	// SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
-+	// Controlled by osOpts.darwin.suppressFirstLoginSetup in the Lima instance config.
++	// Controlled by osOpts.Darwin.suppressFirstLoginSetup in the Lima instance config.
 +	SuppressFirstLoginSetup bool `yaml:"suppress_first_login_setup,omitempty"`
  }
  
@@ -289,7 +289,7 @@ index 0b797b62..a7681b0e 100644
  	switch osname {
  	case "linux":
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 48e212dd..7695f30a 100644
+index 48e212dd..9b0441a7 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -33,6 +33,81 @@ limactl shell macos cat /Users/${USER}.guest/password
@@ -300,13 +300,13 @@ index 48e212dd..7695f30a 100644
 +
 +By default, macOS shows a series of setup wizard screens (Setup Assistant /
 +mini-buddy) on the first GUI login. For automated or headless-style macOS VMs
-+this is inconvenient. Set `osOpts.darwin.suppressFirstLoginSetup` to have Lima
++this is inconvenient. Set `osOpts.Darwin.suppressFirstLoginSetup` to have Lima
 +pre-populate the relevant preference plists during provisioning, before any GUI
 +session starts, so the setup screens are skipped automatically:
 +
 +```yaml
 +osOpts:
-+  darwin:
++  Darwin:
 +    suppressFirstLoginSetup: {}
 +```
 +
@@ -329,7 +329,7 @@ index 48e212dd..7695f30a 100644
 +
 +```yaml
 +osOpts:
-+  darwin:
++  Darwin:
 +    suppressFirstLoginSetup:
 +      plist: |
 +        <?xml version="1.0" encoding="UTF-8"?>
