@@ -195,6 +195,14 @@ sync), regenerate patch-05/patch-08 against whatever `go.setup` points to, not a
 - [ ] Revisit M1 (fakecloudinit) and B3 (DFU) when macOS 27 is released:
       - M1 may be partially upstreamable if ISRootMigrator behavior is documented
       - B3 may be upstreamable or resolved by Apple fixing VZMacOSInstaller
+- [ ] **B3 removal blocked on host macOS 26.6.** Retested 2026-07-23 with beta 4
+      (`26A5388g`) on stable host 26.5.2: standard `VZMacOSInstaller` still fails
+      (`VZErrorDomain Code=10007` / `AMRestorePerformRestoreModeRestoreWithError error: 11`).
+      VirtualBuddy's own bug reports (insidegui/VirtualBuddy#706, #555) show this needs the
+      *host* on a beta version-adjacent to the guest (26.6b3 fixed it for them), not just a
+      matching Xcode device-support package. Decision: wait for 26.6 GA rather than
+      beta-enroll the primary host. Full removal procedure documented in
+      `lima_mac/docs/dfu-install.md` § "2026-07-23 Removal Test" / "Future Removal Procedure".
 - [ ] Test TCC patching against a macOS 27-beta guest (template exists in lima_mac, untested).
 - Related flakiness observed 2026-07-05 (not in the M1 patch itself — in `lima_mac`'s
   `configure.sh`, which runs after Lima's own fakecloudinit as a provisioning script):
