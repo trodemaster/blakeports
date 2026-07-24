@@ -141,19 +141,16 @@ index 00000000..ed651d18
 +                 unsigned int cpuCount, unsigned long long memorySizeBytes);
 diff --git pkg/driver/vz/macos27_dfu_install_darwin_arm64.m pkg/driver/vz/macos27_dfu_install_darwin_arm64.m
 new file mode 100644
-index 00000000..af036653
+index 00000000..15eabd4d
 --- /dev/null
 +++ pkg/driver/vz/macos27_dfu_install_darwin_arm64.m
-@@ -0,0 +1,586 @@
+@@ -0,0 +1,583 @@
 +// macos27_dfu_install_darwin_arm64.m
 +// macOS 27 beta DFU install workaround.
 +//
 +// VZMacOSInstaller is broken when the guest IPSW is newer than the host OS.
 +// This uses the DFU restore path instead: boot the VM with _forceDFU, then drive
 +// the restore via MobileDevice.framework private SPI (same path as physical Mac DFU).
-+//
-+// Approach credit: VirtualBuddy PR #688 (insidegui/VirtualBuddy).
-+// Code here is an independent implementation — do not copy from that PR.
 +//
 +// TODO: Remove this file once Apple fixes VZMacOSInstaller for cross-version installs.
 +
