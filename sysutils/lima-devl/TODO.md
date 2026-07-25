@@ -1,7 +1,7 @@
 # lima-devl — Upstream PR & Port Tracking
 
 Status of feature patches carried by this port and their upstream submission.
-Patch revs: see `b1_rev` / `b2_rev` / `b3_rev` / `m1_rev` in the Portfile (B4 is parked, no `b4_rev`).
+Patch revs: see `b1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no `b4_rev`).
 
 ## Feature status
 
@@ -11,12 +11,16 @@ Patch revs: see `b1_rev` / `b2_rev` / `b3_rev` / `m1_rev` in the Portfile (B4 is
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (depends on B1) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11); depends on B1 |
 | M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
-| B3 (`patch-08`) | DFU install workaround for macOS 27 beta | **NOT for upstream** — macOS 27-beta only |
 | O1 (`patch-07`) | PID timeout | disabled in Portfile |
 
 `patch-01-g1-thread-pin.diff` merged upstream in PR #5036 and removed from port.
 `patch-02-g4-window-title.diff` merged upstream in PR #5084 and removed from port.
 `patch-04-g3-screenshot.diff` merged upstream in PR #5098 (2026-06-28) and removed from port.
+`patch-08-b3-dfu-beta27.diff` (DFU install workaround) removed 2026-07-25 — host reached
+macOS 26.6, confirmed via a real throwaway-instance test that the standard `VZMacOSInstaller`
+path no longer hits `VZErrorDomain Code=10007`; `b3_rev` and the `upstream-pr/b3-dfu-beta27`
+branch (local + `trodemaster`) were also deleted. See
+`lima_mac/docs/dfu-install.md` § "2026-07-25 Removal Confirmed".
 
 ## Patch ordering (applied last = macOS 27 block)
 
@@ -26,7 +30,6 @@ patch-usrlocalgo.diff
 patch-05-b1-fakecloudinit.diff       ← upstream candidate
 patch-06-b2-tcc.diff                 ← upstream candidate (depends on B1)
 patch-09-m1-fakecloudinit-macos27.diff  ← macOS 27-beta workaround, NOT upstream
-patch-08-b3-dfu-beta27.diff             ← macOS 27-beta workaround, NOT upstream
 ```
 
 `patch-10-b4-macos-clipboard.diff` still exists in `files/` and the `upstream-pr/b4-macos-clipboard`
@@ -42,7 +45,9 @@ entirely (merged upstream, removed from `files/` and `patchfiles`).
 | `macports/b2-on-b1` | b1-tip | 3 | stacked on B1 for patching; use b1-tip as B2 patch base (`upstream-pr/b2-tcc` is a stale pre-rebase duplicate, unused) |
 | `upstream-pr/b4-macos-clipboard` | b1-tip | 1 | parked (clipboard non-functional from CLI binary); kept for future |
 | `macports/m1-fakecloudinit-macos27` | b1-tip | 7 | macOS 27 workarounds stacked on B1; first commit = the OpenDirectory/dscl user-existence check (moved out of B1 on 2026-07-11 for PR scope focus) |
-| `upstream-pr/b3-dfu-beta27` | origin/master | 12 | macOS 27 DFU workaround |
+
+`upstream-pr/b3-dfu-beta27` (was: origin/master, 13 commits) deleted 2026-07-25 — see Feature
+status table above.
 
 **2026-07-23 sync:** fetched upstream (`35de194b` → `b48d0187`, 118 new commits) and rebased
 every branch. All six (B1, B2, M1, B3, O1, B4) rebased with zero conflicts — no
@@ -81,11 +86,10 @@ Patch generation commands (as of 2026-07-23, go.setup == origin/master == b48d01
 - patch-06: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/b2-on-b1`
 - patch-10: `git diff --no-prefix upstream-pr/b1-fakecloudinit..upstream-pr/b4-macos-clipboard` (parked, not in patchfiles — stacked on B1, NOT origin/master, despite what an earlier revision of this doc said)
 - patch-09: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/m1-fakecloudinit-macos27`
-- patch-08: `git diff --no-prefix origin/master..upstream-pr/b3-dfu-beta27`
 - patch-07: `git diff --no-prefix origin/master..upstream-pr/o1-pid-timeout` (independent, parked)
 
 Note: if `go.setup` and `origin/master` ever diverge again (master moves before the next
-sync), regenerate patch-05/patch-08 against whatever `go.setup` points to, not a live
+sync), regenerate patch-05 against whatever `go.setup` points to, not a live
 `origin/master` that may have moved further.
 
 ## TODO
@@ -191,18 +195,20 @@ sync), regenerate patch-05/patch-08 against whatever `go.setup` points to, not a
       `upstream-pr/b4-macos-clipboard` and `patch-10-b4-macos-clipboard.diff` are left as-is,
       unmerged, in case Apple's framework behavior changes in a future macOS release.
 
-### macOS 27 workarounds (M1 + B3)
-- [ ] Revisit M1 (fakecloudinit) and B3 (DFU) when macOS 27 is released:
-      - M1 may be partially upstreamable if ISRootMigrator behavior is documented
-      - B3 may be upstreamable or resolved by Apple fixing VZMacOSInstaller
-- [ ] **B3 removal blocked on host macOS 26.6.** Retested 2026-07-23 with beta 4
-      (`26A5388g`) on stable host 26.5.2: standard `VZMacOSInstaller` still fails
-      (`VZErrorDomain Code=10007` / `AMRestorePerformRestoreModeRestoreWithError error: 11`).
-      VirtualBuddy's own bug reports (insidegui/VirtualBuddy#706, #555) show this needs the
-      *host* on a beta version-adjacent to the guest (26.6b3 fixed it for them), not just a
-      matching Xcode device-support package. Decision: wait for 26.6 GA rather than
-      beta-enroll the primary host. Full removal procedure documented in
-      `lima_mac/docs/dfu-install.md` § "2026-07-23 Removal Test" / "Future Removal Procedure".
+### macOS 27 workarounds (M1)
+- [ ] Revisit M1 (fakecloudinit) when macOS 27 is released — may be partially upstreamable
+      if ISRootMigrator behavior is documented.
+- [x] **B3 (DFU install workaround) removed 2026-07-25.** Host reached stable macOS 26.6
+      (25G70). Re-tested against the same beta-4 IPSW (`26A5388g`) with a throwaway instance:
+      `VZErrorDomain Code=10007` is gone — the standard `VZMacOSInstaller` path now runs to a
+      different, unrelated failure (`Code=10006`, "software update required" — the beta-4
+      IPSW itself is stale relative to what a 26.6 host's restore service will accept; a
+      newer macOS 27 beta IPSW is needed to get a full end-to-end install, DFU or not).
+      Confirms VirtualBuddy's own bug reports (insidegui/VirtualBuddy#706, #555) that this
+      needed the *host* on a version-adjacent build, not just a matching Xcode device-support
+      package. `patch-08-b3-dfu-beta27.diff`, `b3_rev`, and the `upstream-pr/b3-dfu-beta27`
+      branch (local + `trodemaster`) are deleted. Full log:
+      `lima_mac/docs/dfu-install.md` § "2026-07-25 Removal Confirmed".
 - [ ] Test TCC patching against a macOS 27-beta guest (template exists in lima_mac, untested).
 - Related flakiness observed 2026-07-05 (not in the M1 patch itself — in `lima_mac`'s
   `configure.sh`, which runs after Lima's own fakecloudinit as a provisioning script):
