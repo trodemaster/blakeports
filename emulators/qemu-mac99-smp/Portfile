@@ -12,8 +12,12 @@ maintainers             {@trodemaster icloud.com:manuals-unread2u} openmaintaine
 description             QEMU with experimental mac99 SMP support for PowerPC guests
 long_description        {*}${description}. This is QEMU ${version} with the \
                         experimental multi-CPU (SMP) patches for the mac99 \
-                        PowerMac machine model, allowing Mac OS X 10.4 and \
-                        10.5 PowerPC guests to boot with up to 4 CPUs. Only \
+                        PowerMac machine model, which raise the machine's \
+                        max_cpus from 1 to 4. In practice Mac OS X 10.5 boots \
+                        reliably with 2 CPUs. Four is accepted by QEMU but the \
+                        guest stalls waiting for its root device, which looks \
+                        like a limit in Leopard's MacRISC2 (G4) platform code \
+                        rather than a fault in this port. Only \
                         the ppc and ppc64 system targets are built. \
                         It installs alongside the stock qemu port under \
                         ${prefix}/libexec/${name}, exposing its emulators as \
@@ -188,14 +192,28 @@ This port installs alongside the stock qemu port. Its emulators are:
     ${prefix}/bin/qemu-system-ppc-mac99-smp
     ${prefix}/bin/qemu-system-ppc64-mac99-smp
 
-Experimental mac99 SMP, for example:
+Experimental mac99 SMP. A known-good Mac OS X 10.5 invocation:
 
-    qemu-system-ppc-mac99-smp -M mac99,via=pmu -cpu g4 -smp 4 \\
+    qemu-system-ppc-mac99-smp \\
+        -L ${prefix}/share/openbios-mac99-smp \\
+        -M mac99,via=pmu -cpu g4 -smp 2 -accel tcg,thread=multi \\
         -m 512 -display cocoa -boot c -drive file=leopard.qcow2
 
-Booting more than one CPU also needs a patched OpenBIOS ROM that marks the
-secondary CPUs as stopped in the device tree. The ROM shipped with QEMU does
-not, so out of the box these binaries boot single-CPU.
+Two things are required beyond this port:
+
+  * a patched OpenBIOS ROM that marks the secondary CPUs as stopped in the
+    device tree, from emulators/openbios-mac99-smp, selected with -L. The ROM
+    shipped with QEMU does not, so without it the guest boots single-CPU.
+  * -accel tcg,thread=multi. The default TCG accelerator round-robins every
+    vcpu onto one host thread, which starves the boot cpu and stalls the ATA
+    probe. QEMU warns about the guest not being converted to MTTCG on 32-bit ppc, and
+    then runs multi-threaded anyway; that combination is unvalidated upstream.
+
+Status as of 2026-07-26: -smp 2 boots Mac OS X 10.5 to the desktop. -smp 4
+reaches the kernel but hangs waiting for its root device. The emulated
+machine is a MacRISC2 (G4) PowerMac, and no G4 Apple ever shipped had more
+than 2 CPUs, so Leopard's platform code most likely cannot start more than one
+secondary. Four CPUs do appear in the OpenBIOS device tree either way.
 "
 
 # Default universal variant does not work

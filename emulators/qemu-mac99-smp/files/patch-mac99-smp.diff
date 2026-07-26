@@ -97,7 +97,7 @@ index 1a7c534d65..2051de3c7f 100644
  
  static void macio_gpio_nmi(NMIState *n, int cpu_index, Error **errp)
 diff --git hw/ppc/mac_newworld.c hw/ppc/mac_newworld.c
-index 3680d96ed3..d6c5698389 100644
+index 3680d96ed3..6930c1ebbd 100644
 --- hw/ppc/mac_newworld.c.orig
 +++ hw/ppc/mac_newworld.c
 @@ -74,6 +74,7 @@
@@ -108,20 +108,42 @@ index 3680d96ed3..d6c5698389 100644
  #include "trace.h"
  
  #define MAX_IDE_BUS 2
-@@ -129,12 +130,26 @@ static void ppc_core99_reset(void *opaque)
+@@ -129,12 +130,48 @@ static void ppc_core99_reset(void *opaque)
      cpu->env.nip = PROM_BASE + 0x100;
  }
  
++/*
++ * Reset and start a secondary CPU. This runs on that CPU's own thread, via
++ * async_run_on_cpu(), rather than on whichever CPU poked the GPIO: cpu_reset()
++ * and ppc_cpu_do_system_reset() mutate the target's state, which is not safe
++ * to do from another vCPU's thread.
++ */
++static void cpu_kick_async(CPUState *cs, run_on_cpu_data data)
++{
++    PowerPCCPU *cpu = POWERPC_CPU(cs);
++
++    cpu_reset(cs);
++
++    /*
++     * Clear the exception prefix *after* the reset, not before. Resetting a
++     * ppc cpu sets MSR[EP], and hreg_store_msr() derives excp_prefix from it
++     * as MSR[EP] * 0xFFF00000, so anything written here beforehand is thrown
++     * away. Leaving it set sends the system reset to 0xFFF00100 in ROM, and
++     * the secondary re-enters OpenBIOS instead of the kernel. With it clear
++     * the vector is 0x00000100, where the OS installs its secondary entry.
++     */
++    cpu->env.excp_prefix = 0;
++
++    ppc_cpu_do_system_reset(cs);
++}
++
 +static void cpu_kick(void *opaque, int n, int level)
 +{
 +    PowerPCCPU *cpu = opaque;
 +    CPUState *cs = CPU(cpu);
 +
-+    nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
 +    if (level) {
-+        cpu->env.excp_prefix = 0;
-+        cpu_reset(cs);
-+        ppc_cpu_do_system_reset(cs);
++        async_run_on_cpu(cs, cpu_kick_async, RUN_ON_CPU_NULL);
 +    }
 +}
 +
@@ -136,7 +158,7 @@ index 3680d96ed3..d6c5698389 100644
      CPUPPCState *env = NULL;
      char *filename;
      IrqLines *openpic_irqs;
-@@ -158,14 +173,19 @@ static void ppc_core99_init(MachineState *machine)
+@@ -158,14 +195,19 @@ static void ppc_core99_init(MachineState *machine)
      uint64_t tbfreq = kvm_enabled() ? kvmppc_get_tbfreq() : TBFREQ;
  
      /* init CPUs */
@@ -161,7 +183,7 @@ index 3680d96ed3..d6c5698389 100644
  
      /* allocate RAM */
      if (machine->ram_size > 2 * GiB) {
-@@ -245,8 +265,8 @@ static void ppc_core99_init(MachineState *machine)
+@@ -245,8 +287,8 @@ static void ppc_core99_init(MachineState *machine)
      }
  
      openpic_irqs = g_new0(IrqLines, machine->smp.cpus);
@@ -171,7 +193,7 @@ index 3680d96ed3..d6c5698389 100644
          /* Mac99 IRQ connection between OpenPIC outputs pins
           * and PowerPC input pins
           */
-@@ -358,14 +378,27 @@ static void ppc_core99_init(MachineState *machine)
+@@ -358,14 +400,27 @@ static void ppc_core99_init(MachineState *machine)
      qdev_prop_set_chr(dev, "chrA", serial_hd(0));
      qdev_prop_set_chr(dev, "chrB", serial_hd(1));
  
@@ -200,7 +222,7 @@ index 3680d96ed3..d6c5698389 100644
      /* TODO: additional PCI buses only wired up for 32-bit machines */
      if (PPC_INPUT(env) != PPC_FLAGS_INPUT_970) {
          /* Uninorth AGP bus */
-@@ -573,8 +606,11 @@ static void core99_machine_class_init(ObjectClass *oc, const void *data)
+@@ -573,8 +628,11 @@ static void core99_machine_class_init(ObjectClass *oc, const void *data)
      mc->desc = "Mac99 based PowerMac";
      mc->init = ppc_core99_init;
      mc->block_default_type = IF_IDE;

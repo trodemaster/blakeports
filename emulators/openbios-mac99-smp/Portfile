@@ -113,13 +113,21 @@ It is deliberately NOT installed over the ROM that qemu ships. Select it at
 runtime with -L, which prepends to QEMU's data directory search path:
 
     qemu-system-ppc-mac99-smp -L ${prefix}/share/${name} \\
-        -M mac99,via=pmu -cpu g4 -smp 4 -m 512 \\
+        -M mac99,via=pmu -cpu g4 -smp 2 -accel tcg,thread=multi -m 512 \\
         -display cocoa -boot c -drive file=leopard.qcow2
 
 Use -L help to confirm which data directories are being searched.
 
-SMP on mac99 is experimental. Mac OS 9 through OS X 10.3 are reported to work
-with 2 CPUs, and OS X 10.4 and 10.5 with 4 CPUs.
+SMP on mac99 is experimental, and the CPU count that works is a property of
+the guest OS, not of this ROM. This ROM enumerates whatever QEMU reports in
+fw_cfg, so -smp 4 really does produce four device tree nodes.
+
+Measured with Mac OS X 10.5 on 2026-07-26: 2 CPUs boots to the desktop, 4
+reaches the kernel and then stalls waiting for the root device. The emulated
+machine is a MacRISC2 (G4) PowerMac and no G4 Apple shipped had more than 2
+CPUs, so Leopard most likely cannot start more than one secondary. Note that
+booting SMP also needs -accel tcg,thread=multi, since the default single
+threaded TCG starves the boot CPU.
 "
 
 livecheck.type          none
