@@ -54,6 +54,20 @@ depends_build           port:powerpc-elf-gcc \
 #
 # Debug leftovers were removed (a printk of the PIR on every CPU, and
 # finish-device calls commented out rather than deleted).
+#
+# The same patch also fixes host detection in config/scripts/switch-arch.
+# Its sed collapses anything matching arm.* to "arm", so macOS on Apple
+# Silicon (uname -m = arm64) is seen as a 32-bit host. Building the 32-bit ppc
+# target then looks like a same-width build, forthstrap truncates 64-bit host
+# pointers, and the dictionary build dies with:
+#
+#   panic: segmentation violation at 0x3150061c
+#   dict=0xa31500000 here=0xa31500628(dict+0x628)
+#
+# Upstream added aarch64 to longbits() in e5ac46dd, but that only helps Linux,
+# where uname -m reports aarch64 and contains no "arm" substring to match.
+# Rewriting arm64 to aarch64 first makes the existing upstream fix apply here
+# too, and leaves armv7l and friends resolving to "arm" as before.
 patchfiles-append       patch-openbios-mac99-smp.diff
 
 # OpenBIOS is configured by a hand written script rather than autoconf. It

@@ -89,3 +89,24 @@ index 253394c..207b309 100644
      ofmem_register(find_dev("/memory"), find_dev(buf));
      node_methods_init(buf);
  
+diff --git config/scripts/switch-arch config/scripts/switch-arch
+index 2c20d27..cfc962c 100755
+--- config/scripts/switch-arch.orig
++++ config/scripts/switch-arch
+@@ -101,8 +101,16 @@ crosscflags()
+ 
+ archname()
+ {
++    # arm64 must be rewritten to aarch64 before the s/arm.*/arm/ rule below
++    # collapses it. Linux reports aarch64, which contains no "arm" substring
++    # and so survives, but macOS on Apple Silicon reports arm64 and would be
++    # flattened to "arm" -- which longbits() treats as a 32-bit host. Building
++    # a 32-bit target then looks like a same-width build, forthstrap truncates
++    # 64-bit host pointers, and the dictionary build dies with
++    # "panic: segmentation violation".
+     HOSTARCH=`uname -m | sed -e s/i.86/x86/ -e s/i86pc/x86/ \
+ 	-e s/sun4u/sparc64/ -e s/sparc$/sparc32/ \
++	-e s/arm64/aarch64/ \
+ 	-e s/arm.*/arm/ -e s/sa110/arm/ -e s/x86_64/amd64/ \
+ 	-e "s/Power Macintosh/ppc/"`
+ }
