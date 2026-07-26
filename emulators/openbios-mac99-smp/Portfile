@@ -38,6 +38,7 @@ checksums               rmd160  290d455af06c166d4b914974ab7247c3a6263b79 \
 # has none, so cross/powerpc-elf-{binutils,gcc} in this repo provide it.
 depends_build           port:powerpc-elf-gcc \
                         port:powerpc-elf-binutils \
+                        port:fcode-utils \
                         port:libxslt
 
 # Experimental mac99 SMP support, from Andrew Randrianasulu's

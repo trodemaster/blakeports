@@ -6,12 +6,14 @@ on:
       - 'emulators/openbios-mac99-smp/**'
       - 'cross/powerpc-elf-binutils/**'
       - 'cross/powerpc-elf-gcc/**'
+      - 'devel/fcode-utils/**'
     branches: [main]
   pull_request:
     paths:
       - 'emulators/openbios-mac99-smp/**'
       - 'cross/powerpc-elf-binutils/**'
       - 'cross/powerpc-elf-gcc/**'
+      - 'devel/fcode-utils/**'
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -105,6 +107,7 @@ jobs:
           source ./setupenv.bash
           port lint --nitpick cross/powerpc-elf-binutils
           port lint --nitpick cross/powerpc-elf-gcc
+          port lint --nitpick devel/fcode-utils
           port lint --nitpick ${{ matrix.port }}
 
       - name: Clean existing installation

@@ -1,0 +1,45 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem              1.0
+PortGroup               github 1.0
+
+github.setup            openbios fcode-utils 6e563ee54aa9f60e538d90eedaa012ae77610344
+github.tarball_from     archive
+name                    fcode-utils
+version                 20260629
+revision                0
+
+categories              devel
+license                 GPL-2
+maintainers             {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+
+description             Utilities to process FCode, Open Firmware's byte code
+long_description        {*}${description}. Provides toke, the FCode \
+                        tokenizer, along with detok and romheaders. OpenBIOS \
+                        requires toke to build its Forth dictionaries, so \
+                        this is a build dependency of \
+                        emulators/openbios-mac99-smp.
+
+homepage                https://openfirmware.info/FCODE_suite
+
+checksums               rmd160  40de26ee328ec8dceb736a010a91d5f44411360f \
+                        sha256  c37ccda5599495f47704d5d84a3a3401135ac6528c193dfe1b5fe354fe17b43c \
+                        size    4312278
+
+# Plain recursive makefiles, no configure script.
+use_configure           no
+
+build.args-append       CC=${configure.cc}
+
+# Note the unusual convention: the per-tool makefiles treat DESTDIR as an
+# install *prefix*, not as a staging root:
+#
+#     DESTDIR ?= /usr/local
+#     install: mkdir -p $(DESTDIR)/bin && cp $(PROGRAM) $(DESTDIR)/bin/...
+#
+# MacPorts would otherwise pass DESTDIR=${destroot} and drop the binaries in
+# ${destroot}/bin rather than ${destroot}${prefix}/bin.
+destroot.destdir        DESTDIR=${destroot}${prefix}
+destroot.args-append    CC=${configure.cc}
+
+livecheck.type          none
