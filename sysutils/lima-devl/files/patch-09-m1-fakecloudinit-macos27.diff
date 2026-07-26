@@ -1,5 +1,5 @@
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-index e3231328..8d476415 100644
+index 5a0dd403..23ac618b 100644
 --- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 +++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 @@ -23,7 +23,6 @@ import (
@@ -84,7 +84,7 @@ index e3231328..8d476415 100644
  	// defaults write (not os.WriteFile) so cfprefsd owns the domain; raw file
  	// writes get overwritten when softwareupdated rewrites the plist on first boot.
  	swPrefs := [][]string{
-@@ -337,8 +377,33 @@ func createUser(ctx context.Context, u *cloudinittypes.User, suppressFirstLoginS
+@@ -337,8 +377,33 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  	if homedir == "" {
  		return fmt.Errorf("homedir is required for user %#q", u.Name)
  	}
@@ -96,7 +96,7 @@ index e3231328..8d476415 100644
 +	// account itself exists — either case makes a filesystem-existence check wrong.
 +	if cmd := exec.CommandContext(ctx, "dscl", ".", "-read", "/Users/"+u.Name, "RecordName"); cmd.Run() == nil {
 +		logrus.Debugf("user %#q already exists in directory services, skipping creation", u.Name)
-+		if suppressFirstLoginSetup {
++		if _, statErr := os.Stat(filepath.Join(mnt, "setup-assistant.plist")); statErr == nil {
 +			// User was pre-created before fakecloudinit ran (observed on macOS 27 where
 +			// early-boot processes may initialize directory services before LaunchDaemons).
 +			// Suppress first-login dialogs, but only on the first run: once mini-buddy has
