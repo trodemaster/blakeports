@@ -138,7 +138,6 @@ configure.args-append   --enable-cocoa \
                         --disable-usb-redir \
                         --disable-seccomp \
                         --disable-linux-aio \
-                        --disable-glusterfs \
                         --disable-rdma \
                         --disable-libssh \
                         --disable-vnc \
