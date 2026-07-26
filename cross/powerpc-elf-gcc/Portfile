@@ -17,3 +17,15 @@ maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
 # 12.4.0 matches what cross/i386-elf-gcc uses upstream, on the theory that a
 # gcc version already exercised by another cross port is the safer bet for
 # OpenBIOS, which is old code and unhappy with some newer compilers.
+
+# Build without NLS. gcc's system.h only pulls in <libintl.h> under
+# ENABLE_NLS, and MacPorts' gettext header defines setlocale as a macro, which
+# collides with the declaration libcpp/system.h makes:
+#
+#   /opt/local/include/libintl.h:1091:34: error: expected unqualified-id
+#   note: expanded from macro 'setlocale'
+#
+# The crossgcc portgroup depends on gettext but never passes --disable-nls.
+# Localised diagnostics are of no value in a bare-metal cross compiler that
+# exists only to build a boot ROM, so turn them off rather than patch gcc.
+configure.args-append   --disable-nls
