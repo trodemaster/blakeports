@@ -1,0 +1,274 @@
+name: Build qemu-mac99-smp
+
+on:
+  push:
+    paths: ['emulators/qemu-mac99-smp/**']
+    branches: [main]
+  pull_request:
+    paths: ['emulators/qemu-mac99-smp/**']
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: false
+        default: 'main'
+        type: string
+      run_macos27_beta:
+        description: 'macOS 27 Beta (Golden Gate)'
+        required: false
+        default: true
+        type: boolean
+      run_macos26:
+        description: 'macOS 26 (Tahoe)'
+        required: false
+        default: true
+        type: boolean
+      run_macos15:
+        description: 'macOS 15 (Sequoia)'
+        required: false
+        default: false
+        type: boolean
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          MATRIX='{"include":['
+          FIRST=true
+
+          # For non-workflow_dispatch events (push/PR), default to modern platforms
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/qemu-mac99-smp"},'
+            MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"emulators/qemu-mac99-smp"}'
+            FIRST=false
+          else
+            # macOS 15
+            if [[ "${{ inputs.run_macos15 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"emulators/qemu-mac99-smp"}'
+              FIRST=false
+            fi
+
+            # macOS 26
+            if [[ "${{ inputs.run_macos26 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/qemu-mac99-smp"}'
+              FIRST=false
+            fi
+
+            # macOS 27 Beta
+            if [[ "${{ inputs.run_macos27_beta }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"emulators/qemu-mac99-smp"}'
+              FIRST=false
+            fi
+
+            # If no platforms selected, default to modern platforms
+            if [[ "$FIRST" == "true" ]]; then
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/qemu-mac99-smp"},'
+              MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"emulators/qemu-mac99-smp"}'
+            fi
+          fi
+
+          MATRIX+=']}'
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix for trigger: ${{ github.event_name }}"
+          echo "$MATRIX" | jq '.'
+
+  build-qemu-mac99-smp:
+    needs: setup-matrix
+    name: build-qemu-mac99-smp (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    strategy:
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Gather system information
+        id: system-info
+        continue-on-error: true
+        run: |
+          echo "Running on: ${{ matrix.platform }}"
+          echo "Building port: qemu-mac99-smp"
+          echo "Building from branch: ${{ inputs.branch || github.ref_name }}"
+
+          eval $(./scripts/getsysteminfo)
+
+          echo "macos_version=${MACOS_VERSION}" >> $GITHUB_OUTPUT
+          echo "macos_major=${MACOS_MAJOR}" >> $GITHUB_OUTPUT
+          echo "macos_minor=${MACOS_MINOR}" >> $GITHUB_OUTPUT
+          echo "macos_build=${MACOS_BUILD}" >> $GITHUB_OUTPUT
+          echo "arch=${ARCH}" >> $GITHUB_OUTPUT
+          echo "xcode_version=${XCODE_VERSION}" >> $GITHUB_OUTPUT
+          echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
+
+          echo ""
+          echo "System Information:"
+          sw_vers || echo "Could not determine macOS version"
+          echo ""
+          echo "Xcode Version: ${XCODE_VERSION}"
+          echo "Command Line Tools: ${CLT_VERSION}"
+          echo "Architecture: ${ARCH}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Setup MacPorts and BlakePorts Environment
+        run: ./scripts/installmacports
+
+      - name: Lint portfile
+        run: |
+          source ./setupenv.bash
+          port lint --nitpick ${{ matrix.port }}
+
+      - name: Clean existing installation
+        run: |
+          source ./setupenv.bash
+          if port installed qemu-mac99-smp 2>/dev/null | grep -q "qemu-mac99-smp @"; then
+            echo "Removing existing qemu-mac99-smp installation..."
+            sudo port uninstall qemu-mac99-smp
+            sudo port clean --dist qemu-mac99-smp || true
+          else
+            echo "No existing qemu-mac99-smp installation found"
+          fi
+
+      - name: Install dependencies
+        run: ./scripts/install-deps qemu-mac99-smp
+
+      - name: Build port
+        run: |
+          source ./setupenv.bash
+          sudo port -kv install qemu-mac99-smp
+
+      - name: Verify installation
+        run: |
+          source ./setupenv.bash
+          port installed qemu-mac99-smp
+          echo ""
+          echo "Published symlinks:"
+          ls -la /opt/local/bin/qemu-system-ppc-mac99-smp \
+                 /opt/local/bin/qemu-system-ppc64-mac99-smp
+          echo ""
+          echo "Private prefix:"
+          ls -la /opt/local/libexec/qemu-mac99-smp/bin
+          echo ""
+          /opt/local/bin/qemu-system-ppc-mac99-smp --version
+          echo ""
+          echo "Linked libraries:"
+          otool -L /opt/local/bin/qemu-system-ppc-mac99-smp
+
+      - name: Verify coexistence with stock qemu
+        run: |
+          source ./setupenv.bash
+          # The point of the private-prefix layout: this port must not own or
+          # clobber any file belonging to port:qemu.
+          echo "=== files this port registers under \${prefix}/bin ==="
+          port contents qemu-mac99-smp | grep "/opt/local/bin/" || true
+          echo ""
+
+          if port contents qemu-mac99-smp | grep -qE "/opt/local/bin/qemu-system-(ppc|ppc64)$"; then
+            echo "FAIL: port registers unsuffixed binaries and would collide with port:qemu"
+            exit 1
+          fi
+          echo "PASS: only suffixed names are published to \${prefix}/bin"
+          echo ""
+
+          # If stock qemu is installed, it must still be active and working.
+          if port -q installed qemu 2>/dev/null | grep -q "qemu @"; then
+            echo "=== stock qemu is installed, checking it still works ==="
+            port installed qemu
+            /opt/local/bin/qemu-system-ppc --version \
+              && echo "PASS: stock qemu-system-ppc still runs" \
+              || { echo "FAIL: stock qemu broken by this port"; exit 1; }
+          else
+            echo "Stock qemu not installed on this runner - coexistence not exercised"
+          fi
+
+      - name: Verify firmware resolves to the private prefix
+        run: |
+          # QEMU realpath()s its own executable to locate pc-bios. If the
+          # symlink indirection broke that, it would silently pick up the
+          # stock port's firmware (or fail to find any).
+          OUT=$(/opt/local/bin/qemu-system-ppc-mac99-smp -M mac99 -L help 2>&1 || true)
+          echo "$OUT"
+          echo ""
+          if echo "$OUT" | grep -q "/opt/local/libexec/qemu-mac99-smp/share/qemu"; then
+            echo "PASS: firmware search path points at the private prefix"
+          else
+            echo "WARNING: could not confirm private firmware path from -L help"
+            echo "Falling back to checking the datadir exists:"
+            ls -la /opt/local/libexec/qemu-mac99-smp/share/qemu/openbios-ppc
+          fi
+
+      - name: Verify mac99 SMP patch is active
+        run: |
+          # The whole point of this port is that patch-mac99-smp.diff raises
+          # mac99's max_cpus from 1 to 4. Assert that without booting a guest:
+          # asking for one CPU too many makes QEMU report the real limit via
+          # "Invalid SMP CPUs 5. The max CPUs supported by machine 'mac99' is N".
+          echo "Requesting -smp 5 on mac99 to read back the enforced limit..."
+          OUT=$(/opt/local/bin/qemu-system-ppc-mac99-smp -M mac99 -smp 5 -display none 2>&1 || true)
+          echo "$OUT"
+          echo ""
+
+          MAX=$(printf '%s\n' "$OUT" \
+            | sed -nE "s/.*supported by machine 'mac99' is ([0-9]+).*/\1/p" | head -1)
+
+          if [[ "$MAX" == "4" ]]; then
+            echo "PASS: mac99 reports max_cpus = 4, SMP patch is active"
+          elif [[ -n "$MAX" ]]; then
+            echo "FAIL: mac99 reports max_cpus = $MAX, expected 4"
+            echo "      The SMP patch did not apply, or applied only partially."
+            exit 1
+          else
+            echo "FAIL: could not parse mac99 max_cpus from the QEMU output above"
+            exit 1
+          fi
+
+      - name: Report MTTCG status for the ppc targets
+        continue-on-error: true
+        run: |
+          # Informational: the PPC tester lane cares whether thread=multi gives
+          # real parallelism. In QEMU, target/ppc sets
+          #   .mttcg_supported = TARGET_LONG_BITS == 64
+          # so only qemu-system-ppc64 declares MTTCG support. Requesting
+          # thread=multi on 32-bit ppc is still accepted, but warns
+          # "Guest not yet converted to MTTCG" and runs unvalidated.
+          #
+          # -S starts the VM paused and QMP quit exits immediately, so this
+          # never boots a guest and never hangs.
+          probe() {
+            local bin="$1"
+            echo "=== $(basename "$bin"), mac99, -smp 4, thread=multi ==="
+            printf '%s' '{"execute":"qmp_capabilities"}{"execute":"quit"}' \
+              | "$bin" -M mac99,via=pmu -cpu g4 -smp 4 \
+                  -accel tcg,thread=multi -display none -S \
+                  -qmp stdio 2>&1 >/dev/null | head -10
+            echo ""
+          }
+
+          probe /opt/local/bin/qemu-system-ppc-mac99-smp || true
+          probe /opt/local/bin/qemu-system-ppc64-mac99-smp || true
+
+          echo "A 'Guest not yet converted to MTTCG' warning above means that"
+          echo "target runs multi-threaded but is NOT validated for it."
+
+      - name: Clean port work directory
+        if: always()
+        run: |
+          source ./setupenv.bash
+          sudo port clean --work qemu-mac99-smp

@@ -1,0 +1,240 @@
+diff --git hw/intc/openpic.c hw/intc/openpic.c
+index 99d2a1e65e..846ff4b361 100644
+--- hw/intc/openpic.c.orig
++++ hw/intc/openpic.c
+@@ -1581,11 +1581,6 @@ static void openpic_realize(DeviceState *dev, Error **errp)
+         opp->brr1 = -1;
+         opp->mpic_mode_mask = GCR_MODE_MIXED;
+ 
+-        if (opp->nb_cpus != 1) {
+-            error_setg(errp, "Only UP supported today");
+-            return;
+-        }
+-
+         map_list(opp, list_le, &list_count);
+         break;
+     }
+diff --git hw/misc/macio/gpio.c hw/misc/macio/gpio.c
+index 1a7c534d65..2051de3c7f 100644
+--- hw/misc/macio/gpio.c.orig
++++ hw/misc/macio/gpio.c
+@@ -80,7 +80,36 @@ void macio_set_gpio(MacIOGPIOState *s, uint32_t gpio, bool state)
+             qemu_irq_lower(s->gpio_extirqs[gpio]);
+         }
+         break;
+-
++    case 4:
++        /* Active low, CPU1 reset */
++        if (!state) {
++            trace_macio_gpio_irq_assert(gpio);
++            qemu_irq_raise(s->gpio_extirqs[gpio]);
++        } else {
++            trace_macio_gpio_irq_deassert(gpio);
++            qemu_irq_lower(s->gpio_extirqs[gpio]);
++        }
++        break;
++    case 5:
++        /* Active low, CPU2 reset */
++        if (!state) {
++            trace_macio_gpio_irq_assert(gpio);
++            qemu_irq_raise(s->gpio_extirqs[gpio]);
++        } else {
++            trace_macio_gpio_irq_deassert(gpio);
++            qemu_irq_lower(s->gpio_extirqs[gpio]);
++        }
++        break;
++    case 6:
++        /* Active low, CPU3 reset */
++        if (!state) {
++            trace_macio_gpio_irq_assert(gpio);
++            qemu_irq_raise(s->gpio_extirqs[gpio]);
++        } else {
++            trace_macio_gpio_irq_deassert(gpio);
++            qemu_irq_lower(s->gpio_extirqs[gpio]);
++        }
++        break;
+     case 9:
+         /* Edge, triggered by NMI below */
+         if (state) {
+@@ -120,7 +149,28 @@ static void macio_gpio_write(void *opaque, hwaddr addr, uint64_t value,
+             ibit = s->gpio_regs[addr] & IN_DATA;
+         }
+ 
+-        s->gpio_regs[addr] = value | ibit;
++        if (addr == 4) {
++            if (!(value & OUT_ENABLE)) {
++                ibit = 1; /* high unless driven low */
++            }
++	}
++        macio_set_gpio(s, addr, ibit);
++
++        if (addr == (KL_GPIO_RESET_CPU1 - KEYLARGO_GPIO_EXTINT_0)) {
++            /* For CPU1 reset: (0x58+0x04) - 0x58 = 0x04 */
++            if (!(value & OUT_ENABLE)) {
++                ibit = 1; /* Ensure pulled high unless driven low */
++            }
++            macio_set_gpio(s, 4, ibit);
++        } else if (addr == (KL_GPIO_RESET_CPU2 - KEYLARGO_GPIO_EXTINT_0)) {
++            /* For CPU2 reset: (0x58+0x0f) - 0x58 = 0x0F */
++            macio_set_gpio(s, 5, ibit);
++        } else if (addr == (KL_GPIO_RESET_CPU3 - KEYLARGO_GPIO_EXTINT_0)) {
++            /* For CPU3 reset: (0x58+0x10) - 0x58 = 0x10 */
++            macio_set_gpio(s, 6, ibit);
++        } else {
++            s->gpio_regs[addr] = value | ibit;
++        }
+     }
+ }
+ 
+@@ -186,6 +236,9 @@ static void macio_gpio_reset(DeviceState *dev)
+ 
+     /* GPIO 1 is up by default */
+     macio_set_gpio(s, 1, true);
++    macio_set_gpio(s, 4, true);
++    macio_set_gpio(s, 5, true);
++    macio_set_gpio(s, 6, true);
+ }
+ 
+ static void macio_gpio_nmi(NMIState *n, int cpu_index, Error **errp)
+diff --git hw/ppc/mac_newworld.c hw/ppc/mac_newworld.c
+index 3680d96ed3..d6c5698389 100644
+--- hw/ppc/mac_newworld.c.orig
++++ hw/ppc/mac_newworld.c
+@@ -74,6 +74,7 @@
+ #include "kvm_ppc.h"
+ #include "hw/usb/usb.h"
+ #include "hw/core/sysbus.h"
++#include "hw/core/irq.h"
+ #include "trace.h"
+ 
+ #define MAX_IDE_BUS 2
+@@ -129,12 +130,26 @@ static void ppc_core99_reset(void *opaque)
+     cpu->env.nip = PROM_BASE + 0x100;
+ }
+ 
++static void cpu_kick(void *opaque, int n, int level)
++{
++    PowerPCCPU *cpu = opaque;
++    CPUState *cs = CPU(cpu);
++
++    nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
++    if (level) {
++        cpu->env.excp_prefix = 0;
++        cpu_reset(cs);
++        ppc_cpu_do_system_reset(cs);
++    }
++}
++
+ /* PowerPC Mac99 hardware initialisation */
+ static void ppc_core99_init(MachineState *machine)
+ {
+     Core99MachineState *core99_machine = CORE99_MACHINE(machine);
+     MachineClass *mc = MACHINE_GET_CLASS(machine);
+-    PowerPCCPU *cpu = NULL;
++    qemu_irq kick;
++    PowerPCCPU **cpus = NULL;
+     CPUPPCState *env = NULL;
+     char *filename;
+     IrqLines *openpic_irqs;
+@@ -158,14 +173,19 @@ static void ppc_core99_init(MachineState *machine)
+     uint64_t tbfreq = kvm_enabled() ? kvmppc_get_tbfreq() : TBFREQ;
+ 
+     /* init CPUs */
++    cpus = g_new0(PowerPCCPU *, machine->smp.cpus);
+     for (i = 0; i < machine->smp.cpus; i++) {
+-        cpu = POWERPC_CPU(cpu_create(machine->cpu_type));
+-        env = &cpu->env;
+-
++        cpus[i] = POWERPC_CPU(cpu_create(machine->cpu_type));
++        /* Secondary CPUs start halted */
++        object_property_set_bool(OBJECT(cpus[i]), "start-powered-off", i != 0,
++                                 &error_abort);
+         /* Set time-base frequency to 100 Mhz */
+-        cpu_ppc_tb_init(env, TBFREQ);
+-        qemu_register_reset(ppc_core99_reset, cpu);
++        cpu_ppc_tb_init(&cpus[i]->env, TBFREQ);
++        qemu_register_reset(ppc_core99_reset, cpus[i]);
++        /* Each CPU reports its own index via PIR */
++        cpus[i]->env.spr_cb[SPR_PIR].default_value = i;
+     }
++    env = &cpus[0]->env;
+ 
+     /* allocate RAM */
+     if (machine->ram_size > 2 * GiB) {
+@@ -245,8 +265,8 @@ static void ppc_core99_init(MachineState *machine)
+     }
+ 
+     openpic_irqs = g_new0(IrqLines, machine->smp.cpus);
+-    dev = DEVICE(cpu);
+     for (i = 0; i < machine->smp.cpus; i++) {
++        dev = DEVICE(cpus[i]);
+         /* Mac99 IRQ connection between OpenPIC outputs pins
+          * and PowerPC input pins
+          */
+@@ -358,14 +378,27 @@ static void ppc_core99_init(MachineState *machine)
+     qdev_prop_set_chr(dev, "chrA", serial_hd(0));
+     qdev_prop_set_chr(dev, "chrB", serial_hd(1));
+ 
++    pic_dev = DEVICE(object_resolve_path_component(macio, "pic"));
++    qdev_prop_set_uint32(pic_dev, "nb_cpus", machine->smp.cpus);
++
+     pci_realize_and_unref(PCI_DEVICE(macio), pci_bus, &error_fatal);
+ 
+-    pic_dev = DEVICE(object_resolve_path_component(macio, "pic"));
+     for (i = 0; i < 4; i++) {
+         qdev_connect_gpio_out(uninorth_pci_dev, i,
+                               qdev_get_gpio_in(pic_dev, 0x1b + i));
+     }
+ 
++    /*
++     * Wire each secondary CPU's KeyLargo GPIO reset line to a cpu_kick IRQ.
++     * The OS starts a secondary CPU by poking its soft-reset GPIO; GPIO 4/5/6
++     * correspond to CPU 1/2/3 respectively.
++     */
++    s = SYS_BUS_DEVICE(object_resolve_path_component(macio, "gpio"));
++    for (i = 1; i < machine->smp.cpus && i < 4; i++) {
++        kick = qemu_allocate_irq(cpu_kick, cpus[i], i);
++        sysbus_connect_irq(s, 3 + i, kick);
++    }
++
+     /* TODO: additional PCI buses only wired up for 32-bit machines */
+     if (PPC_INPUT(env) != PPC_FLAGS_INPUT_970) {
+         /* Uninorth AGP bus */
+@@ -573,8 +606,11 @@ static void core99_machine_class_init(ObjectClass *oc, const void *data)
+     mc->desc = "Mac99 based PowerMac";
+     mc->init = ppc_core99_init;
+     mc->block_default_type = IF_IDE;
+-    /* SMP is not supported currently */
+-    mc->max_cpus = 1;
++    /*
++     * Experimental SMP support (mac99/G4 only, requires a patched OpenBIOS
++     * that advertises the secondary CPUs as "stopped" in the device tree).
++     */
++    mc->max_cpus = 4;
+     mc->default_boot_order = "cd";
+     mc->default_display = "std";
+     mc->default_nic = "sungem";
+diff --git include/hw/misc/macio/gpio.h include/hw/misc/macio/gpio.h
+index 157ea0659b..7d9a0cc9be 100644
+--- include/hw/misc/macio/gpio.h.orig
++++ include/hw/misc/macio/gpio.h
+@@ -30,6 +30,19 @@
+ #include "hw/core/sysbus.h"
+ #include "qom/object.h"
+ 
++/* Linux/KeyLargo definitions for GPIO reset and extint lines */
++#define KEYLARGO_GPIO_EXTINT_0        0x58
++#define KEYLARGO_GPIO_0               0x50   /* if needed for extint calculations */
++
++#define KL_GPIO_EXTINT_CPU1           (KEYLARGO_GPIO_0 + 0x0a)
++#define KL_GPIO_EXTINT_CPU1_ASSERT    0x04
++#define KL_GPIO_EXTINT_CPU1_RELEASE   0x38
++
++#define KL_GPIO_RESET_CPU0            (KEYLARGO_GPIO_EXTINT_0 + 0x03)
++#define KL_GPIO_RESET_CPU1            (KEYLARGO_GPIO_EXTINT_0 + 0x04)
++#define KL_GPIO_RESET_CPU2            (KEYLARGO_GPIO_EXTINT_0 + 0x0f)
++#define KL_GPIO_RESET_CPU3            (KEYLARGO_GPIO_EXTINT_0 + 0x10)
++
+ #define TYPE_MACIO_GPIO "macio-gpio"
+ OBJECT_DECLARE_SIMPLE_TYPE(MacIOGPIOState, MACIO_GPIO)
+ 

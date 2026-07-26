@@ -1,0 +1,205 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem              1.0
+
+name                    qemu-mac99-smp
+version                 11.1.0-rc1
+revision                0
+categories              emulators
+license                 GPL-2+
+maintainers             {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+
+description             QEMU with experimental mac99 SMP support for PowerPC guests
+long_description        {*}${description}. This is QEMU ${version} with the \
+                        experimental multi-CPU (SMP) patches for the mac99 \
+                        PowerMac machine model, allowing Mac OS X 10.4 and \
+                        10.5 PowerPC guests to boot with up to 4 CPUs. Only \
+                        the ppc and ppc64 system targets are built. \
+                        It installs alongside the stock qemu port under \
+                        ${prefix}/libexec/${name}, exposing its emulators as \
+                        qemu-system-ppc-mac99-smp and \
+                        qemu-system-ppc64-mac99-smp. \
+                        Note that SMP additionally requires a patched \
+                        OpenBIOS ROM which advertises the secondary CPUs as \
+                        stopped in the device tree, so this port on its own \
+                        boots single-CPU only.
+
+homepage                https://www.qemu.org
+
+master_sites            https://download.qemu.org/
+distname                qemu-${version}
+use_xz                  yes
+
+checksums               rmd160  ba3194453f9738c3448dbd8c031082808fb178b6 \
+                        sha256  8d3aae3cc7ce58916cbc3cf7891958e47f82ab7a1c239b9be333f892d1ae3f34 \
+                        size    141809476
+
+# This port deliberately coexists with port:qemu rather than conflicting with
+# it. Everything is installed into a private prefix so that no file (binary,
+# firmware blob under share/qemu, keymap, ...) collides with the stock port,
+# and only suffixed symlinks are published into ${prefix}/bin.
+#
+# QEMU locates its own firmware relative to the running executable
+# (util/cutils.c: qemu_init_exec_dir() -> _NSGetExecutablePath() + realpath(),
+# then get_relocated_path()), and meson's "relocatable" option defaults to
+# true. Because the lookup realpath()s through the symlink, the wrappers below
+# resolve to the private prefix and each QEMU finds its matching pc-bios.
+set qemu_prefix         ${prefix}/libexec/${name}
+
+set py_branch           3.14
+set py_version          [string replace ${py_branch} 1 1]
+
+depends_build-append    port:ninja \
+                        path:bin/pkg-config:pkgconfig \
+                        port:py${py_version}-distlib \
+                        port:py${py_version}-meson
+
+depends_lib-append      path:lib/pkgconfig/glib-2.0.pc:glib2 \
+                        path:lib/pkgconfig/pixman-1.pc:libpixman \
+                        port:bzip2 \
+                        port:libslirp \
+                        port:lzo2 \
+                        port:snappy \
+                        port:zlib \
+                        port:zstd \
+                        port:dtc
+
+# Experimental mac99 SMP support.
+#
+# Originally developed by BALATON Zoltan on the qemu-ppc mailing list
+# (https://lists.nongnu.org/archive/html/qemu-ppc/2025-02/msg00317.html),
+# extended to 4 CPUs by JD
+# (https://lists.nongnu.org/archive/html/qemu-ppc/2025-03/msg01151.html),
+# and collected by Andrew Randrianasulu at
+# https://github.com/Randrianasulu/qemu-mac99-smp (branch 10.0-experiments).
+#
+# Rebased here from QEMU 10.0 onto ${version}: hw/irq.h moved to
+# hw/core/irq.h, and debug leftovers (stderr traces, a duplicated GPIO
+# wiring loop) were dropped.
+patchfiles-append       patch-mac99-smp.diff
+
+# ERROR: You either need GCC v7.4 or Clang v10.0 (or XCode Clang v15.0)
+compiler.blacklist      {clang < 1500} {macports-clang-[3-9].*} {macports-gcc-[56]} {*gcc-[34].*}
+
+if {"${configure.build_arch}" eq "arm64"} {
+    set host_cpu "aarch64"
+} else {
+    set host_cpu "${configure.build_arch}"
+}
+
+# Install into the private prefix instead of ${prefix}
+configure.pre_args-replace  --prefix=${prefix} --prefix=${qemu_prefix}
+
+configure.args          --cpu=${host_cpu} \
+                        --cc=${configure.cc} \
+                        --objcc=${configure.objc} \
+                        --host-cc=${configure.cc}
+
+# Only the PowerMac targets are of interest here
+configure.args-append   --target-list=ppc-softmmu,ppc64-softmmu
+
+# Do not use iasl, even if it is installed, #43911
+configure.args-append   --iasl=/usr/bin/false
+
+# Use MacPorts Python
+configure.args-append   --python=${prefix}/bin/python${py_branch}
+
+configure.args-append   --enable-cocoa \
+                        --enable-bzip2 \
+                        --enable-hvf \
+                        --enable-slirp \
+                        --enable-lzo \
+                        --enable-snappy \
+                        --enable-zstd \
+                        --enable-tools \
+                        --enable-fdt=system \
+                        --enable-dmg \
+                        --enable-qcow1 \
+                        --enable-qed \
+                        --enable-vvfat \
+                        --disable-curses \
+                        --disable-capstone \
+                        --disable-sdl \
+                        --disable-gtk \
+                        --disable-opengl \
+                        --disable-virglrenderer \
+                        --disable-curl \
+                        --disable-attr \
+                        --disable-vde \
+                        --disable-jack \
+                        --disable-brlapi \
+                        --disable-cap-ng \
+                        --disable-spice-protocol \
+                        --disable-spice \
+                        --disable-libiscsi \
+                        --disable-rbd \
+                        --disable-smartcard \
+                        --disable-libusb \
+                        --disable-usb-redir \
+                        --disable-seccomp \
+                        --disable-linux-aio \
+                        --disable-glusterfs \
+                        --disable-rdma \
+                        --disable-libssh \
+                        --disable-vnc \
+                        --disable-gnutls \
+                        --disable-gcrypt \
+                        --disable-nettle \
+                        --disable-numa \
+                        --disable-xen \
+                        --disable-png \
+                        --disable-dbus-display \
+                        --disable-fuse \
+                        --disable-docs \
+                        --disable-guest-agent \
+                        --disable-virtfs
+
+# The qemu build system bugs out when using in-source-tree builds, so build
+# out of source. See the comment in emulators/qemu for the full explanation.
+configure.dir           "${workpath}/build"
+configure.cmd           "${worksrcpath}/configure"
+build.dir               "${workpath}/build"
+
+pre-configure {
+    file mkdir ${configure.dir}
+}
+
+pre-configure {
+    configure.args-append --extra-ldflags="${configure.ldflags}"
+}
+
+# disable silent rules
+build.args-append       V=1
+
+# Publish suffixed symlinks so both this port and port:qemu can be active.
+# Only the two PowerMac emulators are exposed; the tools built alongside them
+# (qemu-img and friends) stay in the private prefix, since port:qemu already
+# provides those under ${prefix}/bin.
+post-destroot {
+    xinstall -d ${destroot}${prefix}/bin
+    foreach qemu_target {ppc ppc64} {
+        ln -s ${qemu_prefix}/bin/qemu-system-${qemu_target} \
+              ${destroot}${prefix}/bin/qemu-system-${qemu_target}-mac99-smp
+    }
+}
+
+notes "
+This port installs alongside the stock qemu port. Its emulators are:
+
+    ${prefix}/bin/qemu-system-ppc-mac99-smp
+    ${prefix}/bin/qemu-system-ppc64-mac99-smp
+
+Experimental mac99 SMP, for example:
+
+    qemu-system-ppc-mac99-smp -M mac99,via=pmu -cpu g4 -smp 4 \\
+        -m 512 -display cocoa -boot c -drive file=leopard.qcow2
+
+Booting more than one CPU also needs a patched OpenBIOS ROM that marks the
+secondary CPUs as stopped in the device tree. The ROM shipped with QEMU does
+not, so out of the box these binaries boot single-CPU.
+"
+
+# Default universal variant does not work
+universal_variant       no
+
+livecheck.type          none
