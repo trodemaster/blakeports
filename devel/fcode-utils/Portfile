@@ -29,7 +29,20 @@ checksums               rmd160  40de26ee328ec8dceb736a010a91d5f44411360f \
 # Plain recursive makefiles, no configure script.
 use_configure           no
 
-build.args-append       CC=${configure.cc}
+# The makefiles default to CFLAGS ?= -O2 -Wall -Werror, and this is 2009 era
+# code, so current clang fails it on warnings that did not exist then:
+#
+#   toke.c:232: error: variable 'argindx' set but not used
+#     [-Werror,-Wunused-but-set-variable]
+#
+# CFLAGS is assigned with ?= and INCLUDES is kept separate, so overriding it
+# here drops -Werror without losing the include paths. -Wno-pointer-sign is
+# what the makefiles' own _GCC4_CFLAGS probe adds, replicated because a
+# command line CFLAGS suppresses their later := append.
+set fc_cflags           "${configure.cflags} -Wall -Wno-pointer-sign"
+
+build.args-append       CC=${configure.cc} \
+                        CFLAGS="${fc_cflags}"
 
 # Note the unusual convention: the per-tool makefiles treat DESTDIR as an
 # install *prefix*, not as a staging root:
@@ -40,6 +53,7 @@ build.args-append       CC=${configure.cc}
 # MacPorts would otherwise pass DESTDIR=${destroot} and drop the binaries in
 # ${destroot}/bin rather than ${destroot}${prefix}/bin.
 destroot.destdir        DESTDIR=${destroot}${prefix}
-destroot.args-append    CC=${configure.cc}
+destroot.args-append    CC=${configure.cc} \
+                        CFLAGS="${fc_cflags}"
 
 livecheck.type          none
