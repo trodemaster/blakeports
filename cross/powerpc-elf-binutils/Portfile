@@ -1,0 +1,15 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           crossbinutils 1.0
+
+crossbinutils.setup powerpc-elf 2.46.1
+revision            0
+maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+
+# Needed to build the OpenBIOS PowerPC ROM (see emulators/openbios-mac99-smp).
+# MacPorts ships no powerpc cross toolchain of its own: the cross category has
+# arm-elf, i386-elf, m68k-elf, mips-elf and msp430-elf compilers, plus
+# ppc-linux-binutils (binutils only, and a linux rather than elf target).
+
+configure.args-append --disable-werror

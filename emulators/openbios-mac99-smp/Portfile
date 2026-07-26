@@ -1,0 +1,110 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem              1.0
+PortGroup               github 1.0
+
+github.setup            openbios openbios e5ac46dd24e6216c36aa80462af25457e7029440
+github.tarball_from     archive
+# github.setup names the port after the repo; this is a patched variant that
+# must not present itself as plain "openbios".
+name                    openbios-mac99-smp
+version                 20260629
+revision                0
+
+categories              emulators
+license                 GPL-2
+maintainers             {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+
+description             OpenBIOS PowerPC ROM with experimental mac99 SMP support
+long_description        {*}${description}. OpenBIOS is an Open Firmware \
+                        implementation used by QEMU as the boot ROM for its \
+                        PowerMac machines. This build carries the patches \
+                        that enumerate every CPU in the device tree and mark \
+                        the secondary ones as stopped, which is what lets an \
+                        OS bring them up and is required for SMP to work on \
+                        the mac99 machine. Pair it with the \
+                        emulators/qemu-mac99-smp port, which raises mac99 \
+                        max_cpus from 1 to 4. The stock ROM shipped with \
+                        QEMU does not advertise secondary CPUs, so both \
+                        halves are needed before a guest boots multiprocessor.
+
+homepage                https://openfirmware.info/OpenBIOS
+
+checksums               rmd160  290d455af06c166d4b914974ab7247c3a6263b79 \
+                        sha256  4c295155cb4a8c85d5fec2c20a33c3fe5613aca4394f55185985e0b32af412f4 \
+                        size    932915
+
+# Building a PowerPC ROM needs a bare-metal powerpc cross toolchain. MacPorts
+# has none, so cross/powerpc-elf-{binutils,gcc} in this repo provide it.
+depends_build           port:powerpc-elf-gcc \
+                        port:powerpc-elf-binutils \
+                        port:libxslt
+
+# Experimental mac99 SMP support, from Andrew Randrianasulu's
+# https://github.com/Randrianasulu/openbios-experiments (10.0-smp-screamer),
+# squashed from three commits and rebased onto upstream ${github.version}:
+#
+#   716c232f2e  add mac99/G4 SMP support: one device tree node per CPU, with
+#               non-primary CPUs marked state = "stopped"
+#   57aa458de9  drop finish-device from the 604/750/970 init functions, since
+#               arch_of_init() now issues it once per CPU node
+#   e992e29ad7  point the PowerPC,74xx cpudef at cpu_g4_init so -cpu g4 gets
+#               its PIR property
+#
+# Debug leftovers were removed (a printk of the PIR on every CPU, and
+# finish-device calls commented out rather than deleted).
+patchfiles-append       patch-openbios-mac99-smp.diff
+
+# OpenBIOS is configured by a hand written script rather than autoconf. It
+# writes config-host.mak and an obj-<arch> build directory, then the top level
+# Makefile builds whatever targets that script selected.
+#
+# switch-arch looks for a cross compiler named <target>-gcc, trying prefixes
+# powerpc-unknown-linux-gnu-, powerpc-linux-gnu-, powerpc-linux-, powerpc-elf-
+# and powerpc-eabi- in turn, or honours CROSS_COMPILE if set. Set it
+# explicitly so the build cannot silently pick up some other toolchain.
+use_configure           no
+
+set ob_cross            ${prefix}/bin/powerpc-elf-
+
+build.cmd               ${prefix}/bin/gmake
+build.target            build
+build.args              V=1
+build.env-append        CROSS_COMPILE=${ob_cross}
+
+depends_build-append    port:gmake
+
+pre-build {
+    system -W ${worksrcpath} \
+        "CROSS_COMPILE=${ob_cross} ./config/scripts/switch-arch ppc"
+}
+
+destroot {
+    # Installed under the port's own name rather than as a drop in
+    # replacement, so nothing here can clobber the ROMs owned by port:qemu or
+    # by emulators/qemu-mac99-smp. Point QEMU at it with -L; QEMU keeps a list
+    # of data directories and falls back to its own for everything else.
+    xinstall -d ${destroot}${prefix}/share/${name}
+    xinstall -m 0644 ${worksrcpath}/obj-ppc/openbios-qemu.elf \
+        ${destroot}${prefix}/share/${name}/openbios-ppc
+}
+
+notes "
+This installs an SMP capable OpenBIOS PowerPC ROM as:
+
+    ${prefix}/share/${name}/openbios-ppc
+
+It is deliberately NOT installed over the ROM that qemu ships. Select it at
+runtime with -L, which prepends to QEMU's data directory search path:
+
+    qemu-system-ppc-mac99-smp -L ${prefix}/share/${name} \\
+        -M mac99,via=pmu -cpu g4 -smp 4 -m 512 \\
+        -display cocoa -boot c -drive file=leopard.qcow2
+
+Use -L help to confirm which data directories are being searched.
+
+SMP on mac99 is experimental. Mac OS 9 through OS X 10.3 are reported to work
+with 2 CPUs, and OS X 10.4 and 10.5 with 4 CPUs.
+"
+
+livecheck.type          none

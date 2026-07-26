@@ -1,0 +1,202 @@
+name: Build openbios-mac99-smp
+
+on:
+  push:
+    paths:
+      - 'emulators/openbios-mac99-smp/**'
+      - 'cross/powerpc-elf-binutils/**'
+      - 'cross/powerpc-elf-gcc/**'
+    branches: [main]
+  pull_request:
+    paths:
+      - 'emulators/openbios-mac99-smp/**'
+      - 'cross/powerpc-elf-binutils/**'
+      - 'cross/powerpc-elf-gcc/**'
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: false
+        default: 'main'
+        type: string
+      run_macos27_beta:
+        description: 'macOS 27 Beta (Golden Gate)'
+        required: false
+        default: false
+        type: boolean
+      run_macos26:
+        description: 'macOS 26 (Tahoe)'
+        required: false
+        default: true
+        type: boolean
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          MATRIX='{"include":['
+          FIRST=true
+
+          # Building a powerpc cross toolchain from source is slow, so unlike
+          # the other port workflows this one defaults to macOS 26 only. Beta
+          # has no binary archives at all, which makes it slower still.
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            MATRIX+='{"platform":"macOS_26","runner":"macOS_26","port":"emulators/openbios-mac99-smp"}'
+            FIRST=false
+          else
+            if [[ "${{ inputs.run_macos26 }}" == "true" ]]; then
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","port":"emulators/openbios-mac99-smp"}'
+              FIRST=false
+            fi
+            if [[ "${{ inputs.run_macos27_beta }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","port":"emulators/openbios-mac99-smp"}'
+              FIRST=false
+            fi
+            if [[ "$FIRST" == "true" ]]; then
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","port":"emulators/openbios-mac99-smp"}'
+            fi
+          fi
+
+          MATRIX+=']}'
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "$MATRIX" | jq '.'
+
+  build-openbios-mac99-smp:
+    needs: setup-matrix
+    name: build-openbios-mac99-smp (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    strategy:
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Gather system information
+        id: system-info
+        continue-on-error: true
+        run: |
+          echo "Running on: ${{ matrix.platform }}"
+          echo "Building port: openbios-mac99-smp"
+          eval $(./scripts/getsysteminfo)
+          sw_vers || echo "Could not determine macOS version"
+          echo "Xcode: ${XCODE_VERSION}  CLT: ${CLT_VERSION}  Arch: ${ARCH}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Setup MacPorts and BlakePorts Environment
+        run: ./scripts/installmacports
+
+      - name: Lint portfiles
+        run: |
+          source ./setupenv.bash
+          port lint --nitpick cross/powerpc-elf-binutils
+          port lint --nitpick cross/powerpc-elf-gcc
+          port lint --nitpick ${{ matrix.port }}
+
+      - name: Clean existing installation
+        run: |
+          source ./setupenv.bash
+          if port installed openbios-mac99-smp 2>/dev/null | grep -q "openbios-mac99-smp @"; then
+            sudo port uninstall openbios-mac99-smp
+            sudo port clean --dist openbios-mac99-smp || true
+          else
+            echo "No existing openbios-mac99-smp installation found"
+          fi
+
+      - name: Build powerpc-elf cross toolchain
+        run: |
+          source ./setupenv.bash
+          # Explicit and ordered: gcc depends on binutils, and building these
+          # from source is the bulk of this job's runtime.
+          sudo port -kv install powerpc-elf-binutils
+          sudo port -kv install powerpc-elf-gcc
+          echo ""
+          echo "=== toolchain ==="
+          /opt/local/bin/powerpc-elf-gcc --version | head -2
+          /opt/local/bin/powerpc-elf-ld --version | head -2
+
+      - name: Install remaining dependencies
+        run: ./scripts/install-deps openbios-mac99-smp
+
+      - name: Build port
+        run: |
+          source ./setupenv.bash
+          sudo port -kv install openbios-mac99-smp
+
+      - name: Verify the ROM
+        run: |
+          source ./setupenv.bash
+          ROM=/opt/local/share/openbios-mac99-smp/openbios-ppc
+          port installed openbios-mac99-smp
+          echo ""
+          ls -la "$ROM"
+          echo ""
+          OUT=$(file "$ROM")
+          echo "$OUT"
+          echo ""
+
+          # Must be a big endian 32-bit PowerPC ELF, or it is not a usable
+          # PowerMac ROM regardless of whether the build "succeeded".
+          echo "$OUT" | grep -q "ELF 32-bit MSB" \
+            || { echo "FAIL: not a 32-bit big-endian ELF"; exit 1; }
+          echo "$OUT" | grep -qi "PowerPC" \
+            || { echo "FAIL: not a PowerPC binary"; exit 1; }
+          echo "PASS: ROM is a 32-bit big-endian PowerPC ELF"
+
+      - name: Boot test - does the ROM enumerate 4 CPUs?
+        continue-on-error: true
+        run: |
+          # The real question this port exists to answer. Boot QEMU with the
+          # patched ROM and no disk; OpenBIOS prints the CPU count it found in
+          # fw_cfg and a line per CPU node, then drops to an OF prompt.
+          #
+          # Needs emulators/qemu-mac99-smp, which is a separate workflow, so
+          # this is best effort and never fails the job.
+          QEMU=/opt/local/bin/qemu-system-ppc-mac99-smp
+          if [[ ! -x "$QEMU" ]]; then
+            echo "SKIP: $QEMU not installed (build the qemu-mac99-smp port first)"
+            exit 0
+          fi
+
+          LOG=$(mktemp)
+          # Background + kill rather than a bare run: OpenBIOS drops to an
+          # interactive prompt and would otherwise hang until the job timeout.
+          "$QEMU" -L /opt/local/share/openbios-mac99-smp \
+                  -M mac99,via=pmu -cpu g4 -smp 4 -m 512 \
+                  -display none -serial file:"$LOG" -nodefaults > /dev/null 2>&1 &
+          QPID=$!
+          for _ in $(seq 1 60); do
+            grep -q "CPUs:" "$LOG" 2>/dev/null && break
+            kill -0 "$QPID" 2>/dev/null || break
+            sleep 1
+          done
+          sleep 5
+          kill "$QPID" 2>/dev/null || true
+          wait "$QPID" 2>/dev/null || true
+
+          echo "=== OpenBIOS serial output ==="
+          cat "$LOG" || true
+          echo ""
+          echo "=== CPU nodes reported ==="
+          grep -c "CPU type" "$LOG" 2>/dev/null || echo 0
+          grep "CPUs:" "$LOG" 2>/dev/null || echo "(no CPU count line seen)"
+
+      - name: Clean port work directory
+        if: always()
+        run: |
+          source ./setupenv.bash
+          sudo port clean --work openbios-mac99-smp || true

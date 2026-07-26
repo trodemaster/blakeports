@@ -1,0 +1,91 @@
+diff --git arch/ppc/qemu/init.c arch/ppc/qemu/init.c
+index 253394c..207b309 100644
+--- arch/ppc/qemu/init.c.orig
++++ arch/ppc/qemu/init.c
+@@ -361,7 +361,7 @@ cpu_604_init(const struct cpudef *cpu)
+     cpu_generic_init(cpu);
+     cpu_add_pir_property();
+ 
+-    fword("finish-device");
++    /* finish-device is issued by arch_of_init() for each CPU node */
+ }
+ 
+ static void
+@@ -374,7 +374,7 @@ cpu_750_init(const struct cpudef *cpu)
+     push_str("reg");
+     fword("property");
+ 
+-    fword("finish-device");
++    /* finish-device is issued by arch_of_init() for each CPU node */
+ }
+ 
+ static void
+@@ -383,7 +383,10 @@ cpu_g4_init(const struct cpudef *cpu)
+     cpu_generic_init(cpu);
+     cpu_add_pir_property();
+ 
+-    fword("finish-device");
++    /*
++     * No finish-device here: arch_of_init() now creates one node per CPU
++     * and calls finish-device itself at the end of each iteration.
++     */
+ }
+ 
+ #ifdef CONFIG_PPC_64BITSUPPORT
+@@ -436,7 +439,7 @@ cpu_970_init(const struct cpudef *cpu)
+     push_str("64-bit");
+     fword("property");
+ 
+-    fword("finish-device");
++    /* finish-device is issued by arch_of_init() for each CPU node */
+ 
+ #ifdef CONFIG_PPC_64BITSUPPORT
+     /* The 970 is a PPC64 CPU, so we need to activate
+@@ -566,7 +569,7 @@ static const struct cpudef ppc_defs[] = {
+         .dcache_block_size = 0x20,
+         .tlb_sets = 0x40,
+         .tlb_size = 0x80,
+-        .initfn = cpu_750_init,
++        .initfn = cpu_g4_init,
+     },
+     {
+         .iu_version = 0x0000c0000,
+@@ -1073,11 +1076,34 @@ arch_of_init(void)
+     push_str("reg");
+     fword("property");
+ 
+-    cpu = id_cpu();
+-    cpu->initfn(cpu);
+-    printk("CPU type %s\n", cpu->name);
++    /*
++     * Create one device tree node per CPU. "temp" holds FW_CFG_NB_CPUS,
++     * read from QEMU above. Secondary CPUs are advertised as "stopped" so
++     * that the OS brings them up itself via the KeyLargo GPIO soft-reset,
++     * which is what makes SMP work on mac99.
++     */
++    for (unsigned int i = 0; i < temp; i++) {
++        cpu = id_cpu();
++        cpu->initfn(cpu);
++
++        printk("CPU type %s\n", cpu->name);
++        snprintf(buf, sizeof(buf), "/cpus/%s", cpu->name);
++
++        PUSH(i);
++        fword("encode-int");
++        push_str("reg");
++        fword("property");
++
++        if (i != 0) {
++            push_str("stopped");
++            fword("encode-string");
++            push_str("state");
++            fword("property");
++        }
++
++        fword("finish-device");
++    }
+ 
+-    snprintf(buf, sizeof(buf), "/cpus/%s", cpu->name);
+     ofmem_register(find_dev("/memory"), find_dev(buf));
+     node_methods_init(buf);
+ 
