@@ -75,13 +75,23 @@ fi
 
 echo "Getting dependencies for $PORTNAME..."
 
+# NOTE: all "port sync" calls below must pass -v.
+#
+# macports.tcl only assigns $verboseflag when either portverbose is on or
+# ui_options(progress_download) exists, and the latter is set only when
+# "isatty stderr" is true. Under CI stderr is a pipe, so with a non-verbose
+# sync neither branch runs and the later tar invocation dies with
+#   can't read "verboseflag": no such variable
+# Passing -v takes the first branch and keeps sync working non-interactively.
+# scripts/installmacports does the same for the same reason.
+
 # Function to sync port index and retry
 sync_and_retry_deps() {
     local portname=$1
     local runtime_only=$2
     
     echo "Port not found, syncing port index..."
-    sudo port sync
+    sudo port -v sync
     
     echo "Retrying to get dependencies for $portname..."
     if [ "$runtime_only" = true ]; then
@@ -159,7 +169,13 @@ for dep in $DEPS; do
         # Check if error is "port not found" - if so, sync and retry once
         if echo "$OUTPUT" | grep -qi "not found\|port.*not found\|unknown port"; then
             echo "  ⚠️  Port $dep not found, syncing port index and retrying..."
-            sudo port sync
+            # Show what actually failed. The grep above matches any "not found"
+            # anywhere in the output, so this branch can be entered for reasons
+            # unrelated to a missing port; without this the real error is lost.
+            echo "  📋 Original error from 'port install $dep':"
+            echo "$OUTPUT" | sed 's/^/     /'
+            echo ""
+            sudo port -v sync
             echo "  Retrying installation of $dep..."
             
             # Retry with temp file
