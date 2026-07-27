@@ -2,44 +2,57 @@
 
 Info needed to submit the local patches to upstream
 [lenticularis39/axpbox](https://github.com/lenticularis39/axpbox) later.
-Both patches were developed and verified against **v1.1.2**
-(tag `v1.1.2`, commit `d26f87b`) on macOS 26 (Tahoe) arm64, built via
-this port with MacPorts `libsdl` (sdl12-compat over SDL2) and `libpcap`.
 
-## Patch 1: SDL detection broken on macOS
+**Status as of the v1.2.0 rebase (2026-07):** v1.2.0 pulled in a large
+backport from the [ES40-Emu/es40](https://github.com/ES40-Emu/es40)
+fork (PR [#129](https://github.com/lenticularis39/axpbox/pull/129)),
+which is now where upstream says active development actually happens
+("please go there for the latest improvements and speedups" — v1.2.0
+release notes). That backport substantially rewrote the files these
+patches touch: `CMakeLists.txt` switched from bundled SDL 1.2 to
+`find_package(SDL3 CONFIG)`, and `S3Trio64.{hpp,cpp}` gained a new
+firmware-reset pause/resume mechanism (`PauseThread`/`PauseAck`) that
+`Cirrus.{hpp,cpp}` did not receive. Both remaining patches were
+rebased by hand against v1.2.0 and are build-verified (patches apply
+with `patch -p0`, zero fuzz, zero rejects; `axpbox --help` runs). The
+deep runtime verification from the original v1.1.2 work (ROM boot,
+SDL window visible, telnet-attached serial ports, SIGABRT repro) has
+**not** been redone against v1.2.0 — that requires a firmware ROM
+image and manual interactive testing (see "Verification performed"
+below, which still describes the v1.1.2 results only).
 
-**File:** `files/patch-cmake-sdl-detection.diff` (touches `CMakeLists.txt`)
+**Open question before submitting:** given upstream's own redirect,
+it's worth checking whether ES40-Emu/es40 already has working macOS
+support (its own CI, threading model, etc.) before investing in a PR
+against lenticularis39/axpbox, which may see limited review attention
+going forward.
 
-**Problem:** `check_include_file("SDL/SDL.h" HAVE_SDL)` compiles a probe
-program containing `int main(void)`. SDL 1.2's `SDL_main.h` does
-`#define main SDL_main` when `__MACOSX__` (or `__WIN32__`) is defined, so
-the probe fails to compile on macOS even when SDL is installed —
-`error: conflicting types for 'SDL_main'`. Result: `HAVE_SDL` is always
-0 on macOS and SDL graphics support is silently disabled.
+## Patch 1: SDL detection broken on macOS — DROPPED, no longer applicable
 
-**Fix:** replace the compile-test with
-`find_path(SDL_INCLUDE_DIR NAMES SDL/SDL.h)`, which only checks header
-existence (no compilation, so no macro conflict) and honors
-`CMAKE_SYSTEM_PREFIX_PATH` / standard prefix search the same way the
-working `find_package(PCAP)` detection does. Sets `HAVE_SDL` and adds
-`include_directories(${SDL_INCLUDE_DIR})`.
-
-**Upstream framing:** not macOS-specific in principle — any platform
-where `SDL_main.h` remaps `main` hits this. Windows MSVC builds likely
-dodge it only because they don't use this code path the same way.
+This patch (`files/patch-cmake-sdl-detection.diff`, touched
+`CMakeLists.txt`) is obsolete as of v1.2.0 and was removed from the
+port. v1.2.0 replaced the old `check_include_file("SDL/SDL.h",
+HAVE_SDL)` probe — which broke on macOS because SDL 1.2's
+`SDL_main.h` does `#define main SDL_main`, conflicting with the
+probe's own `int main(void)` test program — with
+`find_package(SDL3 CONFIG QUIET)`. `find_package` doesn't compile a
+test program, so the bug this patch worked around does not exist in
+v1.2.0. Nothing to submit upstream for this one.
 
 ## Patch 2: SDL GUI must run on the macOS main thread
 
 **File:** `files/patch-macos-gui-main-thread.diff` (touches
 `src/SystemComponent.hpp`, `src/System.cpp`, `src/Cirrus.{hpp,cpp}`,
-`src/S3Trio64.{hpp,cpp}`, `src/gui/sdl.cpp`)
+`src/S3Trio64.{hpp,cpp}`). No longer touches `src/gui/sdl.cpp` — see
+below.
 
 **Problem:** each VGA card spawns a worker thread (`CCirrus::run()` /
-`CS3Trio64::run()`) that performs *all* SDL work: `SDL_Init(SDL_INIT_VIDEO)`,
-window creation via `SDL_SetVideoMode` (from `dimension_update()`), and
-event pumping via `SDL_PollEvent`. On macOS, Cocoa requires all of these
-on the process main thread. First failure observed (macOS 26, sdl12-compat
-2.x over SDL2):
+`CS3Trio64::run()`) that performs *all* SDL work: init, window
+creation, and event pumping. On macOS, Cocoa requires all of this on
+the process main thread. (Original crash evidence, from v1.1.2 on
+SDL2/sdl12-compat, quoted for reference — the exact backtrace will
+differ under SDL3 but the underlying Cocoa main-thread constraint is
+unchanged and not SDL-version-specific):
 
 ```
 *** Terminating app due to uncaught exception 'NSInternalInconsistencyException',
@@ -49,10 +62,6 @@ reason: 'API misuse: setting the main menu on a non-main thread.'
  10 axpbox               bx_sdl_gui_c::specific_init
  12 axpbox               CCirrus::run
 ```
-
-Pre-initializing SDL on the main thread is NOT sufficient — Cocoa's
-`nextEventMatchingMask` (reached from `SDL_PollEvent`) also hard-throws
-off the main thread on modern macOS, so the whole GUI loop has to move.
 
 **Fix (all behavior changes under `#if defined(__APPLE__)`):**
 
@@ -72,24 +81,36 @@ off the main thread on modern macOS, so the whole GUI loop has to move.
    component; if any stepped, skip the loop's own 100 ms sleep (the GUI
    step sleeps ~100 ms internally, preserving the watchdog cadence —
    both loops were already 100 ms/iteration by design).
-5. `bx_sdl_gui_c::palette_change()`: NULL-guard `sdl_screen`. The CPU
-   thread reaches this via VGA DAC writes (`write_b_3c9`) and can race
-   screen creation/replacement — observed as a
-   `KERN_INVALID_ADDRESS at 0x8` segfault in
-   `palette_change → SDL_MapRGB(sdl_screen->format, ...)`. This race
-   exists upstream on all platforms (GUI thread vs CPU thread); the
-   guard turns a crash into a missed palette write during mode changes.
+5. `CS3Trio64` specifically (new in v1.2.0 — `Cirrus` has no equivalent):
+   the upstream `PauseThread`/`PauseAck` firmware-reset mechanism (added
+   in the ES40 backport, keeps the SDL window alive across a firmware
+   reset instead of tearing it down) is mirrored on the Apple path.
+   `stop_threads()` sets `PauseThread` and returns immediately instead of
+   spin-waiting on `PauseAck` (there's no separate thread to wait on);
+   `run_gui_step()` checks `PauseThread` after its event-handling pass
+   and, if set, clears the screen once and skips `update()`/`flush()`
+   until unpaused — matching what `run()` does on non-Apple platforms.
+
+**No longer needed — `bx_sdl_gui_c::palette_change()` NULL-guard:** the
+v1.1.2 patch NULL-guarded `sdl_screen` in `set_color()` because the CPU
+thread could reach a `SDL_MapRGB(sdl_screen->format, ...)` call while
+the screen surface was being created/replaced (`KERN_INVALID_ADDRESS`
+segfault). In v1.2.0's SDL3 rewrite, `palette_change()` is a stub
+(`return 1;` — 8bpp indexed-palette handling was dropped in favor of
+direct ARGB32 texture upload in `graphics_frame_update()`), and that
+function itself already NULL-guards `sdl_texture`/`sdl_renderer`
+before touching them. The race no longer exists; nothing to submit for
+this part either.
 
 **Non-Apple platforms:** completely unchanged — the thread spawn path is
 kept verbatim in the `#else` branch; `run_gui_step()` is compiled but
 never called.
 
-**Exception behavior note:** on Apple, exceptions from GUI code now
-propagate to `main_sim()`'s existing `catch (CException&)` (clean
-shutdown) instead of being swallowed by the device thread's catch that
-just set `myThreadDead`.
+## Verification performed (v1.1.2 — not yet redone against v1.2.0)
 
-## Verification performed (evidence for the PR)
+This section describes the original v1.1.2 verification and is kept
+for reference; it has not been repeated against v1.2.0 (needs a
+firmware ROM image + interactive telnet testing, see top of file).
 
 - Config: `gui = sdl`, `pci0.1 = cirrus` with `rom/vgabios-0.6a.bin`
   (VGABIOS 0.7b build, the non-cirrus-named binary from
@@ -106,11 +127,16 @@ just set `myThreadDead`.
 - Without patch 2: 100% reproducible NSException crash at GUI init.
 - With patch 2 but without the eager-init part (lazy init on first
   `run_gui_step`): intermittent SIGSEGV in `palette_change` — keep the
-  eager init and the NULL guard together.
+  eager init and the NULL guard together. (Note: this NULL guard no
+  longer exists as of v1.2.0 — see above.)
 
 ## Patch 3: SIGABRT in CSerial::stop_threads() during shutdown
 
-**File:** `files/patch-serial-stop-threads.diff` (touches `src/Serial.cpp`)
+**File:** `files/patch-serial-stop-threads.diff` (touches `src/Serial.cpp`).
+Unchanged in shape from the v1.1.2 version — `Serial.cpp`'s
+`stop_threads()` is structurally identical in v1.2.0 (only a cosmetic
+brace-style difference), so this patch just needed re-diffing, not
+redesigning.
 
 **Problem:** `CSerial::stop_threads()` only joins the serial thread when it
 is NOT blocked in `accept()`:
@@ -141,7 +167,8 @@ be woken portably (closing a listening socket does not reliably unblock
 `accept()` on all platforms, notably macOS), and the process is exiting
 anyway.
 
-**Verification (repro + fix, macOS 26 arm64, 2026-07-05):**
+**Verification (repro + fix, macOS 26 arm64, 2026-07-05, against v1.1.2 —
+not yet redone against v1.2.0):**
 
 - Repro procedure: boot to SRM, connect telnet clients to both serial
   ports (construction blocks on `accept()` until then), disconnect both
@@ -169,24 +196,24 @@ anyway.
 
 ## Submission checklist
 
-- [ ] Fork lenticularis39/axpbox, branch from `main` (note: `main` is at
-      1.1.3-dev — `CMakeLists.txt` says `VERSION 1.1.3`; re-verify the
-      patches apply/behave there, the touched code is unchanged since
-      v1.1.2 as of 2026-05)
+- [ ] Decide lenticularis39/axpbox vs. ES40-Emu/es40 as the PR target
+      (see "Open question" at top) before doing anything else
+- [ ] Re-run the full runtime verification (ROM boot, SDL window,
+      telnet-attached serial ports, SIGTERM repro) against v1.2.0 —
+      only build-level verification (patches apply cleanly, port
+      builds, `axpbox --help` runs) has been done so far
+- [ ] Fork the chosen repo, branch from its default branch
 - [ ] Apply the patches (they are `-p0` MacPorts-style diffs; use
       `patch -p0 < ...` from the repo root, then commit as normal git
       changes)
-- [ ] Separate PRs suggested: the CMake detection fix and the serial
-      shutdown fix are each trivially reviewable on their own (and the
-      serial fix is platform-independent); the threading change deserves
-      its own discussion
-- [ ] Reference upstream context: README already lists "SDL keyboard
-      (partly works, but easily breaks)" under known issues; wiki VGA
-      page documents the SDL GUI as supported — macOS is just broken
+- [ ] Separate PRs suggested: the threading change (patch 2) and the
+      serial shutdown fix (patch 3, platform-independent) are each
+      independently reviewable
 - [ ] Include the crash stack + `NSInternalInconsistencyException`
-      reason string in the PR body (they're quoted above)
-- [ ] Mention testing: macOS 26 arm64, sdl12-compat/SDL2; ideally also
-      smoke-test a Linux build to show no regression (CI covers this too)
+      reason string in the PR body for patch 2 (quoted above, from the
+      v1.1.2/SDL2 repro — re-capture against v1.2.0/SDL3 if possible)
+- [ ] Mention testing: macOS, arm64; ideally also smoke-test a Linux
+      build to show no regression (CI covers this too)
 - [ ] Follow the lima PR precedent for tone/structure:
       https://github.com/lima-vm/lima/pull/5036 (same class of bug:
       GUI work must happen on the process main thread on macOS)
@@ -195,9 +222,9 @@ anyway.
 
 ## Local port wiring (for reference)
 
-- `Portfile` applies both patches via `patchfiles`; SDL dependency is
-  `port:libsdl` (default sdl12-compat backend — deliberately chosen over
-  legacy `libsdl12`)
-- If upstream merges either patch, drop the corresponding
+- `Portfile` applies both remaining patches via `patchfiles`; SDL
+  dependency is `port:SDL3` (v1.2.0 requirement, replacing the old
+  `port:libsdl`)
+- If upstream merges patch 2 or 3, drop the corresponding
   `files/patch-*.diff` and `patchfiles` entry when bumping the port to
   the release containing it
