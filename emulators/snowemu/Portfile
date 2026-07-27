@@ -16,6 +16,8 @@ app.icon            assets/Snow.icns
 app.identifier      dev.thomasw.snow
 app.retina          yes
 app.sign            yes
+app.signing_args    --force
+app.executable      ${worksrcpath}/target/[cargo.rust_platform]/release/snowemu
 
 categories          emulators
 installs_libs       no
