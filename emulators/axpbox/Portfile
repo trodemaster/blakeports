@@ -4,7 +4,7 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           cmake 1.1
 
-github.setup        lenticularis39 axpbox 1.1.2 v
+github.setup        lenticularis39 axpbox 1.2.0 v
 github.tarball_from archive
 
 categories          emulators
@@ -18,18 +18,13 @@ long_description    AXPbox is a fork of the discontinued es40 emulator. It emula
                     and some versions of NetBSD. It supports SCSI, IDE, serial \
                     ports, Ethernet (via pcap), and VGA graphics (via SDL).
 
-checksums           rmd160  26cf832f82db5dc78a1802c187abf1dfb2098ac6 \
-                    sha256  7e45fd7e1a8bb71e1634133b9d4e91cf08bf0ac1a6aac7a66716311d84854383 \
-                    size    421271
+checksums           rmd160  68dc2e67e61d9071567f252054d470dd47cca745 \
+                    sha256  f48c2c0084c961b00aab27744b326c51e230d302cef0ad2714d833e3577a13a0 \
+                    size    9105683
 
 depends_lib         port:libpcap \
-                    port:libsdl
+                    port:SDL3
 
-# patch-cmake-sdl-detection.diff: upstream's SDL/SDL.h detection (a bare
-# check_include_file call) breaks on macOS: SDL 1.2's SDL_main.h does
-# '#define main SDL_main' for __MACOSX__, which conflicts with the probe's
-# own int main(void) test program. Patch it to use find_path instead,
-# matching the working pcap/find_package pattern.
 # patch-macos-gui-main-thread.diff: upstream runs the SDL GUI loop on the
 # VGA device's worker thread, but Cocoa requires all GUI calls (menu setup,
 # window creation, event pump) on the process main thread and throws
@@ -39,8 +34,7 @@ depends_lib         port:libpcap \
 # still-joinable std::thread when the serial thread is blocked in accept(),
 # which calls std::terminate() and aborts every shutdown that happens while
 # a serial port is waiting for a (re)connection. Detach the thread instead.
-patchfiles          patch-cmake-sdl-detection.diff \
-                    patch-macos-gui-main-thread.diff \
+patchfiles          patch-macos-gui-main-thread.diff \
                     patch-serial-stop-threads.diff
 
 configure.args-append \

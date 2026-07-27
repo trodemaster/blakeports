@@ -14,10 +14,10 @@
  protected:
 --- src/System.cpp.orig
 +++ src/System.cpp
-@@ -265,7 +265,19 @@
-   for (k = 0;; k++) {
-     if (got_sigint)
-       FAILURE(Graceful, "CTRL-C detected");
+@@ -275,7 +275,19 @@
+     if (ProcessPendingReset())
+       continue;
+ 
 -    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 +    bool gui_stepped = false;
 +#if defined(__APPLE__)
@@ -111,15 +111,15 @@
  /**
 --- src/S3Trio64.hpp.orig
 +++ src/S3Trio64.hpp
-@@ -69,6 +69,7 @@
-   virtual void init();
-   virtual void start_threads();
-   virtual void stop_threads();
-+  virtual bool run_gui_step();
+@@ -104,6 +104,7 @@
+   virtual void init() override;
+   virtual void start_threads() override;
+   virtual void stop_threads() override;
++  virtual bool run_gui_step() override;
  
- private:
-   u32 mem_read(u32 address, int dsize);
-@@ -122,6 +123,7 @@
+ protected:
+   virtual u16 line_compare_mask() override;
+@@ -396,6 +397,7 @@
    std::unique_ptr<std::thread> myThread;
    std::atomic_bool myThreadDead{false};
    bool StopThread;
@@ -129,7 +129,7 @@
    /// statefile.
 --- src/S3Trio64.cpp.orig
 +++ src/S3Trio64.cpp
-@@ -342,11 +342,53 @@
+@@ -2746,6 +2746,21 @@
   * Create and start thread.
   **/
  void CS3Trio64::start_threads() {
@@ -142,23 +142,54 @@
 +     the card. */
 +  printf(" s3(main)");
 +  StopThread = false;
++  PauseThread.store(false, std::memory_order_release);
 +  if (!GuiInitialized) {
 +    bx_gui->init(state.x_tilesize, state.y_tilesize);
 +    GuiInitialized = true;
 +  }
 +#else
-   if (!myThread) {
-     printf(" s3");
+   // Resume after reset if the thread already exists
+   PauseThread.store(false, std::memory_order_release);
+ 
+@@ -2754,12 +2769,26 @@
      StopThread = false;
-     myThread = std::make_unique<std::thread>([this](){ this->run(); });
-+  }
+     myThread = std::make_unique<std::thread>([this]() { this->run(); });
+   }
 +#endif
-+}
-+
-+/**
+ }
+ 
+ /**
+  * Stop and destroy thread.
+  **/
+ void CS3Trio64::stop_threads() {
++#if defined(__APPLE__)
++  /* During firmware reset, keep driving the GUI from run_gui_step()
++     (it owns the SDL window) instead of tearing it down; just mark
++     the pause state so run_gui_step() stops touching emulated VGA
++     state, mirroring the non-macOS thread-pause behavior below. */
++  if (cSystem && cSystem->IsResetInProgress()) {
++    PauseThread.store(true, std::memory_order_release);
++    printf(" s3(pause)");
++    return;
++  }
++  StopThread = true;
++  return;
++#else
+   // During firmware reset, do NOT kill the S3 thread (it owns the SDL window).
+   // Just pause it so the window stays alive.
+   if (cSystem && cSystem->IsResetInProgress()) {
+@@ -2786,9 +2815,57 @@
+     myThread->join();
+     myThread = nullptr;
+   }
++#endif
+ }
+ 
+ /**
 + * Run one iteration of the GUI loop on the calling thread. This is
 + * one pass of the run() loop body, used on macOS where the GUI must
-+ * be driven from the process main thread.
++ * be driven from the process main thread. Mirrors run()'s firmware
++ * reset pause handling so the SDL window survives a reset here too.
 + **/
 +bool CS3Trio64::run_gui_step() {
 +  if (StopThread)
@@ -167,34 +198,41 @@
 +    bx_gui->init(state.x_tilesize, state.y_tilesize);
 +    GuiInitialized = true;
 +  }
++
++  static bool was_paused = false;
++
 +  // Handle GUI events (100 times per second)
 +  for (int i = 0; i < 10; i++) {
 +    bx_gui->lock();
 +    bx_gui->handle_events();
 +    bx_gui->unlock();
 +    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-   }
++  }
++
++  // During firmware reset: keep pumping events (window stays alive),
++  // but do NOT touch emulated VGA state.
++  if (PauseThread.load(std::memory_order_acquire)) {
++    if (!was_paused) {
++      bx_gui->lock();
++      bx_gui->clear_screen();
++      bx_gui->unlock();
++      was_paused = true;
++    }
++    PauseAck.store(true, std::memory_order_release);
++    return true;
++  }
++  PauseAck.store(false, std::memory_order_release);
++  was_paused = false;
++
 +  // Update the screen (10 times per second)
 +  bx_gui->lock();
 +  update();
 +  bx_gui->flush();
 +  bx_gui->unlock();
 +  return true;
- }
- 
- /**
---- src/gui/sdl.cpp.orig
-+++ src/gui/sdl.cpp
-@@ -1086,6 +1086,12 @@
-   unsigned char palblue = blue & 0xFF;
- 
-   if (index > 255)
-+    return 0;
++}
 +
-+  /* The CPU thread can reach this through VGA DAC register writes before
-+     the screen surface exists (or while dimension_update() is replacing
-+     it); don't crash on a missed palette write. */
-+  if (!sdl_screen)
-     return 0;
- 
-   palette[index] = SDL_MapRGB(sdl_screen->format, palred, palgreen, palblue);
++/**
+  * Destructor.
+  **/
+ CS3Trio64::~CS3Trio64() { stop_threads(); }
