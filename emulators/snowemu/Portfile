@@ -3,12 +3,19 @@
 PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           cargo 1.0
+PortGroup           app 1.1
 
 github.setup        twvd snow 1.5.0 v
 name                snowemu
 github.tarball_from archive
 homepage            https://snowemu.com
 revision            0
+
+app.name            Snow
+app.icon            assets/Snow.icns
+app.identifier      dev.thomasw.snow
+app.retina          yes
+app.sign            yes
 
 categories          emulators
 installs_libs       no
