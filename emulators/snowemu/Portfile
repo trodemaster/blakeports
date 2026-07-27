@@ -43,11 +43,7 @@ post-patch {
 
 cargo.offline_cmd
 
-destroot {
-    xinstall -m 0755 \
-        ${worksrcpath}/target/[cargo.rust_platform]/release/snowemu \
-        ${destroot}${prefix}/bin/
-}
+destroot {}
 
 cargo.crates \
     ab_glyph                              0.2.32                          01c0457472c38ea5bd1c3b5ada5e368271cb550be7a4ca4a0b4634e9913f6cc2 \

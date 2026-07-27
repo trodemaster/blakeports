@@ -157,14 +157,6 @@ jobs:
         run: |
           source ./setupenv.bash
           port installed snowemu
-          echo "Checking snowemu binary:"
-          if [ -f /opt/local/bin/snowemu ]; then
-            echo "✅ snowemu binary found"
-            /opt/local/bin/snowemu --version || /opt/local/bin/snowemu --help 2>&1 | head -5 || true
-          else
-            echo "❌ snowemu binary not found"
-            exit 1
-          fi
 
       - name: Verify app bundle
         run: |
