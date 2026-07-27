@@ -165,3 +165,25 @@ jobs:
             echo "❌ snowemu binary not found"
             exit 1
           fi
+
+      - name: Verify app bundle
+        run: |
+          APP=/Applications/MacPorts/Snow.app
+
+          echo "Checking app bundle layout:"
+          test -d "${APP}" || { echo "❌ ${APP} not found"; exit 1; }
+          echo "✅ ${APP} found"
+
+          test -f "${APP}/Contents/MacOS/Snow" || { echo "❌ main executable missing"; exit 1; }
+          if [ -L "${APP}/Contents/MacOS/Snow" ]; then
+            echo "❌ main executable is a symlink, not a regular file (codesign will reject this)"
+            exit 1
+          fi
+          echo "✅ main executable is a regular file"
+
+          test -f "${APP}/Contents/Info.plist" || { echo "❌ Info.plist missing"; exit 1; }
+          test -f "${APP}/Contents/Resources/Snow.icns" || { echo "❌ app icon missing"; exit 1; }
+          echo "✅ Info.plist and icon present"
+
+          echo "Checking code signature:"
+          codesign --verify --deep --strict -v "${APP}"
