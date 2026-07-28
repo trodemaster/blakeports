@@ -43,10 +43,6 @@ post-patch {
 
 cargo.offline_cmd
 
-# The cargo PortGroup requires an explicit destroot phase (its own
-# default errors out otherwise). Nothing is installed to ${prefix};
-# app.executable points directly at the built binary and the app
-# PortGroup copies it into the bundle via its own post-destroot hook.
 destroot {}
 
 cargo.crates \
