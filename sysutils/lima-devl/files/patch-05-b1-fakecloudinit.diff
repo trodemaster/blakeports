@@ -1,5 +1,5 @@
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 6ed8267a..85aa2bb7 100644
+index 271d0eec..bedeb753 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
 @@ -124,6 +124,16 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
@@ -47,7 +47,7 @@ index 6ed8267a..85aa2bb7 100644
  	if err != nil {
  		return "", fmt.Errorf("failed to get boot scripts: %w", err)
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index 1f6f9a88..4d6234dc 100644
+index 22b8a3a8..2cfcdb7b 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
 @@ -137,6 +137,8 @@ type TemplateArgs struct {
@@ -254,14 +254,17 @@ index 0b797b62..a7681b0e 100644
  	switch osname {
  	case "linux":
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 48e212dd..9b0441a7 100644
+index 48e212dd..ec328886 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -33,6 +33,81 @@ limactl shell macos cat /Users/${USER}.guest/password
+@@ -33,6 +33,84 @@ limactl shell macos cat /Users/${USER}.guest/password
  - Password-less sudo is disabled, except for `/sbin/shutdown -h now` (see [Sudo](/docs/config/sudo/) — this is not currently configurable on macOS)
  - Several features are not implemented yet. See [Caveats](#caveats) below.
  
-+## Suppressing first-login setup screens
++## Advanced topics
++### Suppressing first-login setup screens
++| ⚡ Requirement | Lima >= 2.3, macOS >= (ADD VERSION HERE)  |
++|-------------------|-----------------------------|
 +
 +By default, macOS shows a series of setup wizard screens (Setup Assistant /
 +mini-buddy) on the first GUI login. For automated or headless-style macOS VMs
