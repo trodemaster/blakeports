@@ -11,7 +11,6 @@ Patch revs: see `b1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (depends on B1) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11); depends on B1 |
 | M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
-| O1 (`patch-07`) | PID timeout | disabled in Portfile |
 
 `patch-01-g1-thread-pin.diff` merged upstream in PR #5036 and removed from port.
 `patch-02-g4-window-title.diff` merged upstream in PR #5084 and removed from port.
@@ -21,6 +20,11 @@ macOS 26.6, confirmed via a real throwaway-instance test that the standard `VZMa
 path no longer hits `VZErrorDomain Code=10007`; `b3_rev` and the `upstream-pr/b3-dfu-beta27`
 branch (local + `trodemaster`) were also deleted. See
 `lima_mac/docs/dfu-install.md` § "2026-07-25 Removal Confirmed".
+`patch-07-o1-pid-timeout.diff` (hostagent PID-wait timeout tweak, `pkg/instance/start.go`)
+abandoned 2026-07-30 — never actually submitted upstream; confirmed `origin/master` still
+has the original 5s `waitHostAgentStart` deadline and no PR/commit history from Blake matches
+it. Was disabled in the Portfile the whole time. `upstream-pr/o1-pid-timeout` branch
+(local + `trodemaster`) deleted.
 
 ## Patch ordering (applied last = macOS 27 block)
 
@@ -37,14 +41,24 @@ git branch is kept, but the patch is **not** in the Portfile's `patchfiles` list
 2026-07-11) — see the B4 entry below for why it's parked. `patch-04-g3-screenshot.diff` is gone
 entirely (merged upstream, removed from `files/` and `patchfiles`).
 
-## Branch topology (as of 2026-07-23, master = b48d0187)
+## Branch topology (as of 2026-07-30, master = e2f8093e)
 
 | Branch | Based on | Commits above base | Role |
 |--------|----------|--------------------|------|
-| `upstream-pr/b1-fakecloudinit` | origin/master (= go.setup b48d0187) | 9 | upstream PR branch (clean); tip = conventions-alignment commit `a41d63da` |
-| `macports/b2-on-b1` | b1-tip | 3 | stacked on B1 for patching; use b1-tip as B2 patch base (`upstream-pr/b2-tcc` is a stale pre-rebase duplicate, unused) |
-| `upstream-pr/b4-macos-clipboard` | b1-tip | 1 | parked (clipboard non-functional from CLI binary); kept for future |
-| `macports/m1-fakecloudinit-macos27` | b1-tip | 7 | macOS 27 workarounds stacked on B1; first commit = the OpenDirectory/dscl user-existence check (moved out of B1 on 2026-07-11 for PR scope focus) |
+| `upstream-pr/b1-fakecloudinit-clean` | origin/master (squashed single commit) | 1 | the actual open PR #5336 branch — never rebased/force-pushed by tooling, GitHub reports MERGEABLE |
+| `macports/b2-on-b1` | b1-clean tip | 3 | stacked on B1-clean for patching (`upstream-pr/b2-tcc` deleted 2026-07-30 — was the stale pre-rebase duplicate) |
+| `upstream-pr/b4-macos-clipboard` | b1-clean tip | 1 | parked (clipboard non-functional from CLI binary); rebased onto b1-clean 2026-07-30 so it no longer depends on the deleted multi-commit B1 branch |
+| `macports/m1-fakecloudinit-macos27` | b1-clean tip | 7 | macOS 27 workarounds stacked on B1-clean |
+| `feat/vz-mac-guest-provisioning` | origin/master | 1 | VZMacGuestProvisioningOptions first-boot provisioning (macOS 27+ native account setup); re-extracted 2026-07-30 with the DFU-workaround dependency it used to sit on top of removed — `createDiskMacOSGuest` now calls `maybeRunGuestProvisioning` straight after the standard installer path, no DFU code involved |
+
+**2026-07-30 cleanup:** old multi-commit `upstream-pr/b1-fakecloudinit` branch deleted (fully
+superseded by `b1-fakecloudinit-clean`, which also carries the cloud-config doc fix the old
+branch lacked); `patch-07-o1-pid-timeout.diff`/O1 abandoned (never upstreamed, disabled in
+Portfile) and its branch deleted; several merged-PR duplicate branches deleted
+(`fix/darwin-lock-main-thread`, `upstream-pr/5036-darwin-lock-main-thread`,
+`feat/vz-window-title`, `upstream-pr/g4-window-title` — all fully superseded by their already-merged
+content in `origin/master`); `feature-review` (scratch branch) deleted; `feat/macos-vz-gui-appbundle`
+deleted (rejected upstream, no salvage). `fork-docs` left untouched, still needs a look.
 
 `upstream-pr/b3-dfu-beta27` (was: origin/master, 13 commits) deleted 2026-07-25 — see Feature
 status table above.
@@ -86,7 +100,6 @@ Patch generation commands (as of 2026-07-23, go.setup == origin/master == b48d01
 - patch-06: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/b2-on-b1`
 - patch-10: `git diff --no-prefix upstream-pr/b1-fakecloudinit..upstream-pr/b4-macos-clipboard` (parked, not in patchfiles — stacked on B1, NOT origin/master, despite what an earlier revision of this doc said)
 - patch-09: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/m1-fakecloudinit-macos27`
-- patch-07: `git diff --no-prefix origin/master..upstream-pr/o1-pid-timeout` (independent, parked)
 
 Note: if `go.setup` and `origin/master` ever diverge again (master moves before the next
 sync), regenerate patch-05 against whatever `go.setup` points to, not a live

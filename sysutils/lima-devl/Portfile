@@ -16,7 +16,7 @@ set b1_rev  7
 set b2_rev  7
 set m1_rev  4
 
-description         Lima ${version} | B1:r${b1_rev} B2:r${b2_rev} M1:r${m1_rev} | off: O1, B4 (G1, G3, G4 upstream)
+description         Lima ${version} | B1:r${b1_rev} B2:r${b2_rev} M1:r${m1_rev} | off: B4 (G1, G3, G4 upstream)
 
 long_description    {*}${description}
 
@@ -41,7 +41,6 @@ patchfiles          patch-Makefile.diff \
                     patch-06-b2-tcc.diff \
                     patch-09-m1-fakecloudinit-macos27.diff
 #                     \
-#                    patch-07-o1-pid-timeout.diff \
 #                    patch-10-b4-macos-clipboard.diff
 
 build.cmd           make
