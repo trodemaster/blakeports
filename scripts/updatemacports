@@ -176,9 +176,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Source profile if available to get MacPorts in PATH
+# Source profile if available to get MacPorts in PATH.
+# set -u is off for this: the MacPorts installer's own .profile boilerplate
+# does `export MANPATH="...:$MANPATH"`, which is unbound in a fresh
+# non-interactive SSH shell and would abort the script under nounset.
 if [ -f ~/.profile ]; then
+    set +u
     source ~/.profile
+    set -u
 fi
 
 # Verify MacPorts is installed
