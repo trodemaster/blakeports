@@ -1,5 +1,5 @@
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 271d0eec..bedeb753 100644
+index 271d0eec..72ca9dfc 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
 @@ -124,6 +124,16 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
@@ -13,8 +13,8 @@ index 271d0eec..bedeb753 100644
 +		}
 +	}
 +	var suppressFirstLoginSetupPlist string
-+	if darwinOpts.SuppressFirstLoginSetup != nil {
-+		suppressFirstLoginSetupPlist = darwinOpts.SuppressFirstLoginSetup.Plist
++	if darwinOpts.SuppressFirstLoginSetupPlist != nil {
++		suppressFirstLoginSetupPlist = *darwinOpts.SuppressFirstLoginSetupPlist
 +	}
  	args := TemplateArgs{
  		Debug:              debugutil.Debug,
@@ -24,7 +24,7 @@ index 271d0eec..bedeb753 100644
  		LegacyBIOS:     *instConfig.Firmware.LegacyBIOS,
  		TPM:            *instConfig.TPM,
 +
-+		SuppressFirstLoginSetup:      darwinOpts.SuppressFirstLoginSetup != nil,
++		SuppressFirstLoginSetup:      darwinOpts.SuppressFirstLoginSetup != nil && *darwinOpts.SuppressFirstLoginSetup,
 +		SuppressFirstLoginSetupPlist: suppressFirstLoginSetupPlist,
  	}
  
@@ -232,29 +232,26 @@ index 249d1510..5a0dd403 100644
  	logrus.Infof("Executing command: %v", cmd.Args)
  	if output, err := cmd.CombinedOutput(); err != nil {
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 0b797b62..a7681b0e 100644
+index 0b797b62..f284d6b6 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -350,6 +350,17 @@ type WindowsOpts struct {
+@@ -350,6 +350,14 @@ type WindowsOpts struct {
  	VirtioWin []File `yaml:"virtioWin,omitempty" json:"virtioWin,omitempty"`
  }
  
 +type DarwinOpts struct {
-+	SuppressFirstLoginSetup *SuppressFirstLoginSetup `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
-+}
-+
-+// SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
-+// If non-nil, the feature is enabled. Plist overrides the built-in com.apple.SetupAssistant.plist
-+// content if non-empty; otherwise the built-in plist is used.
-+type SuppressFirstLoginSetup struct {
-+	Plist string `yaml:"plist,omitempty" json:"plist,omitempty"`
++	// SuppressFirstLoginSetup suppresses macOS first-login wizard screens (Darwin guests only).
++	SuppressFirstLoginSetup *bool `yaml:"suppressFirstLoginSetup,omitempty" json:"suppressFirstLoginSetup,omitempty" jsonschema:"nullable"`
++	// SuppressFirstLoginSetupPlist overrides the built-in com.apple.SetupAssistant.plist content
++	// used by SuppressFirstLoginSetup. Ignored unless SuppressFirstLoginSetup is true.
++	SuppressFirstLoginSetupPlist *string `yaml:"suppressFirstLoginSetupPlist,omitempty" json:"suppressFirstLoginSetupPlist,omitempty" jsonschema:"nullable"`
 +}
 +
  func NewOS(osname string) OS {
  	switch osname {
  	case "linux":
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 48e212dd..ec328886 100644
+index 48e212dd..d23943af 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -33,6 +33,84 @@ limactl shell macos cat /Users/${USER}.guest/password
@@ -275,7 +272,7 @@ index 48e212dd..ec328886 100644
 +```yaml
 +osOpts:
 +  Darwin:
-+    suppressFirstLoginSetup: {}
++    suppressFirstLoginSetup: true
 +```
 +
 +This writes `com.apple.SetupAssistant.plist` into the guest user's home
@@ -298,46 +295,46 @@ index 48e212dd..ec328886 100644
 +```yaml
 +osOpts:
 +  Darwin:
-+    suppressFirstLoginSetup:
-+      plist: |
-+        <?xml version="1.0" encoding="UTF-8"?>
-+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-+        <plist version="1.0">
-+        <dict>
-+        	<key>DidSeeAccessibility</key><true/>
-+        	<key>DidSeeActivationLock</key><true/>
-+        	<key>DidSeeAppStore</key><true/>
-+        	<key>DidSeeAppearanceSetup</key><true/>
-+        	<key>DidSeeApplePaySetup</key><true/>
-+        	<key>DidSeeCloudSetup</key><true/>
-+        	<key>DidSeeLockdownMode</key><true/>
-+        	<key>DidSeePrivacy</key><true/>
-+        	<key>DidSeeScreenTime</key><true/>
-+        	<key>DidSeeSetupSequence</key><true/>
-+        	<key>DidSeeSiriSetup</key><true/>
-+        	<key>DidSeeSyncSetup</key><true/>
-+        	<key>DidSeeSyncSetup2</key><true/>
-+        	<key>DidSeeTermsOfAddress</key><true/>
-+        	<key>DidSeeTouchIDSetup</key><true/>
-+        	<key>DidSeeiCloudLoginForStorageServices</key><true/>
-+        	<key>LastPreLoginTasksPerformedBuild</key><string><build></string>
-+        	<key>LastPreLoginTasksPerformedVersion</key><string><version></string>
-+        	<key>LastSeenAgeRangeSelectionProductVersion</key><string><version></string>
-+        	<key>LastSeenBuddyBuildVersion</key><string><build></string>
-+        	<key>LastSeenCloudProductVersion</key><string><version></string>
-+        	<key>LastSeenDiagnosticsProductVersion</key><string><version></string>
-+        	<key>MiniBuddyLaunchReason</key><integer>0</integer>
-+        	<key>MiniBuddyShouldLaunchToResumeSetup</key><false/>
-+        	<key>SkipExpressSettingsUpdating</key><true/>
-+        	<key>SkipFirstLoginOptimization</key><true/>
-+        </dict>
-+        </plist>
++    suppressFirstLoginSetup: true
++    suppressFirstLoginSetupPlist: |
++      <?xml version="1.0" encoding="UTF-8"?>
++      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++      <plist version="1.0">
++      <dict>
++      	<key>DidSeeAccessibility</key><true/>
++      	<key>DidSeeActivationLock</key><true/>
++      	<key>DidSeeAppStore</key><true/>
++      	<key>DidSeeAppearanceSetup</key><true/>
++      	<key>DidSeeApplePaySetup</key><true/>
++      	<key>DidSeeCloudSetup</key><true/>
++      	<key>DidSeeLockdownMode</key><true/>
++      	<key>DidSeePrivacy</key><true/>
++      	<key>DidSeeScreenTime</key><true/>
++      	<key>DidSeeSetupSequence</key><true/>
++      	<key>DidSeeSiriSetup</key><true/>
++      	<key>DidSeeSyncSetup</key><true/>
++      	<key>DidSeeSyncSetup2</key><true/>
++      	<key>DidSeeTermsOfAddress</key><true/>
++      	<key>DidSeeTouchIDSetup</key><true/>
++      	<key>DidSeeiCloudLoginForStorageServices</key><true/>
++      	<key>LastPreLoginTasksPerformedBuild</key><string><build></string>
++      	<key>LastPreLoginTasksPerformedVersion</key><string><version></string>
++      	<key>LastSeenAgeRangeSelectionProductVersion</key><string><version></string>
++      	<key>LastSeenBuddyBuildVersion</key><string><build></string>
++      	<key>LastSeenCloudProductVersion</key><string><version></string>
++      	<key>LastSeenDiagnosticsProductVersion</key><string><version></string>
++      	<key>MiniBuddyLaunchReason</key><integer>0</integer>
++      	<key>MiniBuddyShouldLaunchToResumeSetup</key><false/>
++      	<key>SkipExpressSettingsUpdating</key><true/>
++      	<key>SkipFirstLoginOptimization</key><true/>
++      </dict>
++      </plist>
 +```
 +
-+When a custom `plist` is supplied, it is used verbatim — no `<build>`/`<version>`
-+substitution is performed. Copy and adapt the built-in template above, then
-+supply the actual build and version strings for your target OS release if
-+needed.
++When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
++`<build>`/`<version>` substitution is performed. Copy and adapt the built-in
++template above, then supply the actual build and version strings for your
++target OS release if needed.
 +
  ## Caveats
  - No support for turning off the video display.

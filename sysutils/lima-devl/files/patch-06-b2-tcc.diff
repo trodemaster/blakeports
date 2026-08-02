@@ -462,7 +462,7 @@ index 00000000..c7f417a0
 +	return strings.Join(names, ", ")
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index a7681b0e..46d94a4a 100644
+index f284d6b6..5bf84864 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
 @@ -125,8 +125,23 @@ type QEMUOpts struct {
@@ -492,12 +492,12 @@ index a7681b0e..46d94a4a 100644
  
  type Rosetta struct {
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index ec328886..687519bf 100644
+index d23943af..3e55849a 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -111,6 +111,69 @@ substitution is performed. Copy and adapt the built-in template above, then
- supply the actual build and version strings for your target OS release if
- needed.
+@@ -111,6 +111,69 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
+ template above, then supply the actual build and version strings for your
+ target OS release if needed.
  
 +## Pre-populating TCC permissions
 +

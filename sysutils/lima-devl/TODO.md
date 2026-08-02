@@ -7,7 +7,7 @@ Patch revs: see `b1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no
 
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
-| B1 (`patch-05`) | `suppressFirstLoginSetup` | **Issue #5186 open** — PR welcomed; schema move + conventions alignment done 2026-07-11, PR not yet opened |
+| B1 (`patch-05`) | `suppressFirstLoginSetup` | **PR #5336 open** (Issue #5186) — addressing review feedback |
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (depends on B1) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11); depends on B1 |
 | M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
@@ -46,10 +46,34 @@ entirely (merged upstream, removed from `files/` and `patchfiles`).
 | Branch | Based on | Commits above base | Role |
 |--------|----------|--------------------|------|
 | `upstream-pr/b1-fakecloudinit-clean` | origin/master (squashed single commit) | 1 | the actual open PR #5336 branch — never rebased/force-pushed by tooling, GitHub reports MERGEABLE |
-| `macports/b2-on-b1` | b1-clean tip | 3 | stacked on B1-clean for patching (`upstream-pr/b2-tcc` deleted 2026-07-30 — was the stale pre-rebase duplicate) |
+| `macports/b2-on-b1` | origin/master + B1 content cherry-picked from b1-clean tip | 4 (1 B1 + 3 B2) | rebuilt 2026-08-02 directly on origin/master — the previous version had silently drifted onto origin/master too, but with a stale pre-review-fix copy of B1 baked in as one of its own commits (see 2026-08-02 note) |
 | `upstream-pr/b4-macos-clipboard` | b1-clean tip | 1 | parked (clipboard non-functional from CLI binary); rebased onto b1-clean 2026-07-30 so it no longer depends on the deleted multi-commit B1 branch |
-| `macports/m1-fakecloudinit-macos27` | b1-clean tip | 7 | macOS 27 workarounds stacked on B1-clean |
+| `macports/m1-fakecloudinit-macos27` | origin/master + B1 content cherry-picked from b1-clean tip | 8 (1 B1 + 7 M1) | macOS 27 workarounds; rebuilt 2026-08-02, same reason as B2 above |
 | `feat/vz-mac-guest-provisioning` | origin/master | 1 | VZMacGuestProvisioningOptions first-boot provisioning (macOS 27+ native account setup); re-extracted 2026-07-30 with the DFU-workaround dependency it used to sit on top of removed — `createDiskMacOSGuest` now calls `maybeRunGuestProvisioning` straight after the standard installer path, no DFU code involved |
+
+**2026-08-02 review-feedback sync:** PR #5336 got reviewer pushback on
+`suppressFirstLoginSetup: {}` ("why not `true`?") plus a request to keep the custom-plist
+override as a separate option rather than a nested field. Amended the PR's single commit
+(force-pushed, `c6b2a4a1` → `e40a3a34`): `DarwinOpts.SuppressFirstLoginSetup` is now `*bool`,
+and a new `DarwinOpts.SuppressFirstLoginSetupPlist *string` carries the custom plist; the
+`SuppressFirstLoginSetup` struct type is gone. Docs updated to `suppressFirstLoginSetup: true`
++ a sibling `suppressFirstLoginSetupPlist: |` key.
+
+Regenerating patch-05 surfaced that `macports/b2-on-b1` and `macports/m1-fakecloudinit-macos27`
+were not actually stacked on the b1-clean branch tip as the topology table claimed — both had
+silently ended up based on `origin/master` with a leftover duplicate B1 commit
+(`2744b5f6`/pre-fix content) baked into their own history, left over from however they were
+rebased during the 2026-07-30 sync. Diffing against the literal b1-clean tip would have pulled
+in ~50 unrelated master commits (dependabot/CI bumps, `cmd/limactl/shell.go`, `go.mod`, etc.) —
+same base-drift contamination pattern as before, just latent until this regen exposed it.
+Fixed by rebuilding both from scratch: rebased the amended B1 commit onto `origin/master`
+(disposable branch), then cherry-picked B2's 3 own commits and M1's 7 own commits (identified
+by walking `origin/master..<old-branch-tip>` and finding the fake-B1 commit boundary) onto that
+clean base. Both cherry-picked with zero conflicts. Regenerated patch-05 (105 lines changed)
+and patch-06 (10 lines changed, line-offset only); patch-09 (M1) came out byte-identical since
+M1 doesn't touch `suppressFirstLoginSetup`. All three dry-run clean in sequence against a fresh
+`origin/master` archive; gofmt clean. Bumped `b1_rev`→8, `b2_rev`→8 (`m1_rev` unchanged). Both
+branches force-pushed to `trodemaster` (`gh pr list` confirmed neither has an open PR first).
 
 **2026-07-30 cleanup:** old multi-commit `upstream-pr/b1-fakecloudinit` branch deleted (fully
 superseded by `b1-fakecloudinit-clean`, which also carries the cloud-config doc fix the old
@@ -95,11 +119,25 @@ conflict in `lima_yaml.go` resolved by keeping `VZOpts.GuestPatch` and dropping 
 `SuppressFirstLoginSetup`/`VZOpts` duplication) and regenerating patch-06. Bumped `b1_rev`→2,
 `b2_rev`→2. Full 5-patch chain (05, 06, 10, 09, 08) dry-run verified clean in sequence.
 
-Patch generation commands (as of 2026-07-23, go.setup == origin/master == b48d0187):
-- patch-05: `git diff --no-prefix origin/master..upstream-pr/b1-fakecloudinit`
-- patch-06: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/b2-on-b1`
-- patch-10: `git diff --no-prefix upstream-pr/b1-fakecloudinit..upstream-pr/b4-macos-clipboard` (parked, not in patchfiles — stacked on B1, NOT origin/master, despite what an earlier revision of this doc said)
-- patch-09: `git diff --no-prefix upstream-pr/b1-fakecloudinit..macports/m1-fakecloudinit-macos27`
+Patch generation commands (as of 2026-08-02, go.setup == origin/master == e2f8093e):
+- patch-05: `git diff --no-prefix origin/master..upstream-pr/b1-fakecloudinit-clean` — safe
+  as-is only while `upstream-pr/b1-fakecloudinit-clean`'s base (`bc7ba1ec`) matches
+  `origin/master`; once they diverge, rebuild on a disposable branch instead (see below).
+- patch-06 / patch-09 / patch-10: do **not** diff directly against
+  `upstream-pr/b1-fakecloudinit-clean` or trust `macports/b2-on-b1` /
+  `macports/m1-fakecloudinit-macos27` to still be literally stacked on its tip — twice now
+  (2026-07-08, 2026-08-02) those branches had silently drifted onto `origin/master` with a
+  stale duplicate B1 commit baked in, and a naive diff against the real PR branch pulled in
+  dozens of unrelated master commits. Regenerate with the disposable-branch method instead:
+  1. `git branch -f _tmp-b1-basis upstream-pr/b1-fakecloudinit-clean && git rebase --onto origin/master <old-base-sha> _tmp-b1-basis`
+  2. For each of B2/M1/B4: `git branch -f _tmp-X-basis _tmp-b1-basis`, then
+     `git cherry-pick <that branch's own unique commit SHAs>` (find them via
+     `git log --oneline origin/master..<branch-tip>`, taking everything above the fake-B1
+     commit if one is present)
+  3. `git diff --no-prefix _tmp-b1-basis.._tmp-X-basis > patch-NN-....diff`
+  4. Promote: `git branch -f macports/X-on-b1 _tmp-X-basis`, delete temp refs, force-push
+  5. `git diff --stat` each result before trusting it — file list should match the feature's
+     own scope, nothing from `.github/`, `go.mod`/`go.sum`, or unrelated packages.
 
 Note: if `go.setup` and `origin/master` ever diverge again (master moves before the next
 sync), regenerate patch-05 against whatever `go.setup` points to, not a live
@@ -127,12 +165,20 @@ sync), regenerate patch-05 against whatever `go.setup` points to, not a live
       warning), user-data template tidy. Moved the OpenDirectory/dscl user-existence
       commit out of B1 into M1 (its justification is macOS 27 pre-existing users — out
       of scope per maintainer). B1 diff is now 376 lines, zero macOS 27/TCC content.
-      Trodemaster fork branch is now STALE (pre-rebase) — force-push with
-      `--force-with-lease` before opening the PR.
-      Next: squash to a single signed-off commit on a fresh branch from origin/master,
-      draft PR body (plain prose, reference #5186, tested guest versions macOS 15 + 26,
-      `Assisted-by: Claude Code (Sonnet 4.7 & Sonnet 5)`), show Blake for review, then
-      push and open the PR — the PR is what triggers upstream CI.
+      **PR #5336 opened**, referencing #5186. Review feedback received: a `user-data`
+      cloud-config-conformance nit on `pkg/cidata/cidata.TEMPLATE.d/user-data` (already
+      addressed pre-2026-08-02 by switching to the file-marker approach, see PR comment
+      thread), a question on the `13` magic number in `fakecloudinit_darwin.go` (answered:
+      undocumented MiniBuddy state-tracking value, not changeable), and — the substantive
+      one — `suppressFirstLoginSetup: {}` questioned ("why not `true`?"), with a follow-up
+      asking
+      for the custom-plist override to be its own option rather than nested under the
+      struct. **2026-08-02: addressed** — amended the PR commit (`c6b2a4a1` → `e40a3a34`):
+      `SuppressFirstLoginSetup` is now `*bool`, custom plist moved to a new
+      `SuppressFirstLoginSetupPlist *string`; the old `SuppressFirstLoginSetup` struct type
+      removed. Port patches (patch-05/06) regenerated and synced, see the 2026-08-02 note
+      above.
+      Next: watch for further review on #5336.
 - [ ] B2: submit after B1 merges.
       PR description must cover: TCC schema v30 + tccd forward-migration rationale,
       presets shipped (sshd-full-disk-access, lima-guestagent-full-disk-access, terminal-accessibility),
