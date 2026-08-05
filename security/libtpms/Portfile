@@ -12,7 +12,7 @@ categories          security
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
 license             BSD
 
-description         library for software emulation of a Trusted Platform Module
+description         Library for software emulation of a Trusted Platform Module
 
 long_description    {*}${description}. libtpms provides the core TPM 1.2 and \
                     TPM 2.0 functionality used to integrate TPM emulation \
