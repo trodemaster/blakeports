@@ -1,0 +1,196 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+
+name                vd_agent
+version             0.22.1
+revision            0
+categories          sysutils
+platforms           {darwin >= 20}
+supported_archs     arm64 x86_64
+license             GPL-3
+maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+
+description         SPICE guest agent for a macOS VM under UTM/QEMU
+long_description    UTM's fork of spice-vdagent with native macOS guest support. \
+                    Installs spice-vdagentd (a LaunchDaemon) and spice-vdagent \
+                    (a LaunchAgent) which share the clipboard between a macOS \
+                    guest running under UTM/QEMU and the host, over the SPICE \
+                    virtio-serial channel.
+homepage            https://github.com/utmapp/vd_agent
+
+fetch.type          git
+git.url             https://github.com/utmapp/vd_agent.git
+git.branch          spice-vdagent-${version}-macOS
+
+# Upstream only builds this on macOS via an Xcode project that hardcodes
+# Homebrew paths and statically links a Homebrew-built glib (lipo'd together
+# from separate /usr/local and /opt/homebrew installs). None of that applies
+# to MacPorts, so post-extract below generates a SwiftPM package that builds
+# the same sources against MacPorts' glib2 and spice-protocol instead.
+set xcodeversion_min_required 15.0
+pre-fetch {
+    if {[vercmp ${xcodeversion} ${xcodeversion_min_required}] < 0} {
+        ui_error "${name} @${version} requires Xcode ${xcodeversion_min_required} or later but you have Xcode ${xcodeversion}."
+        ui_error "See https://guide.macports.org/chunked/installing.xcode.html for download links."
+        return -code error "incompatible Xcode version"
+    }
+}
+
+depends_lib-append  port:glib2 \
+                    port:spice-protocol
+
+# spice-vdagent (the LaunchAgent) depends on Apple's swift-argument-parser,
+# which has no MacPorts port yet; SwiftPM fetches and builds it from GitHub
+# during the build step (same approach as devel/container, sysutils/mist-cli).
+
+use_configure       no
+use_xcode           yes
+# Avoid header conflicts between the system CPATH and SwiftPM's own search
+# paths (same workaround used by sysutils/mist-cli).
+compiler.cpath
+
+post-extract {
+    set pkgswift {
+// swift-tools-version:5.9
+import PackageDescription
+
+let prefix = "@PREFIX@"
+let glibFlags: [CSetting] = [
+    .unsafeFlags([
+        "-I\(prefix)/include/spice-1",
+        "-I\(prefix)/include/glib-2.0",
+        "-I\(prefix)/lib/glib-2.0/include",
+        "-I\(prefix)/include/gio-unix-2.0",
+        "-I\(prefix)/include",
+    ])
+]
+let glibLibs: [LinkerSetting] = [
+    .unsafeFlags([
+        "-L\(prefix)/lib",
+        "-lglib-2.0", "-lgobject-2.0", "-lgio-2.0", "-lintl",
+    ])
+]
+
+let package = Package(
+    name: "vd_agent",
+    platforms: [.macOS(.v10_13)],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0")
+    ],
+    targets: [
+        // src/udscs.c + src/vdagent-connection.c, shared by both binaries.
+        .target(
+            name: "CVdagentShared",
+            path: "shim/CVdagentShared",
+            publicHeadersPath: "include",
+            cSettings: [
+                .headerSearchPath("../../src/darwin/include"),
+                .headerSearchPath("../../src"),
+            ] + glibFlags
+        ),
+        .executableTarget(
+            name: "spice-vdagentd",
+            dependencies: ["CVdagentShared"],
+            path: "src/vdagentd",
+            exclude: ["console-kit.c", "systemd-login.c", "uinput.c", "xorg-conf.c"],
+            sources: ["dummy-session-info.c", "virtio-port.c", "vdagentd.c"],
+            cSettings: [
+                .headerSearchPath("../darwin/include"),
+                .headerSearchPath(".."),
+            ] + glibFlags,
+            linkerSettings: glibLibs
+        ),
+        // src/darwin/vdagent.c, the ObjC-bridgeable core used by the Swift agent.
+        .target(
+            name: "CVdagentDarwin",
+            dependencies: ["CVdagentShared"],
+            path: "shim/CVdagentDarwin",
+            publicHeadersPath: "include",
+            cSettings: [
+                .headerSearchPath("../../src/darwin/include"),
+                .headerSearchPath("../../src"),
+            ] + glibFlags
+        ),
+        .executableTarget(
+            name: "spice-vdagent",
+            dependencies: [
+                "CVdagentDarwin",
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            path: "src/darwin-swift",
+            sources: ["Vdagent.swift"],
+            linkerSettings: glibLibs
+        )
+    ]
+)
+}
+    set fd [open ${worksrcpath}/Package.swift w]
+    puts ${fd} [string map [list @PREFIX@ ${prefix}] ${pkgswift}]
+    close ${fd}
+
+    file mkdir ${worksrcpath}/shim/CVdagentShared/include
+    file mkdir ${worksrcpath}/shim/CVdagentDarwin/include
+    file copy -force ${worksrcpath}/src/udscs.c ${worksrcpath}/shim/CVdagentShared/
+    file copy -force ${worksrcpath}/src/vdagent-connection.c ${worksrcpath}/shim/CVdagentShared/
+    file copy -force ${worksrcpath}/src/udscs.h ${worksrcpath}/shim/CVdagentShared/include/
+    file copy -force ${worksrcpath}/src/vdagent-connection.h ${worksrcpath}/shim/CVdagentShared/include/
+    file copy -force ${worksrcpath}/src/darwin/vdagent.c ${worksrcpath}/shim/CVdagentDarwin/
+    file copy -force ${worksrcpath}/src/darwin/vdagent.h ${worksrcpath}/shim/CVdagentDarwin/include/
+
+    # Vdagent.swift relies on Xcode's bridging-header mechanism
+    # (SWIFT_OBJC_BRIDGING_HEADER) to see vdagent.h's declarations; plain
+    # SwiftPM builds need an explicit module import instead.
+    file mkdir ${worksrcpath}/src/darwin-swift
+    set swiftfd [open ${worksrcpath}/src/darwin/Vdagent.swift r]
+    set swiftsrc [read ${swiftfd}]
+    close ${swiftfd}
+    set swiftfd [open ${worksrcpath}/src/darwin-swift/Vdagent.swift w]
+    puts ${swiftfd} [string map \
+        [list "import ObjectiveC" "import ObjectiveC\nimport CVdagentDarwin"] \
+        ${swiftsrc}]
+    close ${swiftfd}
+}
+
+build.cmd           swift
+build.target        build
+build.args          --configuration release --disable-sandbox \
+                    --cache-path ${workpath}/.swiftpm/cache \
+                    --security-path ${workpath}/.swiftpm/security \
+                    --config-path ${workpath}/.swiftpm/config
+
+destroot {
+    xinstall -m 0755 ${worksrcpath}/.build/release/spice-vdagentd ${destroot}${prefix}/bin/
+    xinstall -m 0755 ${worksrcpath}/.build/release/spice-vdagent ${destroot}${prefix}/bin/
+
+    xinstall -d ${destroot}${prefix}/etc/LaunchDaemons
+    xinstall -d ${destroot}${prefix}/etc/LaunchAgents
+
+    copy ${worksrcpath}/data/com.redhat.spice.vdagentd.plist \
+        ${destroot}${prefix}/etc/LaunchDaemons/
+    copy ${worksrcpath}/data/com.redhat.spice.vdagent.plist \
+        ${destroot}${prefix}/etc/LaunchAgents/
+
+    reinplace "s|/usr/local/bin/spice-vdagentd|${prefix}/bin/spice-vdagentd|" \
+        ${destroot}${prefix}/etc/LaunchDaemons/com.redhat.spice.vdagentd.plist
+    reinplace "s|/usr/local/bin/spice-vdagent|${prefix}/bin/spice-vdagent|" \
+        ${destroot}${prefix}/etc/LaunchAgents/com.redhat.spice.vdagent.plist
+}
+
+notes "
+    ${name} installs two launchd jobs but does not load them automatically:
+      - ${prefix}/etc/LaunchDaemons/com.redhat.spice.vdagentd.plist (system daemon)
+      - ${prefix}/etc/LaunchAgents/com.redhat.spice.vdagent.plist (per-user agent)
+
+    To install and start them:
+
+        sudo cp ${prefix}/etc/LaunchDaemons/com.redhat.spice.vdagentd.plist /Library/LaunchDaemons/
+        sudo launchctl load /Library/LaunchDaemons/com.redhat.spice.vdagentd.plist
+
+        cp ${prefix}/etc/LaunchAgents/com.redhat.spice.vdagent.plist ~/Library/LaunchAgents/
+        launchctl load ~/Library/LaunchAgents/com.redhat.spice.vdagent.plist
+
+    Only the clipboard-sharing feature is implemented on macOS; this agent is
+    intended to run inside a macOS guest VM under UTM/QEMU with a virtio-serial
+    SPICE channel (com.redhat.spice.0), not on the host.
+"
