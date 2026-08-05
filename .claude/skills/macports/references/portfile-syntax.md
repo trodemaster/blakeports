@@ -38,7 +38,7 @@ checksums           rmd160  HASH \
                     size    SIZE
 
 depends_build-append \
-                    port:pkgconfig
+                    path:bin/pkg-config:pkgconfig
 
 depends_lib-append  port:openssl \
                     port:zlib
@@ -190,13 +190,12 @@ require_active_variants openssl quic
 ### Build dependencies
 ```tcl
 depends_build-append \
-                    port:pkgconfig \
-                    port:autoconf \
-                    port:automake \
-                    port:libtool
+                    path:bin/pkg-config:pkgconfig
 ```
 
 Used only during compilation, not installed in the final environment.
+
+**Don't add `port:autoconf`/`port:automake`/`port:libtool` here if `use_autoreconf`, `use_autoconf`, or `use_automake` is set** — MacPorts base (`portconfigure.tcl`) adds those deps for you automatically. Declaring them manually is redundant and gets flagged in review. Only add them explicitly if the port needs autotools *without* setting one of those `use_*` options.
 
 ### Library dependencies
 ```tcl
@@ -233,7 +232,22 @@ depends_lib-append  path:lib/libssl.dylib:openssl
 depends_lib-append  path:bin/perl:perl5
 ```
 
-Allows flexibility if multiple ports provide the same file.
+**How resolution actually works** (from MacPorts base, `macports.tcl` `_mportispresent`):
+1. MacPorts first checks its install receipt — is the literal named port (e.g. `pkgconfig`) already active?
+2. If not, and the depspec has a `lib:`/`bin:`/`path:` prefix, it falls back to a **filesystem existence test** (`_libtest`/`_bintest`/`_pathtest`) — does the file exist anywhere under `${prefix}`, regardless of which port put it there?
+3. Only a bare `port:foo` depspec requires that *specific* port — there's no fallback check.
+
+The `:portname` suffix on a `path:`/`lib:`/`bin:` spec is only the **fallback provider** — used to install something if the file is missing, not the primary check.
+
+**Practical effect:** path-style depends are satisfied by *anything* that provides the file (another port, a variant, the base OS), so they avoid forcing installation of one specific port when the actual build requirement is just "this file exists." Use `port:` only when you genuinely need that specific named port active.
+
+**Standard idiom — always use path-style for these two** (confirmed as the dominant convention across macports-ports, and what reviewers flag if you use `port:` instead):
+```tcl
+depends_build-append \
+                    path:bin/pkg-config:pkgconfig
+
+depends_lib-append  path:lib/pkgconfig/glib-2.0.pc:glib2
+```
 
 ## Build Configuration
 
@@ -274,6 +288,8 @@ use_autoreconf      yes
 # Custom configure
 configure.cmd       ./autogen.sh
 ```
+
+Each `use_*` option above automatically adds the matching `port:autoconf`/`port:automake`/`port:libtool` to `depends_build` — do not declare those deps yourself alongside these options (see [Dependencies](#dependencies)).
 
 #### CMake
 ```tcl
