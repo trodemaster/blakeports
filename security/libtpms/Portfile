@@ -24,10 +24,7 @@ checksums           rmd160  21c3efc868077d6b108eb38193a4a4c179f982b1 \
                     size    1399529
 
 depends_build-append \
-                    port:autoconf \
-                    port:automake \
-                    port:libtool \
-                    port:pkgconfig
+                    path:bin/pkg-config:pkgconfig
 
 use_autoreconf      yes
 

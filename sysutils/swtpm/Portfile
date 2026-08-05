@@ -23,13 +23,10 @@ checksums           rmd160  6de58b85fc0242e49adbf22ba6a9468f0c08980c \
                     size    415992
 
 depends_build-append \
-                    port:autoconf \
-                    port:automake \
-                    port:libtool \
-                    port:pkgconfig
+                    path:bin/pkg-config:pkgconfig
 
 depends_lib-append  port:libtpms \
-                    port:glib2 \
+                    path:lib/pkgconfig/glib-2.0.pc:glib2 \
                     port:json-glib \
                     port:libtasn1 \
                     port:gmp
