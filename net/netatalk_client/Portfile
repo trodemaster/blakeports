@@ -1,0 +1,60 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           meson 1.0
+
+github.setup        Netatalk netatalk-client 0.9.5
+name                netatalk_client
+revision            0
+categories-append   net fuse
+license             GPL-2
+maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+github.tarball_from archive
+
+platforms           {darwin >= 21}
+
+description         AFP file sharing client
+
+long_description    Netatalk Client is a file sharing client written \
+                    in C which can be used to access AFP shares exposed \
+                    by multiple devices, notably personal file sharing \
+                    on older Mac OS X and Classic Mac OS computers, \
+                    Netatalk servers hosted on Linux/*BSD/Solaris/macOS, \
+                    Apple AirPort and Time Capsule products as well as \
+                    other AFP enabled NAS devices from various vendors. \
+                    Netatalk Client is an improved fork of afpfs-ng.
+
+homepage            https://netatalk.io/
+
+checksums           rmd160  1884356de2582f0846a0348b19158b63cdb0c82b \
+                    sha256  db7ae6db3fd68349bbb143ad9843d88abb3c8595c6fedb0cf3ea34e58f1ece13 \
+                    size    277352
+
+meson.wrap_mode     nodownload
+
+depends_lib-append  port:libgcrypt \
+                    port:libiconv \
+                    port:readline
+
+compiler.c_standard 2011
+
+configure.args-append \
+                    -Denable-fuse=false
+
+variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpfs) via macFUSE} {
+    configure.args-delete  -Denable-fuse=false
+    configure.args-append  -Denable-fuse=true
+
+    depends_build-append   path:bin/pkg-config:pkgconfig
+    depends_lib-append     path:lib/pkgconfig/fuse3.pc:macfuse
+
+    # macfuse installs a compatibility include/fuse.h that resolves to its
+    # bundled FUSE 2.x-style API. Since ${prefix}/include is always on the
+    # search path ahead of ${prefix}/include/fuse3, bare `#include <fuse.h>`
+    # picks up the wrong (FUSE 2.x) struct layout even when linking fuse3.
+    # Point the FUSE daemon sources at fuse3/fuse.h explicitly.
+    patchfiles-append      patch-fuse3-header.diff
+}
+
+default_variants    +fuse
