@@ -792,7 +792,7 @@ index 00000000..b0cb01de
 Binary files /dev/null and pkg/udfutil/testdata/windows11-client-9edition-esd.iso differ
 diff --git pkg/udfutil/udfutil.go pkg/udfutil/udfutil.go
 new file mode 100644
-index 00000000..971621d9
+index 00000000..f2cb936d
 --- /dev/null
 +++ pkg/udfutil/udfutil.go
 @@ -0,0 +1,406 @@
@@ -888,7 +888,7 @@ index 00000000..971621d9
 +		return nil, err
 +	}
 +
-+	for _, name := range strings.Split(strings.Trim(path, "/"), "/") {
++	for name := range strings.SplitSeq(strings.Trim(path, "/"), "/") {
 +		if name == "" {
 +			continue
 +		}
@@ -1204,7 +1204,7 @@ index 00000000..971621d9
 +}
 diff --git pkg/udfutil/udfutil_test.go pkg/udfutil/udfutil_test.go
 new file mode 100644
-index 00000000..b57a1543
+index 00000000..c34843f2
 --- /dev/null
 +++ pkg/udfutil/udfutil_test.go
 @@ -0,0 +1,242 @@
@@ -1290,7 +1290,7 @@ index 00000000..b57a1543
 +//	/            (root, ICB at partition-relative lbn 0)
 +//	/subdir      (directory, lbn 1)
 +//	/subdir/big  (regular file, lbn 2, split across two extents)
-+func buildUDFFixture(t *testing.T) ([]byte, []byte) {
++func buildUDFFixture(t *testing.T) (image, wantContent []byte) {
 +	t.Helper()
 +	b := newFixtureBuilder()
 +
@@ -1614,7 +1614,7 @@ index 00000000..dbb5ee64
 +}
 diff --git pkg/wimutil/wimutil_test.go pkg/wimutil/wimutil_test.go
 new file mode 100644
-index 00000000..698513c3
+index 00000000..0b616301
 --- /dev/null
 +++ pkg/wimutil/wimutil_test.go
 @@ -0,0 +1,111 @@
@@ -1701,7 +1701,7 @@ index 00000000..698513c3
 +
 +func TestImagesBadSignature(t *testing.T) {
 +	data := buildFixture(t, sampleXML)
-+	copy(data[0:8], []byte("NOTAWIM\x00"))
++	copy(data[0:8], "NOTAWIM\x00")
 +	_, err := Images(bytes.NewReader(data))
 +	assert.ErrorContains(t, err, "bad signature")
 +}
