@@ -226,10 +226,11 @@ See `.cursorrules` for detailed PR templates and guidelines.
 
 ## Common Commands Quick Reference
 
-```bash
-# Environment setup
-source ./setupenv.bash
+Claude's shell already has MacPorts on `PATH` — do not source `setupenv.bash`
+in an interactive Claude session. `setupenv.bash` is only needed in CI
+workflows, which start from a bare shell.
 
+```bash
 # Port index management
 portindex                          # Regenerate index
 
@@ -257,7 +258,7 @@ cd ../jibb-runners
 1. **Always run `portindex`** after modifying any Portfile
 2. **Never remove checksums** when updating versions - MacPorts needs them to show correct values
 3. **Use `port lint --nitpick`** for strict compliance checking
-4. **Source `setupenv.bash`** before running port commands in workflows
+4. **Source `setupenv.bash`** before running port commands in CI workflows only — Claude's interactive shell already has MacPorts on `PATH`, so don't source it there
 5. **Matrix builds run on both macOS 15 and 26** - ensure compatibility
 6. **The `_resources` directory is synced from upstream** - don't modify directly
 7. **Check `.cursorrules`** for comprehensive MacPorts development standards
