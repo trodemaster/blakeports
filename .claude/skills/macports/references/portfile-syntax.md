@@ -142,6 +142,76 @@ github.tarball_from releases                # Use releases instead of tarball
 github.tarball_from archive                 # Use archive (default)
 ```
 
+**Which `tarball_from` to use:**
+- `archive` (default) — git-generated tarball of the tag. Fine for most ports.
+- `releases` — an explicit release asset the maintainer uploaded. Prefer this when it
+  exists: release assets are immutable, whereas git-generated tarballs have historically
+  changed bytes for the same tag ("stealth" distfile changes).
+- `tarball` — deprecated, do not use in new ports.
+
+When using `releases` and the asset filename carries a tag prefix or doesn't match the
+repo name, set `distname` explicitly:
+
+```tcl
+github.setup        translate translate 2.4.0
+github.tarball_from releases
+distname            translate-toolkit-${version}
+```
+
+### obsolete 1.0
+For retiring a port. Keep the port name and version, bump `revision` by 1, delete all
+other code and the `files/` directory.
+
+```tcl
+PortGroup           obsolete 1.0
+# port to be removed after 2026-06
+replaced_by         newportname            # omit if nothing replaces it
+```
+
+### stub 1.0
+For a port that produces no meaningful build output (umbrella/metapackage, or a
+`*_select` base port).
+
+```tcl
+PortGroup           stub 1.0
+```
+
+### makefile 1.0
+For projects with a plain `Makefile` and no configure script.
+
+```tcl
+PortGroup           makefile 1.0
+```
+
+Pre-PortGroup idiom (still seen in older Portfiles):
+
+```tcl
+use_configure       no
+build.args-append   CC=${configure.cc} \
+                    CFLAGS="${configure.cflags}" \
+                    LDFLAGS="${configure.ldflags}"
+destroot.args       prefix=${destroot}${prefix}
+```
+
+### conflicts_build 1.0
+Declare ports that must NOT be active during the build (headers/libs that would be
+picked up wrongly), without making them runtime conflicts.
+
+```tcl
+PortGroup           conflicts_build 1.0
+conflicts_build     someport
+```
+
+### select 1.0
+Debian-style alternatives for CLI commands. Create a base port (e.g. `foo_select`, use
+the `stub` PortGroup) with one subport per provider; users switch with:
+
+```bash
+port select --list foo
+port select --set  foo foo-3.9
+port select --show foo
+```
+
 ### cmake 1.1
 ```tcl
 PortGroup           cmake 1.1
@@ -232,6 +302,27 @@ depends_lib-append  path:lib/libssl.dylib:openssl
 depends_lib-append  path:bin/perl:perl5
 ```
 
+Use `path:` when a file has multiple possible providers (e.g. `libssl` from `openssl`
+*or* `libressl`) — the port after the last `:` is only the fallback to install if the
+file is missing, not a hard requirement on that specific port.
+
+### Undeclared ("opportunistic") dependencies
+A build may pick up a library that is installed but not declared in the Portfile. It
+works on your machine and breaks for anyone who later uninstalls that port. Fix it by
+either declaring the real dependency (`depends_lib-append port:foo`) or explicitly
+disabling the optional feature (`configure.args-append --disable-foo`). Trace mode finds
+these — see debugging.md.
+
+### Conflicts must be declared on BOTH sides
+`conflicts` is only checked against currently-active ports. If port A conflicts with
+port B, put `conflicts B` in A *and* `conflicts A` in B, or the collision is missed
+depending on install order.
+
+```tcl
+# in portA/Portfile
+conflicts           portB
+```
+
 **How resolution actually works** (from MacPorts base, `macports.tcl` `_mportispresent`):
 1. MacPorts first checks its install receipt — is the literal named port (e.g. `pkgconfig`) already active?
 2. If not, and the depspec has a `lib:`/`bin:`/`path:` prefix, it falls back to a **filesystem existence test** (`_libtest`/`_bintest`/`_pathtest`) — does the file exist anywhere under `${prefix}`, regardless of which port put it there?
@@ -291,6 +382,11 @@ configure.cmd       ./autogen.sh
 
 Each `use_*` option above automatically adds the matching `port:autoconf`/`port:automake`/`port:libtool` to `depends_build` — do not declare those deps yourself alongside these options (see [Dependencies](#dependencies)).
 
+Set `use_autoreconf yes` whenever a `patchfiles` entry touches `configure.ac`,
+`Makefile.am`, or `configure.in` — the generated `configure`/`Makefile.in` must be
+rebuilt from the patched sources. Release tarballs usually ship a pre-built `configure`
+so this isn't needed; git checkouts and `-devel` ports usually are.
+
 #### CMake
 ```tcl
 PortGroup           cmake 1.1
@@ -298,6 +394,14 @@ PortGroup           cmake 1.1
 configure.args-append \
                     -DENABLE_FEATURE=ON \
                     -DBUILD_SHARED_LIBS=ON
+
+# Override the PortGroup default build type (default is usually MinSizeRel/RelWithDebInfo)
+cmake.build_type    Release
+
+# Point CMake at a dependency installed under a versioned subdir (e.g. libfmt9)
+depends_lib-append  port:libfmt9
+cmake.module_path-append \
+                    ${prefix}/lib/libfmt9/cmake
 ```
 
 #### Meson
@@ -404,6 +508,35 @@ platform darwin {
 }
 ```
 
+### Requiring a modern C++ standard on older OS versions
+Prefer `compiler.cxx_standard` over a hand-rolled `compiler.blacklist` — it picks a
+capable compiler and pulls in the build dependency automatically.
+
+```tcl
+compiler.cxx_standard 2017
+```
+
+### Declaring a port unbuildable on some OS versions
+`known_fail yes` marks the port as expected-to-fail (keeps it out of buildbot noise);
+the `pre-fetch` abort gives the user a clear message instead of a deep build error.
+
+```tcl
+if {${os.platform} eq "darwin" && ${os.major} < 18} {
+    known_fail      yes
+    pre-fetch {
+        ui_error "${name} @${version} requires macOS 10.14 or later."
+        return -code error "incompatible macOS version"
+    }
+}
+```
+
+### Applying a fix only on certain OS versions
+```tcl
+if {${os.platform} eq "darwin" && ${os.major} >= 22} {
+    patchfiles-append   patch-ventura-and-newer.diff
+}
+```
+
 ## Common Patterns
 
 ### Patches
@@ -422,11 +555,148 @@ post-patch {
 }
 ```
 
+### Placeholder patches
+Keep `${prefix}` out of the committed `.diff` so it stays portable and easy to rebase:
+
+```tcl
+patchfiles          patch-deps-tool-path.diff   # contains @@PREFIX@@
+
+post-patch {
+    reinplace -W ${worksrcpath} "s|@@PREFIX@@|${prefix}|g" deps/build_deps.sh
+}
+```
+
+When resolving a patch conflict later, restore the `@@PREFIX@@` token — don't leave your
+local `/opt/local` baked into the diff.
+
+### Tcl in Portfiles
+```tcl
+# Derive a value from the version
+version             0.3.8
+set branch          [join [lrange [split ${version} .] 0 1] .]   # -> 0.3
+master_sites        https://example.com/download/${branch}/
+
+# Loop over matched files, templating a shim into place
+foreach bin [glob -tails -directory ${destroot}${prefix}/libexec/bin dart?*] {
+    xinstall -m 0755 ${filespath}/shim.in ${destroot}${prefix}/bin/${bin}
+    reinplace "s|@@BIN@@|${prefix}/libexec/bin/${bin}|g" ${destroot}${prefix}/bin/${bin}
+}
+
+# Expand a glob into separate arguments (works in xinstall/move/copy/delete too)
+xinstall -m 0755 {*}[glob ${worksrcpath}/target/*/release/${name}-{a,b}] \
+    ${destroot}${prefix}/bin/
+```
+
+Use `notes { ... }` (braces) rather than `notes " ... "` when the text contains `$`,
+`[`, or backslashes you don't want substituted.
+
 ### Custom extract
 ```tcl
 extract.mkdir       yes
 extract.only        ${distname}${extract.suffix}
 ```
+
+### Non-standard distfile / worksrcdir
+```tcl
+extract.suffix      .tgz                  # non-.tar.gz archive extension
+worksrcdir          ${distname}/src       # build happens in a subdir of the extract
+```
+
+Choose between overriding `distname` and overriding `distfiles` based on what
+`worksrcdir` needs to end up being.
+
+### Stealth distfile updates
+When upstream replaces the bytes of a distfile at the *same URL* (checksums suddenly
+mismatch and you did not change `version`), don't just update the checksums — old
+downloads and mirrors still disagree. Bump into a versioned subdir:
+
+```tcl
+# Stealth update YYYY-MM-DD; remove on next version bump
+dist_subdir         ${name}/${version}_1
+```
+
+Or pin to the MacPorts mirror copy and ignore upstream churn entirely:
+
+```tcl
+master_sites        macports_distfiles
+```
+
+### Sharing a distfile cache across ports
+```tcl
+dist_subdir         ruby                  # several ports fetch the same tarball once
+```
+
+### Multiple distfiles
+Tag each `master_sites`/`distfiles` entry and give each file its own `checksums` block
+(filename first):
+
+```tcl
+github.setup        joshkunz ashuffle 3.13.3 v
+github.tarball_from archive
+master_sites        ${github.master_sites}:ashuffle
+distfiles           ${distname}${extract.suffix}:ashuffle
+
+checksums           ${distname}${extract.suffix} \
+                    rmd160  aaaa... \
+                    sha256  bbbb... \
+                    size    85824
+```
+
+The same applies when a `patchfiles` entry needs to be downloaded (tag it and add a
+`checksums` block).
+
+### Dummy master_sites URL
+When the download URL cannot end in the filename:
+
+```tcl
+master_sites        https://example.com/source/download/${commit}/?dummy=
+```
+
+### Git submodules in an incomplete tarball
+```tcl
+fetch.type          git
+post-fetch {
+    system -W ${worksrcpath} "git submodule update --init --recursive"
+}
+```
+
+### Not clobbering user config on upgrade
+```tcl
+post-destroot {
+    move ${destroot}${prefix}/etc/foo.conf \
+         ${destroot}${prefix}/etc/foo.conf.sample
+}
+post-activate {
+    if {![file exists ${prefix}/etc/foo.conf]} {
+        copy ${prefix}/etc/foo.conf.sample ${prefix}/etc/foo.conf
+    }
+}
+```
+
+### Preserving empty directories
+`destroot` drops empty dirs. Keep ones the program expects for user files:
+
+```tcl
+destroot.keepdirs-append \
+                    ${destroot}${prefix}/etc/haproxy
+```
+
+### Binary-archive distributability
+`license` controls whether MacPorts may distribute a prebuilt archive of the port. When
+copying another port's Portfile, re-check its license against the actual source.
+
+```bash
+port_binary_distributable.tcl -v <portname>   # why a port is / isn't distributable
+```
+
+```tcl
+license_noconflict  somedep      # suppress a false-positive license conflict with a dep
+```
+
+### Case-sensitive filesystem
+The MacPorts buildbot runs on case-sensitive filesystems; a port that only builds on the
+default case-insensitive macOS FS will fail there. Watch buildbot for
+case-sensitivity-only failures.
 
 ### Post-destroot
 ```tcl

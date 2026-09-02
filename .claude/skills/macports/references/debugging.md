@@ -5,6 +5,7 @@ Techniques for diagnosing and fixing port build failures.
 ## Table of Contents
 - [Reading Build Logs](#reading-build-logs)
 - [Common Error Patterns](#common-error-patterns)
+- [Common Upstream Build Fixes](#common-upstream-build-fixes)
 - [Build Phase Debugging](#build-phase-debugging)
 - [Work Directory Inspection](#work-directory-inspection)
 - [Environment Issues](#environment-issues)
@@ -68,6 +69,15 @@ sudo port clean --dist <portname>        # Clear cached download
 sudo port checksum <portname>            # Get correct checksums
 # Update Portfile with new checksums
 ```
+
+**If `version` did NOT change:** upstream replaced the distfile bytes at the same URL
+("stealth update"). Don't just swap the checksums — bump into a versioned subdir so old
+caches/mirrors don't collide:
+```tcl
+# Stealth update YYYY-MM-DD; remove on next version bump
+dist_subdir         ${name}/${version}_1
+```
+or pin to `master_sites macports_distfiles`.
 
 ### Missing Dependencies
 **Error:**
@@ -141,6 +151,75 @@ error: reinplace pattern not matched
 1. Check destroot commands in Portfile
 2. Verify paths use ${destroot} prefix
 3. Ensure reinplace patterns match file content
+
+## Common Upstream Build Fixes
+
+Patterns that come up constantly, especially on the legacy (10.5/10.7) and beta-OS
+runners where the compiler is much older or much newer than what upstream tested.
+
+### `-Werror` breaks with a newer compiler
+A newer clang emits warnings the code didn't trip before, and `-Wall -Werror` turns them
+fatal.
+```tcl
+post-patch {
+    reinplace "s|-Werror||g" ${worksrcpath}/CMakeLists.txt
+}
+```
+
+### Missing `#include` (implicit function declaration)
+`error: implicitly declaring library function` / `use of undeclared identifier`. Add the
+header upstream forgot — commonly `<utime.h>`, `<signal.h>`, `<unistd.h>`, `<cstdint>`.
+Ship it as a `patchfiles` diff.
+
+### Identifier / macro collides with a system header
+`macosx()` or similar clashing with a platform macro:
+```diff
+-#define macosx() ...
++#define is_macosx() ...
+```
+
+### Makefile ignores `DESTDIR`
+Staging fails with "files intended to be installed outside of destroot". Patch:
+1. bare `mkdir`/`install` calls → prefix with `$(DESTDIR)`
+2. CMake `install(CODE ...)` writing absolute paths → add `$ENV{DESTDIR}`
+3. symlinks created with a `$(DESTDIR)`-prefixed target → drop `DESTDIR` from the link
+   target (it must be relative to the live prefix, not the staging dir)
+
+### Hard-coded paths baked into a binary
+The one case where patching C directly (not just build files) is expected:
+```tcl
+patchfiles          patch-config-path.c.diff   # contains @@PREFIX@@
+post-patch {
+    reinplace "s|@@PREFIX@@|${prefix}|g" ${worksrcpath}/src/config.c
+}
+```
+
+### Racy parallel build
+Random, position-dependent `make` failures from missing target deps:
+```tcl
+use_parallel_build  no
+```
+Workaround only — fix the Makefile and send it upstream.
+
+### Wrong permissions in the extracted tarball
+```tcl
+post-extract {
+    fs-traverse dir ${worksrcpath} {
+        if {[file isdirectory ${dir}]} {
+            file attributes ${dir} -permissions 0755
+        }
+    }
+}
+```
+
+### Disable an upstream auto-updater
+Self-updating tools fight MacPorts' version tracking:
+```tcl
+post-patch {
+    reinplace "s|\"disable_updater\": false|\"disable_updater\": true|" \
+        ${worksrcpath}/lib/config.json
+}
+```
 
 ## Build Phase Debugging
 
@@ -300,6 +379,24 @@ depends_lib-append    port:openssl \   # Needed at runtime
 
 depends_run-append    port:python311   # Runtime only, not linked
 ```
+
+### Finding undeclared dependencies
+
+Trace mode reports every file the build touched outside its declared deps:
+```bash
+sudo port -vst destroot <portname>
+```
+Add the flagged ports to `depends_lib`/`depends_build`. Trace does **not** catch
+`depends_run` (things exec'd at runtime, not opened during build) — exercise the
+installed program before opening a PR.
+
+Confirm which libraries a built binary actually links, then map each back to a port:
+```bash
+otool -L $(port work <portname>)/*/path/to/binary
+port provides /opt/local/lib/libfoo.dylib
+```
+Declare direct library links in `depends_lib` even if the build succeeds without them —
+it's how MacPorts knows to rebuild your port when that library's ABI changes.
 
 ## Platform-Specific Issues
 

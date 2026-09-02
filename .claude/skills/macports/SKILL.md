@@ -33,6 +33,14 @@ The script will:
 
 **Script available:** `scripts/check-updates.sh` (in repo root `scripts/`) automates version checking.
 
+**Native alternative:** `port -v livecheck maintainer:<handle>` checks every port you
+maintain in one pass. `scripts/check-updates.sh` predates this and additionally parses
+SourceForge SVN release RSS, which livecheck does not do. In a Portfile:
+- `livecheck.url ${github.homepage}/releases/latest` — track the latest GitHub *release*
+  (skips pre-releases the default git-tag check would catch)
+- `livecheck.type none` — for archived/dead upstreams, and in subports to suppress
+  duplicate livecheck hits
+
 ### 2. Testing a Port
 
 Standard test sequence for any port modification:
@@ -46,6 +54,16 @@ sudo port install -sv <portname>         # Install with verbose output
 ```
 
 **Script available:** `scripts/test-port.sh <portname>` (in repo root `scripts/`) automates this sequence.
+
+**Force a source build when the version is unchanged:** `port install` pulls a prebuilt
+binary archive whenever `version`/`revision`/`epoch` match an existing archive, so it can
+silently skip your local Portfile change. Force it to build from source:
+
+```bash
+sudo port clean <portname> && sudo port -s install <portname>
+```
+
+Or validate destroot staging in isolation: `sudo port destroot <portname>`.
 
 ### 3. Updating Port Version
 
@@ -257,6 +275,29 @@ diff -u original.txt modified.txt > files/patch-name.diff
 ```
 
 `diff -u` does not add `a/`/`b/` prefixes, so it is `-p0` compatible by default.
+
+`git format-patch --no-prefix -<n>` (or `git diff --no-prefix HEAD`) is the equivalent
+when the fix is already committed on a branch.
+
+#### If a patch must stay `-p1`
+
+MacPorts defaults to `patch -p0`. Prefer regenerating with `--no-prefix`, but when
+carrying a patch **verbatim** from an upstream PR that uses `a/`…`b/` paths:
+
+```tcl
+patch.pre_args-replace  -p0 -p1
+```
+
+#### Verifying patches after a version bump
+
+```bash
+sudo port clean <portname>
+sudo port -v patch <portname>            # applies patchfiles against the new source
+```
+
+If a hunk no longer applies, fix it on the fork branch and regenerate — never hand-edit
+the `.diff`. For large distfiles, skip `port clean`, manually revert the partially
+applied hunks, then re-run `port patch`.
 
 #### Adding to Portfile
 
@@ -511,9 +552,9 @@ Execute without reading into context for efficiency.
 
 **port-commands.md** - Comprehensive `port` CLI reference with all commands, options, and workflows. Load when working with port commands or needing command syntax.
 
-**debugging.md** - Build failure debugging techniques including log analysis, common error patterns, work directory inspection, and environment troubleshooting. Load when diagnosing build failures.
+**debugging.md** - Build failure debugging techniques including log analysis, common error patterns, a catalog of common upstream build fixes (-Werror, missing includes, DESTDIR, racy builds), finding undeclared dependencies (trace mode, otool -L), work directory inspection, and environment troubleshooting. Load when diagnosing build failures.
 
-**portfile-syntax.md** - Complete Portfile syntax reference covering structure, PortGroups, dependencies, variants, platform checks, and style guide. Load when writing or modifying Portfiles.
+**portfile-syntax.md** - Complete Portfile syntax reference covering structure, PortGroups (github/cmake/python/meson/legacysupport/obsolete/stub/makefile/conflicts_build/select), dependencies, variants, platform checks (compiler.cxx_standard, known_fail), distfile handling (stealth updates, multiple distfiles, dist_subdir), Tcl techniques, and style guide. Load when writing or modifying Portfiles.
 
 **pr-template.md** - Official MacPorts PR template. **ALWAYS use as the starting point** when creating pull requests. Includes verification checklist and system info helper command.
 
@@ -546,6 +587,15 @@ Execute without reading into context for efficiency.
 21. **`platform darwin` version blocks**: sort highest `os.major` threshold first (affects most systems), down to lowest; merge multiple blocks with the same threshold into one
 22. **Never update the upstream macports-ports PR before CI passes** — always fix in blakeports, run CI, verify green, then amend upstream
 23. **Always branch from `upstream/master`**, not from fork master — fork master can lag behind, causing conflicts when upstream merges a concurrent change to the same port before your PR lands
-24. **Bump `revision` when fixing a dependency or build flag without changing the version** — users with the port already installed at `version_0` won't get the fix automatically unless revision increments. Required for: adding a missing dependency, removing an incorrect one, or changing configure args that affect the built binary
+24. **Revisions: local blakeports iteration and MacPorts submissions follow different rules.**
+    - **In blakeports / local dev MacPorts:** do NOT bump `revision` for minor Portfile
+      changes while the upstream distfile is unchanged. Clean and rebuild to pick up
+      the change: `sudo port uninstall <port> && sudo port clean --all <port> && sudo port install <port>`.
+    - **In a macports-ports submission:** bump `revision` when a change alters the
+      *installed binary* without a version change — adding or removing a dependency,
+      changing configure args, adding a patch, or an ABI-incompatible dependency bump.
+    - A build *fix* that only makes a broken port compile is **not** a revbump — no
+      user has a working install at the old revision to protect.
+    - Reset `revision` to 0 whenever `version` or `epoch` increases.
 25. **Use path-style dependencies (`path:file:portname`) for `pkgconfig` and `glib2`** — `path:bin/pkg-config:pkgconfig` and `path:lib/pkgconfig/glib-2.0.pc:glib2`, not `port:pkgconfig`/`port:glib2`. This is the dominant convention across macports-ports and what reviewers (e.g. reneeotten) flag in review. See [portfile-syntax.md](references/portfile-syntax.md#dependencies) for the mechanism and rationale.
 26. **Don't manually declare `depends_build` for autoconf/automake/libtool when `use_autoreconf`/`use_autoconf`/`use_automake` is set** — MacPorts base (`portconfigure.tcl`) adds those deps automatically. Manually listing them is redundant and gets flagged in review.
