@@ -59,6 +59,23 @@ and a new `DarwinOpts.SuppressFirstLoginSetupPlist *string` carries the custom p
 `SuppressFirstLoginSetup` struct type is gone. Docs updated to `suppressFirstLoginSetup: true`
 + a sibling `suppressFirstLoginSetupPlist: |` key.
 
+**2026-09-02 sync to master `659e69a5` (v2.3.0-dev):** PR #5336's last open review thread was
+`ADD VERSION HERE` in `website/content/en/docs/usage/guests/macos.md` — filled in as
+`macOS >= 13.0` (Blake: feature works on macOS 13–26; table is scoped to the feature's own
+`###` heading, page-wide requirement stays in the top table). Rebased
+`upstream-pr/b1-fakecloudinit-clean` onto `659e69a5`, amended the single commit with the doc
+fix (`e40a3a34` → `c700cfd6`), force-pushed to `trodemaster` (has open PR #5336, approved).
+Rebuilt `macports/b2-on-b1` (3 own commits) and `macports/m1-fakecloudinit-macos27` (7 own
+commits) via the disposable-branch cherry-pick method onto the new B1 tip — zero conflicts;
+`feat/windows-wim-edition-detection` (W1, 4 commits) rebased onto `659e69a5` clean.
+Regenerated patch-03/05/06; patch-09 (M1) came out byte-identical. `go.setup` → `659e69a5`,
+`version` → `2.3.0-dev.20260902`, new distfile checksums. Bumped `w1_rev`→3, `b1_rev`→9,
+`b2_rev`→9 (`m1_rev` unchanged). All six patches (Makefile, usrlocalgo, 03, 05, 06, 09)
+apply clean in sequence against a fresh `659e69a5` archive; fully-patched tree builds
+(`go build ./...`) and vets clean; `port lint` 0/0. `macports/b2-on-b1`,
+`macports/m1-fakecloudinit-macos27`, and `feat/windows-wim-edition-detection` NOT yet
+force-pushed to `trodemaster` (none has an open PR).
+
 Regenerating patch-05 surfaced that `macports/b2-on-b1` and `macports/m1-fakecloudinit-macos27`
 were not actually stacked on the b1-clean branch tip as the topology table claimed — both had
 silently ended up based on `origin/master` with a leftover duplicate B1 commit

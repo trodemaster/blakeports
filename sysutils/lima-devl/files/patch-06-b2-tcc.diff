@@ -1,8 +1,8 @@
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index ffc170d9..175436c2 100644
+index 1210eab6..7623d7c7 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
-@@ -95,6 +95,7 @@ type LimaVzDriver struct {
+@@ -94,6 +94,7 @@ type LimaVzDriver struct {
  	rosettaEnabled  bool
  	rosettaBinFmt   bool
  	diskImageFormat image.Type
@@ -10,7 +10,7 @@ index ffc170d9..175436c2 100644
  
  	machine                    *virtualMachineWrapper
  	waitSSHLocalPortAccessible <-chan any
-@@ -159,6 +160,7 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) (*d
+@@ -158,6 +159,7 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) (*d
  	} else {
  		l.diskImageFormat = raw.Type
  	}
@@ -18,7 +18,7 @@ index ffc170d9..175436c2 100644
  
  	return &driver.ConfiguredDriver{
  		Driver: l,
-@@ -382,7 +384,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+@@ -381,7 +383,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  		patchedMarker := disk + ".patched" // empty file
  		if !osutil.FileExists(patchedMarker) {
  			logrus.Infof("Patching macOS disk %#q", disk)
@@ -462,10 +462,10 @@ index 00000000..c7f417a0
 +	return strings.Join(names, ", ")
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index f284d6b6..5bf84864 100644
+index 74d883b7..082789b5 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -125,8 +125,23 @@ type QEMUOpts struct {
+@@ -126,8 +126,23 @@ type QEMUOpts struct {
  }
  
  type VZOpts struct {
@@ -492,7 +492,7 @@ index f284d6b6..5bf84864 100644
  
  type Rosetta struct {
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index d23943af..3e55849a 100644
+index 99c42c04..056c98f2 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -111,6 +111,69 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no

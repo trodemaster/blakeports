@@ -1,5 +1,5 @@
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 271d0eec..72ca9dfc 100644
+index b1d33390..f42f4a0d 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
 @@ -124,6 +124,16 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
@@ -60,10 +60,10 @@ index 22b8a3a8..2cfcdb7b 100644
  
  func (t *TemplateArgs) generateWindowsInitialPassword() error {
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index d0704901..ffc170d9 100644
+index 298d7cf4..1210eab6 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
-@@ -66,6 +66,7 @@ var knownYamlProperties = []string{
+@@ -65,6 +65,7 @@ var knownYamlProperties = []string{
  	"NestedVirtualization",
  	"Networks",
  	"OS",
@@ -232,10 +232,10 @@ index 249d1510..5a0dd403 100644
  	logrus.Infof("Executing command: %v", cmd.Args)
  	if output, err := cmd.CombinedOutput(); err != nil {
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 0b797b62..f284d6b6 100644
+index ca1fae32..74d883b7 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -350,6 +350,14 @@ type WindowsOpts struct {
+@@ -353,6 +353,14 @@ type WindowsOpts struct {
  	VirtioWin []File `yaml:"virtioWin,omitempty" json:"virtioWin,omitempty"`
  }
  
@@ -251,7 +251,7 @@ index 0b797b62..f284d6b6 100644
  	switch osname {
  	case "linux":
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 48e212dd..d23943af 100644
+index 48e212dd..99c42c04 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -33,6 +33,84 @@ limactl shell macos cat /Users/${USER}.guest/password
@@ -260,7 +260,7 @@ index 48e212dd..d23943af 100644
  
 +## Advanced topics
 +### Suppressing first-login setup screens
-+| ⚡ Requirement | Lima >= 2.3, macOS >= (ADD VERSION HERE)  |
++| ⚡ Requirement | Lima >= 2.3, macOS >= 13.0  |
 +|-------------------|-----------------------------|
 +
 +By default, macOS shows a series of setup wizard screens (Setup Assistant /

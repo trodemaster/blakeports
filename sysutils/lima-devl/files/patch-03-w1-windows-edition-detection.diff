@@ -1,8 +1,8 @@
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 271d0eec..5b81e932 100644
+index b1d33390..0b6c132e 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -610,8 +610,21 @@ func GenerateWindowsISO(ctx context.Context, instDir, name string, instConfig *l
+@@ -600,8 +600,21 @@ func GenerateWindowsISO(ctx context.Context, instDir, name string, instConfig *l
  		return "", err
  	}
  
@@ -364,6 +364,19 @@ index 502937b0..1d95c87c 100644
              </MetaData>
            </InstallFrom>
            <InstallTo>
+diff --git pkg/cidata/wincidata.TEMPLATE.d/install_provision.ps1 pkg/cidata/wincidata.TEMPLATE.d/install_provision.ps1
+index f65fea60..c1dc6c2b 100644
+--- pkg/cidata/wincidata.TEMPLATE.d/install_provision.ps1
++++ pkg/cidata/wincidata.TEMPLATE.d/install_provision.ps1
+@@ -8,7 +8,7 @@ function Copy-Provision {
+     param(
+         [string]$Src,
+         [string]$Dst,
+-        [bool]$Extension
++        [switch]$Extension
+     )
+ 
+     if (-not (Test-Path -LiteralPath $Src)) {
 diff --git pkg/cidata/windows_edition_test.go pkg/cidata/windows_edition_test.go
 new file mode 100644
 index 00000000..10b59e0c
@@ -468,10 +481,10 @@ index 00000000..10b59e0c
 +	}
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index fa6b3831..25f07d20 100644
+index ca1fae32..e1b124eb 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -350,6 +350,20 @@ type OsOpts map[OS]any
+@@ -351,6 +351,20 @@ type OsOpts map[OS]any
  
  type WindowsOpts struct {
  	VirtioWin []File `yaml:"virtioWin,omitempty" json:"virtioWin,omitempty"`
