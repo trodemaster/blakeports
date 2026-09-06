@@ -19,42 +19,42 @@ on:
         required: false
         default: false
         type: boolean
-      run_tenfive_ppc:
+      run_leopard_ppc:
         description: 'Mac OS X 10.5 PPC (Leopard)'
         required: false
         default: false
         type: boolean
-      run_tenfive:
+      run_leopard:
         description: 'Mac OS X 10.5 (Leopard)'
         required: false
         default: false
         type: boolean
-      run_tensix:
+      run_snowleopard:
         description: 'Mac OS X 10.6 (Snow Leopard)'
         required: false
         default: false
         type: boolean
-      run_tenseven:
+      run_lion:
         description: 'Mac OS X 10.7 (Lion)'
         required: false
         default: false
         type: boolean
-      run_teneight:
+      run_mountainlion:
         description: 'Mac OS X 10.8 (Mountain Lion)'
         required: false
         default: false
         type: boolean
-      run_tennine:
+      run_mavericks:
         description: 'Mac OS X 10.9 (Mavericks)'
         required: false
         default: false
         type: boolean
-      run_tenten:
+      run_yosemite:
         description: 'Mac OS X 10.10 (Yosemite)'
         required: false
         default: false
         type: boolean
-      run_teneleven:
+      run_elcapitan:
         description: 'Mac OS X 10.11 (El Capitan)'
         required: false
         default: false
@@ -94,51 +94,51 @@ jobs:
             FIRST=false
           fi
 
-          if [[ "${{ inputs.run_tenfive_ppc }}" == "true" ]]; then
+          if [[ "${{ inputs.run_leopard_ppc }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tenfive-ppc","runner":["self-hosted","tenfive-ppc"],"type":"legacy","vm_name":"TenFive-PPC","os_version":"10.5"}'
+            MATRIX+='{"platform":"leopard-ppc","runner":["self-hosted","leopard-ppc"],"type":"legacy","vm_name":"Leopard-PPC","os_version":"10.5"}'
             FIRST=false
           fi
 
-          if [[ "${{ inputs.run_tenfive }}" == "true" ]]; then
+          if [[ "${{ inputs.run_leopard }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tenfive","runner":["self-hosted","tenfive"],"type":"legacy","vm_name":"TenFive","os_version":"10.5"}'
+            MATRIX+='{"platform":"leopard","runner":["self-hosted","leopard"],"type":"legacy","vm_name":"Leopard","os_version":"10.5"}'
             FIRST=false
           fi
 
-          if [[ "${{ inputs.run_tensix }}" == "true" ]]; then
+          if [[ "${{ inputs.run_snowleopard }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tensix","runner":["self-hosted","tensix"],"type":"legacy","vm_name":"TenSix","os_version":"10.6"}'
+            MATRIX+='{"platform":"snowleopard","runner":["self-hosted","snowleopard"],"type":"legacy","vm_name":"SnowLeopard","os_version":"10.6"}'
             FIRST=false
           fi
 
-          if [[ "${{ inputs.run_tenseven }}" == "true" ]]; then
+          if [[ "${{ inputs.run_lion }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tenseven","runner":["self-hosted","tenseven"],"type":"legacy","vm_name":"TenSeven","os_version":"10.7"}'
+            MATRIX+='{"platform":"lion","runner":["self-hosted","lion"],"type":"legacy","vm_name":"Lion","os_version":"10.7"}'
             FIRST=false
           fi
 
-          if [[ "${{ inputs.run_teneight }}" == "true" ]]; then
+          if [[ "${{ inputs.run_mountainlion }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"teneight","runner":["self-hosted","teneight"],"type":"legacy","vm_name":"TenEight","os_version":"10.8"}'
+            MATRIX+='{"platform":"mountainlion","runner":["self-hosted","mountainlion"],"type":"legacy","vm_name":"MountainLion","os_version":"10.8"}'
             FIRST=false
           fi
 
-          if [[ "${{ inputs.run_tennine }}" == "true" ]]; then
+          if [[ "${{ inputs.run_mavericks }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tennine","runner":["self-hosted","tennine"],"type":"legacy","vm_name":"TenNine","os_version":"10.9"}'
+            MATRIX+='{"platform":"mavericks","runner":["self-hosted","mavericks"],"type":"legacy","vm_name":"Mavericks","os_version":"10.9"}'
             FIRST=false
           fi
 
-          if [[ "${{ inputs.run_tenten }}" == "true" ]]; then
+          if [[ "${{ inputs.run_yosemite }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tenten","runner":["self-hosted","tenten"],"type":"legacy","vm_name":"TenTen","os_version":"10.10"}'
+            MATRIX+='{"platform":"yosemite","runner":["self-hosted","yosemite"],"type":"legacy","vm_name":"Yosemite","os_version":"10.10"}'
             FIRST=false
           fi
 
-          if [[ "${{ inputs.run_teneleven }}" == "true" ]]; then
+          if [[ "${{ inputs.run_elcapitan }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"teneleven","runner":["self-hosted","teneleven"],"type":"legacy","vm_name":"TenEleven","os_version":"10.11"}'
+            MATRIX+='{"platform":"elcapitan","runner":["self-hosted","elcapitan"],"type":"legacy","vm_name":"ElCapitan","os_version":"10.11"}'
             FIRST=false
           fi
 

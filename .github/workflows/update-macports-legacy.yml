@@ -13,42 +13,42 @@ on:
         required: false
         default: 'main'
         type: string
-      run_tenfive_ppc:
+      run_leopard_ppc:
         description: 'Mac OS X 10.5 PPC (Leopard)'
         required: false
         default: false
         type: boolean
-      run_tenfive:
+      run_leopard:
         description: 'Mac OS X 10.5 (Leopard)'
         required: false
         default: true
         type: boolean
-      run_tensix:
+      run_snowleopard:
         description: 'Mac OS X 10.6 (Snow Leopard)'
         required: false
         default: true
         type: boolean
-      run_tenseven:
+      run_lion:
         description: 'Mac OS X 10.7 (Lion)'
         required: false
         default: true
         type: boolean
-      run_teneight:
+      run_mountainlion:
         description: 'Mac OS X 10.8 (Mountain Lion)'
         required: false
         default: true
         type: boolean
-      run_tennine:
+      run_mavericks:
         description: 'Mac OS X 10.9 (Mavericks)'
         required: false
         default: true
         type: boolean
-      run_tenten:
+      run_yosemite:
         description: 'Mac OS X 10.10 (Yosemite)'
         required: false
         default: true
         type: boolean
-      run_teneleven:
+      run_elcapitan:
         description: 'Mac OS X 10.11 (El Capitan)'
         required: false
         default: true
@@ -76,58 +76,58 @@ jobs:
           FIRST=true
 
           # Mac OS X 10.5 PPC
-          if [[ "${{ inputs.run_tenfive_ppc }}" == "true" ]]; then
+          if [[ "${{ inputs.run_leopard_ppc }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tenfive-ppc","runner":["self-hosted","tenfive-ppc"],"vm_ip":"192.168.0.141","vm_username":"blake","vm_name":"TenFive-PPC","os_version":"10.5","timeout":"240"}'
+            MATRIX+='{"platform":"leopard-ppc","runner":["self-hosted","leopard-ppc"],"vm_ip":"192.168.0.141","vm_username":"blake","vm_name":"Leopard-PPC","os_version":"10.5","timeout":"480"}'
             FIRST=false
           fi
 
           # Mac OS X 10.5
-          if [[ "${{ inputs.run_tenfive }}" == "true" ]]; then
+          if [[ "${{ inputs.run_leopard }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tenfive","runner":["self-hosted","tenfive"],"vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenFive","os_version":"10.5","timeout":"120"}'
+            MATRIX+='{"platform":"leopard","runner":["self-hosted","leopard"],"vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Leopard","os_version":"10.5","timeout":"480"}'
             FIRST=false
           fi
 
           # Mac OS X 10.6
-          if [[ "${{ inputs.run_tensix }}" == "true" ]]; then
+          if [[ "${{ inputs.run_snowleopard }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tensix","runner":["self-hosted","tensix"],"vm_ip":"${{ vars.LEGACY_TENSIX_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenSix","os_version":"10.6","timeout":"120"}'
+            MATRIX+='{"platform":"snowleopard","runner":["self-hosted","snowleopard"],"vm_ip":"${{ vars.LEGACY_TENSIX_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"SnowLeopard","os_version":"10.6","timeout":"480"}'
             FIRST=false
           fi
 
           # Mac OS X 10.7
-          if [[ "${{ inputs.run_tenseven }}" == "true" ]]; then
+          if [[ "${{ inputs.run_lion }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tenseven","runner":["self-hosted","tenseven"],"vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenSeven","os_version":"10.7","timeout":"120"}'
+            MATRIX+='{"platform":"lion","runner":["self-hosted","lion"],"vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Lion","os_version":"10.7","timeout":"480"}'
             FIRST=false
           fi
 
           # Mac OS X 10.8
-          if [[ "${{ inputs.run_teneight }}" == "true" ]]; then
+          if [[ "${{ inputs.run_mountainlion }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"teneight","runner":["self-hosted","teneight"],"vm_ip":"${{ vars.LEGACY_TENEIGHT_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenEight","os_version":"10.8","timeout":"120"}'
+            MATRIX+='{"platform":"mountainlion","runner":["self-hosted","mountainlion"],"vm_ip":"${{ vars.LEGACY_TENEIGHT_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"MountainLion","os_version":"10.8","timeout":"480"}'
             FIRST=false
           fi
 
           # Mac OS X 10.9
-          if [[ "${{ inputs.run_tennine }}" == "true" ]]; then
+          if [[ "${{ inputs.run_mavericks }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tennine","runner":["self-hosted","tennine"],"vm_ip":"${{ vars.LEGACY_TENNINE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenNine","os_version":"10.9","timeout":"120"}'
+            MATRIX+='{"platform":"mavericks","runner":["self-hosted","mavericks"],"vm_ip":"${{ vars.LEGACY_TENNINE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Mavericks","os_version":"10.9","timeout":"480"}'
             FIRST=false
           fi
 
           # Mac OS X 10.10
-          if [[ "${{ inputs.run_tenten }}" == "true" ]]; then
+          if [[ "${{ inputs.run_yosemite }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"tenten","runner":["self-hosted","tenten"],"vm_ip":"${{ vars.LEGACY_TENTEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenTen","os_version":"10.10","timeout":"120"}'
+            MATRIX+='{"platform":"yosemite","runner":["self-hosted","yosemite"],"vm_ip":"${{ vars.LEGACY_TENTEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Yosemite","os_version":"10.10","timeout":"480"}'
             FIRST=false
           fi
 
           # Mac OS X 10.11
-          if [[ "${{ inputs.run_teneleven }}" == "true" ]]; then
+          if [[ "${{ inputs.run_elcapitan }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"teneleven","runner":["self-hosted","teneleven"],"vm_ip":"${{ vars.LEGACY_TENELEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"TenEleven","os_version":"10.11","timeout":"120"}'
+            MATRIX+='{"platform":"elcapitan","runner":["self-hosted","elcapitan"],"vm_ip":"${{ vars.LEGACY_TENELEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"ElCapitan","os_version":"10.11","timeout":"480"}'
             FIRST=false
           fi
 
