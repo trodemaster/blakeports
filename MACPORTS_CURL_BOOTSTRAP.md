@@ -162,15 +162,42 @@ legacy workflows renamed `tenfive…teneleven`/`tenfive-ppc` →
 `leopard…elcapitan`/`leopard-ppc` (matches the darkstar container runner
 labels).
 
-### Still open
+### leopard (10.5) — MacPorts 2.12.6 base won't compile
 
-- **leopard / leopard‑ppc (10.5):** MacPorts 2.12.6 base won't compile against
-  10.5's libcurl. Pin an older `macports_version` for the 10.5 line (leopard
-  currently sits fine on 2.11.6; `leopard-ppc` on 2.12.5 with a working
-  mpcurl). Dispatch separately with just `run_leopard=true`.
-- After the fixes, re‑running the 5 curl‑done VMs (10.6–10.10) should be quick:
-  `check_curl_configuration` returns OK → no rebuild → `port selfupdate` +
-  lean `git` install only.
+`curl.c:510: error: 'CURLOPT_NOPROXY' undeclared` while building `pextlib`.
+Tracked upstream:
+
+- **[trac #74362](https://trac.macports.org/ticket/74362)** — "port 2.12.6 does
+  not build on PPC Leopard, Mac OS X 10.5.8 … 'CURLOPT_NOPROXY' undeclared" —
+  **closed: fixed**. ( **[#74365](https://trac.macports.org/ticket/74365)** —
+  "doesn't build on <10.6" — closed as duplicate.)
+- Introduced by macports-base commit `8749f963` (2026‑05‑04, "Don't rely on env
+  vars for curl in worker threads"): added `curl_easy_setopt(…,
+  CURLOPT_NOPROXY, …)`. That option needs libcurl ≥ 7.19.4 (2009); Apple's
+  system libcurl on 10.5 is older.
+- Fixed by commit `847bfc23` (2026‑08‑26, "Guard use of CURLOPT_NOPROXY"):
+  `#if LIBCURL_VERSION_NUM >= 0x071304` around both call sites. On the
+  `release-2.12` branch and as a patchfile in `sysutils/MacPorts` — **not in
+  any released tag yet** (latest is v2.12.6; fix lands in v2.12.7).
+
+| MacPorts base | 10.5 build |
+|---|---|
+| ≤ v2.12.5 | ✅ ok (predates `8749f963`) |
+| v2.12.6 | ❌ CURLOPT_NOPROXY |
+| release‑2.12 / future v2.12.7 | ✅ fixed |
+
+**Our fix:** pin `-f macports_version=2.12.5` for the 10.5 line. `leopard-ppc`
+already sits on 2.12.5 with a working mpcurl — leave it. Move both to v2.12.7
+once released.
+
+### Pre‑fix bloat still on some VMs (2026‑09)
+
+`snowleopard` (~84 `p5.34-*`) and `elcapitan` (~99 `p5.34-*`, fat `git`
+variants) carry the perl tree from runs that happened before the lean‑git fix.
+git on `snowleopard` is already lean; the orphaned deps just weren't swept.
+Cleanup: on `elcapitan` `port -f uninstall git` then reinstall lean; then on
+both `sudo port uninstall leaves` (repeat until none) to drop build‑only
+leftovers.
 
 ---
 
