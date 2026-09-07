@@ -100,6 +100,10 @@ ensure_git_configured() {
         info "Refreshing ports tree (port selfupdate)..."
         sudo port selfupdate 2>&1 | tail -3 || warn "selfupdate failed - continuing with existing tree"
 
+        # Clear any partial/variant-mismatched build left by an earlier run
+        # ("Requested variants ... do not match those the build was started with").
+        sudo port clean --all git 2>/dev/null || true
+
         info "MacPorts git not found - installing git (lean variants)..."
         if sudo port install git +ssl +pcre \
                 -perl5_34 -doc -diff_highlight -credential_osxkeychain; then
