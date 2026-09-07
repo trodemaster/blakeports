@@ -145,7 +145,7 @@ base build.
 
 ---
 
-## 6. Fixes applied (branch `legacy-runner-codenames`)
+## 6. Fixes applied (PR #4, merged to `main` 2026-09-07)
 
 `scripts/updatemacports`:
 
