@@ -39,30 +39,32 @@ error() {
 # Set MacPorts prefix
 MACPORTS_PREFIX="/opt/local"
 
-# Check if MacPorts base is compiled with MacPorts curl
-# Returns 0 if properly configured, 1 if rebuild needed
+# Check if MacPorts base is compiled --with-curlprefix=${MACPORTS_PREFIX}.
+# Returns 0 if properly configured, 1 if a rebuild is needed.
+#
+# NOTE: --with-curlprefix links libcurl into the pextlib Tcl C extension
+# (Pextlib.dylib), NOT the /opt/local/bin/port wrapper script -- that is a
+# plain tclsh script and never links libcurl. Checking `otool -L .../bin/port`
+# (as this function used to) therefore ALWAYS reported "not configured" and
+# forced a full base rebuild on every run. Inspect Pextlib.dylib instead.
 check_curl_configuration() {
-    local CURL_LINK=""
-    
-    # Check if MacPorts curl exists first
-    if [ ! -f "${MACPORTS_PREFIX}/bin/curl" ]; then
-        return 1  # MacPorts curl not installed
+    # MacPorts curl must exist and actually run
+    if [ ! -x "${MACPORTS_PREFIX}/bin/curl" ] \
+        || ! "${MACPORTS_PREFIX}/bin/curl" --version >/dev/null 2>&1; then
+        return 1
     fi
-    
-    # Check what curl the port binary links against using otool
-    if command -v otool &> /dev/null; then
-        CURL_LINK=$(otool -L "${MACPORTS_PREFIX}/bin/port" 2>/dev/null | grep -i libcurl || echo "")
-        if [ -n "$CURL_LINK" ]; then
-            if echo "$CURL_LINK" | grep -q "/opt/local"; then
-                return 0  # Linked against MacPorts curl
-            else
-                return 1  # Linked against system curl
-            fi
+
+    local pextlib="${MACPORTS_PREFIX}/libexec/macports/lib/pextlib1.0/Pextlib.dylib"
+    if command -v otool &> /dev/null && [ -f "$pextlib" ]; then
+        if otool -L "$pextlib" 2>/dev/null | grep -q "${MACPORTS_PREFIX}/lib/libcurl"; then
+            return 0  # base built --with-curlprefix
         fi
+        return 1      # links system libcurl (or none) -> rebuild
     fi
-    
-    # If we can't determine, assume rebuild needed
-    return 1
+
+    # Can't introspect (no otool / no Pextlib.dylib): a working MacPorts curl
+    # plus a matching version is good enough -- don't force an endless rebuild.
+    return 0
 }
 
 # Ensure MacPorts git is installed and patch port_autoconf.tcl so MacPorts
@@ -80,10 +82,27 @@ ensure_git_configured() {
     info "  Ensuring MacPorts git is configured"
     info "========================================"
 
-    # Install MacPorts git if not present
+    # Install MacPorts git if not present.
+    #
+    # Lean variants: git's job here is git-type port fetches (git clone/fetch
+    # over HTTPS), which is pure C on libcurl. The default variants pull ~90
+    # extra ports we don't need:
+    #   -perl5_34            git send-email / git svn (drags perl5.34 + ~85
+    #                        p5.34-* modules + kerberos5 via Authen::SASL)
+    #   -doc                 HTML/plaintext man pages
+    #   -diff_highlight      a Perl script in contrib/
+    #   -credential_osxkeychain  keychain helper, pointless in CI
+    # What's left (git +pcre +ssl) reuses curl/zlib/expat/libiconv/pcre2 that
+    # the curl bootstrap already installed; only `rsync` is genuinely new.
     if [ ! -f "${MACPORTS_PREFIX}/bin/git" ]; then
-        info "MacPorts git not found - installing git +ssl..."
-        if sudo port install git +ssl; then
+        # A stale ports tree (>2 weeks) has Portfile checksums that no longer
+        # match the mirrors -> `port install` aborts. Refresh first.
+        info "Refreshing ports tree (port selfupdate)..."
+        sudo port selfupdate 2>&1 | tail -3 || warn "selfupdate failed - continuing with existing tree"
+
+        info "MacPorts git not found - installing git (lean variants)..."
+        if sudo port install git +ssl +pcre \
+                -perl5_34 -doc -diff_highlight -credential_osxkeychain; then
             info "✅ MacPorts git installed: $(${MACPORTS_PREFIX}/bin/git --version)"
         else
             warn "Failed to install MacPorts git"
@@ -305,7 +324,9 @@ if [[ "$NEEDS_REBUILD" == "false" ]]; then
     info "MacPorts $MACPORTS_VERSION is up to date and properly configured"
     info "No rebuild needed"
     log_curl_configuration
-    ensure_git_configured
+    # non-fatal: the curl setup is what this script primarily guarantees; a git
+    # hiccup shouldn't fail the run
+    ensure_git_configured || warn "git setup incomplete - git-type port fetches may fail"
     exit 0
 fi
 
@@ -489,8 +510,10 @@ fi
 # Log final curl configuration
 log_curl_configuration
 
-# Ensure MacPorts git is installed and configured after every rebuild
-ensure_git_configured
+# Ensure MacPorts git is installed and configured after every rebuild.
+# non-fatal: curl (rebuilt above) is the critical piece; don't fail the whole
+# run if git install/config trips.
+ensure_git_configured || warn "git setup incomplete - git-type port fetches may fail"
 
 # Cleanup
 info "Cleaning up build directory..."
