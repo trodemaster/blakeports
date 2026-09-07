@@ -154,8 +154,14 @@ base build.
    a rebuild every run.
 2. **Lean git variants** (§4) — `git +ssl +pcre -perl5_34 -doc
    -diff_highlight -credential_osxkeychain`. +91 ports → +2.
-3. **`port selfupdate`** before `port install git`, and the whole git step
-   **non‑fatal** at both call sites.
+3. **`port selfupdate`** before `port install git`, `port clean git` to drop
+   any variant‑mismatched partial build, and the whole git step **non‑fatal**
+   at both call sites.
+4. **`trim_build_deps()`** — after curl + git are built, `port uninstall
+   inactive` then sweep `port uninstall leaves` until the cascade stops. Drops
+   the clang/llvm/cctools bootstrap, autotools, and the perl5.34 + p5.34‑*
+   tree (openssl3 / git *build* deps). MacPorts protects the `requested`
+   ports and their live closure. Measured: **48–191 ports → ~13–19** per VM.
 
 Workflows: `update-macports-legacy` per‑job `timeout` 120 → 480 min; all 8
 legacy workflows renamed `tenfive…teneleven`/`tenfive-ppc` →
