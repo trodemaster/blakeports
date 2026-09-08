@@ -59,6 +59,11 @@ on:
         required: false
         default: false
         type: boolean
+      keep_ports:
+        description: 'Extra ports to preserve on legacy VMs (space-separated), on top of curl/git and the compiler toolchain'
+        required: false
+        default: ''
+        type: string
 
 defaults:
   run:
@@ -170,6 +175,9 @@ jobs:
         if: matrix.type == 'modern'
         uses: actions/checkout@v6
 
+      # Modern runners pull prebuilt binary archives, so a full wipe back to
+      # curl costs minutes -- no toolchain to preserve here (see the legacy
+      # step, where a rebuild is measured in hours).
       - name: Uninstall all ports except curl and its dependencies
         if: matrix.type == 'modern'
         run: |
@@ -233,10 +241,12 @@ jobs:
           echo "SSH_KEY_PATH=$SSH_KEY_PATH" >> $GITHUB_ENV
           echo "✅ Configuration verified. Will connect to: $VM_USERNAME@$VM_IP"
 
-      - name: Uninstall all ports except curl and its dependencies (legacy)
+      - name: Uninstall all ports except curl, git and the compiler toolchain (legacy)
         if: matrix.type == 'legacy'
+        env:
+          EXTRA_KEEP: ${{ inputs.keep_ports }}
         run: |
-          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+          ssh -F ~/.ssh/config ${{ matrix.platform }} "EXTRA_KEEP=\"${EXTRA_KEEP}\" bash -s" <<'EOF'
             set +e
             if [ -f ~/.profile ]; then
               source ~/.profile
@@ -248,21 +258,36 @@ jobs:
             echo "Installed ports before cleanup:"
             port installed || true
             echo ""
-            echo "Determining ports to preserve (curl + dependencies)..."
-            PRESERVE=$(port echo curl rdepof:curl 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')
-            echo "Preserving: $PRESERVE"
+
+            # On the legacy VMs the compiler toolchain (gcc10-bootstrap, llvm-*,
+            # clang-*, cmake, cctools/ld64, libcxx/libomp, icu) is built FROM
+            # SOURCE and costs many hours -- on 10.5 the gcc bootstrap alone is
+            # ~3h. Never uninstall those, curl/git, or anything they still need;
+            # only sweep the genuinely cheap ports (the port under test and its
+            # light deps). Add one-off keepers via the keep_ports workflow input.
+            KEEP_ROOTS="curl curl-ca-bundle git ${EXTRA_KEEP}"
+            KEEP_PATTERN='gcc|llvm|clang|cmake|cctools|ld64|libmacho|libcxx|libcxxabi|libunwind|libomp|^icu$|^boost|^rust$|^go$'
+
+            INSTALLED=$(port -q echo installed 2>/dev/null | awk '{print $1}' | sort -u)
+            TOOLCHAIN=$(echo "$INSTALLED" | grep -E "$KEEP_PATTERN")
+
+            PRESERVE=$(port echo $KEEP_ROOTS $TOOLCHAIN \
+                         $(for p in $KEEP_ROOTS $TOOLCHAIN; do echo "rdepof:$p"; done) \
+                         2>/dev/null | awk '{print $1}' | sort -u)
+            PRESERVE=" $(echo $PRESERVE | tr '\n' ' ') "
+
+            echo "Preserving (curl/git + toolchain + full dependency closure):"
+            echo "$PRESERVE" | tr ' ' '\n' | grep . | sed 's/^/  /'
             echo ""
-            echo "Uninstalling all other ports..."
-            for p in $(port echo installed 2>/dev/null | awk '{print $1}' | sort -u); do
-              if ! echo " $PRESERVE " | grep -q " $p "; then
-                echo "Uninstalling: $p"
-                sudo port -f uninstall "$p" || true
-              else
-                echo "Keeping: $p"
-              fi
+            echo "Uninstalling everything else..."
+            for p in $INSTALLED; do
+              case "$PRESERVE" in
+                *" $p "*) echo "  keep      $p" ;;
+                *)        echo "  uninstall $p"; sudo port -f uninstall "$p" || true ;;
+              esac
             done
             echo ""
-            echo "Cleaning all dist files..."
+            echo "Cleaning dist files..."
             sudo port clean --all all || true
             echo ""
             echo "Installed ports after cleanup:"

@@ -146,17 +146,24 @@ ensure_git_configured() {
     info "========================================"
 }
 
-# Remove inactive port versions and build-only leftovers -- the compiler
-# bootstrap (clang-11-bootstrap, llvm-*, cctools, ld64), autotools, and the
-# perl5.34 + p5.34-* tree that only exist to *build* openssl3 / git. MacPorts
-# protects `requested` ports (curl, git installed by name) and their live
-# dependency closure; `port uninstall leaves` only touches ports nothing
-# depends on. Without this the VMs sit at 50-190 ports instead of ~15.
+# Remove inactive port versions and build-only leftovers -- autotools, the
+# perl5.34 + p5.34-* tree, and other light deps that only exist to *build*
+# openssl3 / git. MacPorts protects `requested` ports (curl, git installed by
+# name) and their live dependency closure; `port uninstall leaves` only touches
+# ports nothing depends on. Without this the VMs sit at 50-190 ports.
+#
+# EXCEPTION: the from-source compiler toolchain (gcc10-bootstrap, llvm-*,
+# clang-*, cmake, cctools/ld64, libcxx/libomp, icu) is kept even when it goes
+# leaf. On 10.5 the gcc bootstrap alone is ~3h and the full clang chain many
+# more; trimming it would force that rebuild on the next `port install`. The
+# same list is preserved by .github/workflows/macports-cleanup.yml.
+TRIM_KEEP_RE='gcc|llvm|clang|cmake|cctools|ld64|libmacho|libcxx|libcxxabi|libunwind|libomp|^icu$|^boost|^rust$|^go$'
+
 trim_build_deps() {
     info "========================================"
     info "  Trimming build-only dependencies"
     info "========================================"
-    local before after i
+    local before after i leaves
     before=$(port -q installed 2>/dev/null | grep -c . || echo '?')
 
     sudo port -q uninstall inactive 2>/dev/null || true
@@ -164,12 +171,14 @@ trim_build_deps() {
     i=0
     while [ "$i" -lt 25 ]; do
         i=$((i + 1))
-        [ -z "$(port -q echo leaves 2>/dev/null)" ] && break
-        sudo port -q uninstall leaves 2>/dev/null || true
+        leaves=$(port -q echo leaves 2>/dev/null | awk '{print $1}' | grep -Ev "$TRIM_KEEP_RE")
+        [ -z "$leaves" ] && break
+        # shellcheck disable=SC2086
+        sudo port -q uninstall $leaves 2>/dev/null || true
     done
 
     after=$(port -q installed 2>/dev/null | grep -c . || echo '?')
-    info "installed ports: ${before} -> ${after} (${i} sweep rounds)"
+    info "installed ports: ${before} -> ${after} (${i} sweep rounds; toolchain preserved)"
     info "========================================"
 }
 
