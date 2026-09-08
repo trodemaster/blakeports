@@ -92,8 +92,14 @@ ensure_git_configured() {
     #   -doc                 HTML/plaintext man pages
     #   -diff_highlight      a Perl script in contrib/
     #   -credential_osxkeychain  keychain helper, pointless in CI
-    # What's left (git +pcre +ssl) reuses curl/zlib/expat/libiconv/pcre2 that
-    # the curl bootstrap already installed; only `rsync` is genuinely new.
+    #   -pcre               `git grep -P` only. pcre2 is now a CMake build:
+    #                       on 10.5 it drags cmake-bootstrap -> clang-11-bootstrap
+    #                       -> libstdcxx_clang_fix -> ld64 -> xar -> libxml2 ->
+    #                       icu -- a multi-hour from-source toolchain that fails
+    #                       on Leopard's libstdc++ (icu 78 wants C++17). git
+    #                       itself is C99, so -pcre keeps its dep set to
+    #                       curl/zlib/expat/gettext-runtime/libiconv, all already
+    #                       present from the curl bootstrap. Only `rsync` is new.
     if [ ! -f "${MACPORTS_PREFIX}/bin/git" ]; then
         # A stale ports tree (>2 weeks) has Portfile checksums that no longer
         # match the mirrors -> `port install` aborts. Refresh first.
@@ -105,8 +111,8 @@ ensure_git_configured() {
         sudo port clean --all git 2>/dev/null || true
 
         info "MacPorts git not found - installing git (lean variants)..."
-        if sudo port install git +ssl +pcre \
-                -perl5_34 -doc -diff_highlight -credential_osxkeychain; then
+        if sudo port install git +ssl \
+                -pcre -perl5_34 -doc -diff_highlight -credential_osxkeychain; then
             info "✅ MacPorts git installed: $(${MACPORTS_PREFIX}/bin/git --version)"
         else
             warn "Failed to install MacPorts git"

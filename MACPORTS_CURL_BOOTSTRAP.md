@@ -65,7 +65,7 @@ inspect `Pextlib.dylib`.
 ## 3. How `/opt/local/bin/git` is configured (`ensure_git_configured()`)
 
 1. If missing: `sudo port selfupdate` (stale trees fail checksums), then
-   `sudo port install git +ssl +pcre -perl5_34 -doc -diff_highlight
+   `sudo port install git +ssl -pcre -perl5_34 -doc -diff_highlight
    -credential_osxkeychain` — see §4 for why the lean variants.
 2. Patch `libexec/macports/lib/port1.0/port_autoconf.tcl`:
    `variable git_path` → `/opt/local/bin/git`. MacPorts bakes `/usr/bin/git` in
@@ -84,7 +84,7 @@ The whole git step is **non‑fatal** — curl is the piece the script guarantee
 |---|---|
 | curl bootstrap only (mavericks) | **49** |
 | curl + `git +ssl` **default variants** (elcapitan, first run) | **140** |
-| curl + `git +ssl +pcre` **lean variants** | **~52** (git + `rsync`) |
+| curl + `git +ssl -pcre` **lean variants** | **~52** (git + `rsync`) |
 
 ### The curl bootstrap's ~49 ports
 
@@ -111,13 +111,25 @@ autoconf automake libtool`. **All of it serves `git send-email` / `git svn` /
 `contrib/diff-highlight` (a Perl script) — none of which git‑type port fetches
 use.**
 
-### Lean git — `git +ssl +pcre -perl5_34 -doc -diff_highlight -credential_osxkeychain`
+### Lean git — `git +ssl -pcre -perl5_34 -doc -diff_highlight -credential_osxkeychain`
 
-Resolves to `git @2.12.x+pcre`. Deps: `curl zlib expat gettext-runtime
-libiconv pcre2` (**all already present** from the curl bootstrap) + `rsync`
-(the only genuinely new port). Core `git clone` / `git fetch` over HTTPS is
-pure C on libcurl and fully intact; only `git send-email`, `git svn`,
-`git cvsimport`, `git archimport` are dropped.
+`git` itself is C99 (`use_configure no`, `compiler.c_standard 1999`). Deps:
+`curl zlib expat gettext-runtime libiconv` — **all already present** from the
+curl bootstrap — + `rsync` (the only genuinely new port). Core `git clone` /
+`git fetch` over HTTPS is pure C on libcurl and fully intact; only
+`git send-email`, `git svn`, `git cvsimport`, `git archimport` are dropped.
+
+**Why `-pcre` (not `+pcre`):** `+pcre` adds `port:pcre2`, whose only benefit
+to git is `git grep -P`. `pcre2` is now a **CMake** build. On 10.6–10.11 that
+resolves cheaply (system clang). On **10.5** it drags in a full from-source
+toolchain: `cmake-bootstrap → clang-11-bootstrap → libstdcxx_clang_fix`, and
+`ld64 → xar → libxml2 → icu`. That's many hours, and it **fails** — `icu`
+(v78, wants C++17) won't compile against Leopard's `macports-libstdc++`
+(`clang++ -stdlib=macports-libstdc++` can't find `<memory>`; the gcc10
+libstdc++ headers live under `libexec/gcc10-bootstrap/` where that driver
+flavour doesn't look). `libomp` in the same chain also hard-fails destroot on
+the libstdc++ branch without the blakeports `lang/libomp` override. Dropping
+`+pcre` sidesteps the entire chain and git builds in ~10 min on 10.5.
 
 ---
 
@@ -152,8 +164,10 @@ base build.
 1. **`check_curl_configuration()`** inspects `Pextlib.dylib`, not `bin/port`.
    A working mpcurl + matching version is now a real no‑op instead of forcing
    a rebuild every run.
-2. **Lean git variants** (§4) — `git +ssl +pcre -perl5_34 -doc
-   -diff_highlight -credential_osxkeychain`. +91 ports → +2.
+2. **Lean git variants** (§4) — `git +ssl -pcre -perl5_34 -doc
+   -diff_highlight -credential_osxkeychain`. +91 ports → +2 (`-pcre` added
+   2026-09-08: `+pcre`'s `pcre2` is a CMake build that pulls the clang-11 /
+   icu toolchain on 10.5 and fails at `icu`).
 3. **`port selfupdate`** before `port install git`, `port clean git` to drop
    any variant‑mismatched partial build, and the whole git step **non‑fatal**
    at both call sites.
