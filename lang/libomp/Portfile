@@ -175,7 +175,14 @@ post-destroot {
 
     xinstall -d ${instdest}/include/libomp
     foreach h ${hnames} {
-        move ${instdest}/tmp/include/${h} ${instdest}/include/libomp/
+        # blakeports: guard like the lib loop below -- if a prior destroot
+        # attempt failed partway and MacPorts reused work/destroot, ${h} is
+        # already in include/libomp/ and the move hard-fails with "file
+        # already exists". Skip anything the fresh make-install didn't put
+        # back in tmp/.
+        if {[file exists ${instdest}/tmp/include/${h}]} {
+            move ${instdest}/tmp/include/${h} ${instdest}/include/libomp/
+        }
     }
 
     xinstall -d ${instdest}/lib/libomp
