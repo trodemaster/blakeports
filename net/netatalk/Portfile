@@ -50,15 +50,6 @@ if {${subport} eq ${name}} {
                                port:bison \
                                port:flex
 
-    # cmark-gfm only generates the man pages / HTML manual (all optional in
-    # netatalk's meson build; the plain-markdown docs still install without
-    # it). Its cmake dependency chain does not resolve on macOS 10.5
-    # (cmake -> icu, unbuildable against the 10.5 libstdc++) or 10.7
-    # (cmake -> clang-3.x dependency cycle).
-    if {${os.platform} eq "darwin" && (${os.major} <= 9 || ${os.major} == 11)} {
-        depends_build-delete   port:cmark-gfm
-    }
-
     depends_lib         port:sqlite3 \
                         port:libevent \
                         port:libgcrypt \
