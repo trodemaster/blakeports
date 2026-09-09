@@ -149,7 +149,7 @@ jobs:
       - name: Install dependencies
         run: ./scripts/install-deps netatalk_client
 
-      - name: Build port (default variant: +fuse)
+      - name: "Build port (default variant: +fuse)"
         run: |
           source ./setupenv.bash
           sudo port -v install netatalk_client
