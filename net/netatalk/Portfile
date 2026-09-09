@@ -6,7 +6,7 @@ PortGroup           meson 1.0
 PortGroup           legacysupport 1.1
 
 name                netatalk
-version             4.5.1
+version             4.5.2
 revision            0
 categories          net
 description         Netatalk is a freely-available Open Source AFP fileserver.
@@ -15,8 +15,8 @@ long_description    Netatalk is a freely-available Open Source AFP fileserver. \
                     servers for Macintosh computers.
 
 if {${subport} eq ${name}} {
-    github.setup        Netatalk netatalk 4-5-1 netatalk-
-    version             4.5.1
+    github.setup        Netatalk netatalk 4-5-2 netatalk-
+    version             4.5.2
     revision            0
     github.tarball_from releases
     distname            netatalk-${version}
@@ -24,9 +24,30 @@ if {${subport} eq ${name}} {
 
     compiler.c_standard 2011
 
-    checksums       rmd160  30986ad34619e6c4cee961296c2507ba44c52057 \
-                    sha256  f091de10b0c40996ebf7d6502cf947cfd87dfe1a7e62f9d96013225573938524 \
-                    size    1305244
+    # Apple's system clang on macOS 10.5-10.9 (clang-425 / clang-503, based on
+    # LLVM 3.4) advertises C11 but ships no <stdatomic.h>, which netatalk 4.x
+    # needs for its lock-free worker queues; MacPorts base's C11 capability
+    # check does not catch this. Force the self-contained clang-11-bootstrap,
+    # which builds on these systems and has the header. 10.10+ uses the normal
+    # compiler selection (system clang is new enough).
+    if {${os.platform} eq "darwin" && ${os.major} <= 13} {
+        configure.compiler.add_deps   no
+        depends_build-append          port:clang-11-bootstrap
+        depends_skip_archcheck-append clang-11-bootstrap
+        meson.native.binaries-append \
+            c=${prefix}/libexec/clang-11-bootstrap/bin/clang \
+            cpp=${prefix}/libexec/clang-11-bootstrap/bin/clang++ \
+            objc=${prefix}/libexec/clang-11-bootstrap/bin/clang
+        pre-configure {
+            configure.cc    ${prefix}/libexec/clang-11-bootstrap/bin/clang
+            configure.cxx   ${prefix}/libexec/clang-11-bootstrap/bin/clang++
+            configure.objc  ${prefix}/libexec/clang-11-bootstrap/bin/clang
+        }
+    }
+
+    checksums       rmd160  96271798e86668342eda69ec4576f09e1966ffc7 \
+                    sha256  2cdfd5420e8e91c85c82dda66a92dcdd5974eef076feb169b279c600133f38b2 \
+                    size    1307800
     
     license             GPL-2+
     maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
@@ -37,7 +58,15 @@ if {${subport} eq ${name}} {
                                port:cmark-gfm \
                                port:bison \
                                port:flex
-    
+
+    # cmark-gfm only generates the man pages / HTML manual (all optional in
+    # netatalk's meson build). On macOS 10.5 it pulls cmake -> icu, which does
+    # not build against the 10.5 libstdc++ toolchain, so drop it there; the
+    # plain-markdown docs still install.
+    if {${os.platform} eq "darwin" && ${os.major} <= 9} {
+        depends_build-delete   port:cmark-gfm
+    }
+
     depends_lib         port:sqlite3 \
                         port:libevent \
                         port:libgcrypt \
@@ -66,7 +95,7 @@ if {${subport} eq ${name}} {
 subport netatalk4 {
     PortGroup           stub 1.0
 
-    version             4.5.1
+    version             4.5.2
     revision            0
     
     categories          net
