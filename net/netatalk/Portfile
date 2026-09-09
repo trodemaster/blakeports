@@ -27,24 +27,13 @@ if {${subport} eq ${name}} {
     # macOS 10.7-10.9: Apple's system clang (clang-425 / clang-503, based on
     # LLVM 3.4) advertises C11 but ships no <stdatomic.h>, which netatalk 4.x
     # needs for its lock-free worker queues; MacPorts base's C11 capability
-    # check does not catch this. Force the self-contained clang-11-bootstrap
-    # (builds on these systems, has the header), plus cctools for a linker new
-    # enough to accept -no_weak_imports (added by the legacysupport PG); the
-    # stock 10.7-10.9 ld64 rejects it and every meson link probe then fails.
-    # 10.6 keeps its working macports-clang-11; 10.10+ system clang is fine.
+    # check does not catch this. Use macports-clang-11: it has the header and
+    # pulls a matching cctools/ld64 that accepts -no_weak_imports (base adds
+    # that for a non-system compiler, and the stock 10.7-10.9 ld64 rejects it).
+    # 10.6 already resolves to macports-clang-11 on its own; 10.10+ system
+    # clang is new enough.
     if {${os.platform} eq "darwin" && ${os.major} >= 11 && ${os.major} <= 13} {
-        configure.compiler.add_deps   no
-        depends_build-append          port:clang-11-bootstrap port:cctools
-        depends_skip_archcheck-append clang-11-bootstrap cctools
-        meson.native.binaries-append \
-            c=${prefix}/libexec/clang-11-bootstrap/bin/clang \
-            cpp=${prefix}/libexec/clang-11-bootstrap/bin/clang++ \
-            objc=${prefix}/libexec/clang-11-bootstrap/bin/clang
-        pre-configure {
-            configure.cc    ${prefix}/libexec/clang-11-bootstrap/bin/clang
-            configure.cxx   ${prefix}/libexec/clang-11-bootstrap/bin/clang++
-            configure.objc  ${prefix}/libexec/clang-11-bootstrap/bin/clang
-        }
+        configure.compiler  macports-clang-11
     }
 
     checksums       rmd160  96271798e86668342eda69ec4576f09e1966ffc7 \
