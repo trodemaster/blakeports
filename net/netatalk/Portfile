@@ -24,16 +24,18 @@ if {${subport} eq ${name}} {
 
     compiler.c_standard 2011
 
-    # Apple's system clang on macOS 10.5-10.9 (clang-425 / clang-503, based on
+    # macOS 10.7-10.9: Apple's system clang (clang-425 / clang-503, based on
     # LLVM 3.4) advertises C11 but ships no <stdatomic.h>, which netatalk 4.x
     # needs for its lock-free worker queues; MacPorts base's C11 capability
-    # check does not catch this. Force the self-contained clang-11-bootstrap,
-    # which builds on these systems and has the header. 10.10+ uses the normal
-    # compiler selection (system clang is new enough).
-    if {${os.platform} eq "darwin" && ${os.major} <= 13} {
+    # check does not catch this. Force the self-contained clang-11-bootstrap
+    # (builds on these systems, has the header), plus cctools for a linker new
+    # enough to accept -no_weak_imports (added by the legacysupport PG); the
+    # stock 10.7-10.9 ld64 rejects it and every meson link probe then fails.
+    # 10.6 keeps its working macports-clang-11; 10.10+ system clang is fine.
+    if {${os.platform} eq "darwin" && ${os.major} >= 11 && ${os.major} <= 13} {
         configure.compiler.add_deps   no
-        depends_build-append          port:clang-11-bootstrap
-        depends_skip_archcheck-append clang-11-bootstrap
+        depends_build-append          port:clang-11-bootstrap port:cctools
+        depends_skip_archcheck-append clang-11-bootstrap cctools
         meson.native.binaries-append \
             c=${prefix}/libexec/clang-11-bootstrap/bin/clang \
             cpp=${prefix}/libexec/clang-11-bootstrap/bin/clang++ \
@@ -60,10 +62,11 @@ if {${subport} eq ${name}} {
                                port:flex
 
     # cmark-gfm only generates the man pages / HTML manual (all optional in
-    # netatalk's meson build). On macOS 10.5 it pulls cmake -> icu, which does
-    # not build against the 10.5 libstdc++ toolchain, so drop it there; the
-    # plain-markdown docs still install.
-    if {${os.platform} eq "darwin" && ${os.major} <= 9} {
+    # netatalk's meson build; the plain-markdown docs still install without
+    # it). Its cmake dependency chain does not resolve on macOS 10.5
+    # (cmake -> icu, unbuildable against the 10.5 libstdc++) or 10.7
+    # (cmake -> clang-3.x dependency cycle).
+    if {${os.platform} eq "darwin" && (${os.major} <= 9 || ${os.major} == 11)} {
         depends_build-delete   port:cmark-gfm
     }
 
