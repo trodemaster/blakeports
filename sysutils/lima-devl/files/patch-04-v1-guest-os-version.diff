@@ -1,0 +1,16 @@
+diff --git pkg/driver/vz/vm_darwin_arm64.go pkg/driver/vz/vm_darwin_arm64.go
+index 0a3fc0b6..23f8fc2d 100644
+--- pkg/driver/vz/vm_darwin_arm64.go
++++ pkg/driver/vz/vm_darwin_arm64.go
+@@ -65,6 +65,11 @@ func newMacPlatformConfiguration(inst *limatype.Instance) (vz.PlatformConfigurat
+ 		if err != nil {
+ 			return nil, err
+ 		}
++		// The restore image carries the guest's macOS version and build number.
++		// Lima only consumes the hardware model below, but log the version too so
++		// it is visible in `limactl create` output; nothing branches on it yet.
++		logrus.Infof("Guest macOS restore image: version %s, build %s",
++			ipswImage.OperatingSystemVersion(), ipswImage.BuildVersion())
+ 		ipswMostFeatureFul := ipswImage.MostFeaturefulSupportedConfiguration()
+ 		hwModelData = ipswMostFeatureFul.HardwareModel().DataRepresentation()
+ 		if err = os.WriteFile(hwModelFile, hwModelData, 0o666); err != nil {

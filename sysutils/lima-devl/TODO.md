@@ -1,12 +1,13 @@
 # lima-devl — Upstream PR & Port Tracking
 
 Status of feature patches carried by this port and their upstream submission.
-Patch revs: see `w1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no `b4_rev`).
+Patch revs: see `w1_rev` / `v1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no `b4_rev`).
 
 ## Feature status
 
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
+| V1 (`patch-04`) | Log guest macOS version + build from the restore image during `limactl create` | branch `feat/vz-guest-os-version-log` (`origin/master`, 1 commit); "PR 1" precursor — first slice of guest-OS-version detection, log-only, nothing consumes the value yet. Issue draft: `~/orac/Computer/blakeports/lima guest os version issue draft.md` |
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
@@ -37,9 +38,20 @@ it. Was disabled in the Portfile the whole time. `upstream-pr/o1-pid-timeout` br
 patch-Makefile.diff
 patch-usrlocalgo.diff
 patch-03-w1-windows-edition-detection.diff  ← carried in port
+patch-04-v1-guest-os-version.diff    ← "PR 1" precursor, log-only
 patch-06-b2-tcc.diff                 ← upstream candidate (B1 dependency merged)
 patch-09-m1-fakecloudinit-macos27.diff  ← macOS 27-beta workaround, NOT upstream
 ```
+
+`patch-04-v1-guest-os-version.diff` (2026-09-09): one `logrus.Infof` in
+`newMacPlatformConfiguration` (`pkg/driver/vz/vm_darwin_arm64.go`) logging
+`ipswImage.OperatingSystemVersion()` / `.BuildVersion()` right where the driver
+already loads the restore image for the hardware model. Log-only, macOS-guest
+create path only. Branch `feat/vz-guest-os-version-log` off `origin/master`
+(`19e75908`), commit signed-off, not yet pushed to `trodemaster`, no PR yet —
+the issue draft goes first per the skill's issue workflow. Full-stack version
+propagation (sentinel file + `LIMA_CIDATA_GUEST_OS_VERSION`) is the later part
+of PR 1; see `lima_mac/docs/ipsw-build-manifest.md`.
 
 `patch-10-b4-macos-clipboard.diff` still exists in `files/` and the `upstream-pr/b4-macos-clipboard`
 git branch is kept, but the patch is **not** in the Portfile's `patchfiles` list (commented out,
