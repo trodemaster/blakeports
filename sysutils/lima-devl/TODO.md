@@ -7,7 +7,7 @@ Patch revs: see `w1_rev` / `v1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is
 
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
-| V1 (`patch-04`) | Log guest macOS version + build from the restore image during `limactl create` | branch `feat/vz-guest-os-version-log` (`origin/master`, 1 commit); "PR 1" precursor — first slice of guest-OS-version detection, log-only, nothing consumes the value yet. Issue draft: `~/orac/Computer/blakeports/lima guest os version issue draft.md` |
+| V1 (`patch-04`) | Detect guest macOS version + build from the restore image; persist to `vz-guest-os-version` / `vz-guest-os-build-version` sentinels at create time and expose as `LIMA_CIDATA_GUEST_OS_VERSION` / `_BUILD_VERSION` | branch `feat/vz-guest-os-version-log` (`origin/master`, 2 commits: log, then cidata propagation); this is "PR 1", ready for upstream once the issue is filed. Nothing consumes the value yet. Issue draft: `~/orac/Computer/blakeports/lima guest os version issue draft.md` |
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
@@ -43,15 +43,32 @@ patch-06-b2-tcc.diff                 ← upstream candidate (B1 dependency merge
 patch-09-m1-fakecloudinit-macos27.diff  ← macOS 27-beta workaround, NOT upstream
 ```
 
-`patch-04-v1-guest-os-version.diff` (2026-09-09): one `logrus.Infof` in
-`newMacPlatformConfiguration` (`pkg/driver/vz/vm_darwin_arm64.go`) logging
-`ipswImage.OperatingSystemVersion()` / `.BuildVersion()` right where the driver
-already loads the restore image for the hardware model. Log-only, macOS-guest
-create path only. Branch `feat/vz-guest-os-version-log` off `origin/master`
-(`19e75908`), commit signed-off, not yet pushed to `trodemaster`, no PR yet —
-the issue draft goes first per the skill's issue workflow. Full-stack version
-propagation (sentinel file + `LIMA_CIDATA_GUEST_OS_VERSION`) is the later part
-of PR 1; see `lima_mac/docs/ipsw-build-manifest.md`.
+`patch-04-v1-guest-os-version.diff` — the full "PR 1". Branch
+`feat/vz-guest-os-version-log` off `origin/master` (`19e75908`), 2 signed-off
+commits:
+1. `feat(vz): log the guest macOS version from the restore image` — one
+   `logrus.Infof` in `newMacPlatformConfiguration` right where the driver already
+   loads the restore image for the hardware model.
+2. `feat(vz): expose the guest macOS version to cidata as LIMA_CIDATA_GUEST_OS_*`
+   — persist `OperatingSystemVersion().String()` / `BuildVersion()` to two
+   plain-text sentinels (`vz-guest-os-version`, `vz-guest-os-build-version`,
+   `0o444`, written once alongside `vz-hwmodel` at create time); `templateArgs`
+   reads them back for macOS guests via a new `readOptionalInstanceFile` helper;
+   `TemplateArgs.GuestOSVersion` / `GuestOSBuildVersion`; `lima.env` template
+   emits `LIMA_CIDATA_GUEST_OS_VERSION` / `LIMA_CIDATA_GUEST_OS_BUILD_VERSION`
+   (always present, empty for non-macOS / qemu / pre-existing instances). Test
+   `TestTemplateGuestOSVersion`. Docs in `website/.../dev/internals.md`.
+
+Conventions matched deliberately (per Blake, "don't swim upstream"): sentinel
+files mirror `vz-hwmodel` (macOS-only, one datum per file) and the `LimaVersion`
+plain-text precedent; no new YAML/config knob; nothing consumes the value yet;
+values are the restore image's (guest version at first boot, not tracked across
+OS updates); env vars always emitted like the other optional `LIMA_CIDATA_*`.
+
+`v1_rev` 1→2 when the patch grew from log-only to the full stack. Not yet
+pushed to `trodemaster`, no PR — the issue draft goes up first per the skill's
+issue workflow (`~/orac/Computer/blakeports/lima guest os version issue draft.md`).
+Research: `lima_mac/docs/ipsw-build-manifest.md`.
 
 `patch-10-b4-macos-clipboard.diff` still exists in `files/` and the `upstream-pr/b4-macos-clipboard`
 git branch is kept, but the patch is **not** in the Portfile's `patchfiles` list (commented out,

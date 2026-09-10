@@ -1,16 +1,197 @@
+diff --git pkg/cidata/cidata.TEMPLATE.d/lima.env pkg/cidata/cidata.TEMPLATE.d/lima.env
+index 2795dc0b..25421141 100644
+--- pkg/cidata/cidata.TEMPLATE.d/lima.env
++++ pkg/cidata/cidata.TEMPLATE.d/lima.env
+@@ -66,6 +66,8 @@ LIMA_CIDATA_SKIP_DEFAULT_DEPENDENCY_RESOLUTION=
+ LIMA_CIDATA_VMTYPE={{ .VMType }}
+ LIMA_CIDATA_VSOCK_PORT={{ .VSockPort }}
+ LIMA_CIDATA_VIRTIO_PORT={{ .VirtioPort}}
++LIMA_CIDATA_GUEST_OS_VERSION={{ .GuestOSVersion }}
++LIMA_CIDATA_GUEST_OS_BUILD_VERSION={{ .GuestOSBuildVersion }}
+ {{- if .Plain}}
+ LIMA_CIDATA_PLAIN=1
+ {{- else}}
+diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
+index f42f4a0d..4c6bf9b4 100644
+--- pkg/cidata/cidata.go
++++ pkg/cidata/cidata.go
+@@ -119,16 +119,36 @@ func setupEnv(instConfigEnv map[string]string, propagateProxyEnv bool, slirpGate
+ 	return env, nil
+ }
+ 
++// readOptionalInstanceFile returns the trimmed content of instDir/name, or an
++// empty string if the file does not exist. Any other read error is logged and
++// also yields an empty string: callers treat "" as "unknown".
++func readOptionalInstanceFile(instDir, name string) string {
++	b, err := os.ReadFile(filepath.Join(instDir, name))
++	if err != nil {
++		if !errors.Is(err, os.ErrNotExist) {
++			logrus.WithError(err).Warnf("Failed to read %s", name)
++		}
++		return ""
++	}
++	return strings.TrimSpace(string(b))
++}
++
+ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, instConfig *limatype.LimaYAML, udpDNSLocalPort, tcpDNSLocalPort, vsockPort int, virtioPort string, noCloudInit, rosettaEnabled, rosettaBinFmt bool) (*TemplateArgs, error) {
+ 	if err := limayaml.Validate(instConfig, false); err != nil {
+ 		return nil, err
+ 	}
+ 	archive := "nerdctl-full.tgz"
+ 	var darwinOpts limatype.DarwinOpts
++	var guestOSVersion, guestOSBuildVersion string
+ 	if *instConfig.OS == limatype.DARWIN {
+ 		if err := limayaml.Convert(instConfig.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.Darwin"); err != nil {
+ 			return nil, err
+ 		}
++		// Written once, at create time, by the vz driver from the restore image.
++		// Absent for the qemu driver and for instances created before this was
++		// added; an empty string is the correct "unknown" value in that case.
++		guestOSVersion = readOptionalInstanceFile(instDir, filenames.VzGuestOSVersion)
++		guestOSBuildVersion = readOptionalInstanceFile(instDir, filenames.VzGuestOSBuildVersion)
+ 	}
+ 	var suppressFirstLoginSetupPlist string
+ 	if darwinOpts.SuppressFirstLoginSetupPlist != nil {
+@@ -166,6 +186,8 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+ 
+ 		SuppressFirstLoginSetup:      darwinOpts.SuppressFirstLoginSetup != nil && *darwinOpts.SuppressFirstLoginSetup,
+ 		SuppressFirstLoginSetupPlist: suppressFirstLoginSetupPlist,
++		GuestOSVersion:               guestOSVersion,
++		GuestOSBuildVersion:          guestOSBuildVersion,
+ 	}
+ 
+ 	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
+diff --git pkg/cidata/template.go pkg/cidata/template.go
+index 2cfcdb7b..74dee89a 100644
+--- pkg/cidata/template.go
++++ pkg/cidata/template.go
+@@ -139,6 +139,8 @@ type TemplateArgs struct {
+ 	TPM                             bool
+ 	SuppressFirstLoginSetup         bool
+ 	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
++	GuestOSVersion                  string // macOS guests only: restore-image OS version, e.g. "27.0.0"; empty otherwise
++	GuestOSBuildVersion             string // macOS guests only: restore-image build, e.g. "26A5425a"; empty otherwise
+ }
+ 
+ func (t *TemplateArgs) generateWindowsInitialPassword() error {
+diff --git pkg/cidata/template_test.go pkg/cidata/template_test.go
+index c7d5fb94..2b064341 100644
+--- pkg/cidata/template_test.go
++++ pkg/cidata/template_test.go
+@@ -172,6 +172,47 @@ func TestTemplate9p(t *testing.T) {
+ 	}
+ }
+ 
++func TestTemplateGuestOSVersion(t *testing.T) {
++	args := &TemplateArgs{
++		Name:                "default",
++		User:                "foo",
++		UID:                 501,
++		Home:                "/home/foo.guest",
++		Shell:               "/bin/bash",
++		SSHPubKeys:          []string{"ssh-rsa dummy foo@example.com"},
++		MountType:           "reverse-sshfs",
++		OS:                  "Darwin",
++		GuestOSVersion:      "27.0.0",
++		GuestOSBuildVersion: "26A5425a",
++	}
++	layout, err := ExecuteTemplateCIDataISO(args)
++	assert.NilError(t, err)
++	files := make(map[string]string)
++	for _, f := range layout {
++		b, err := io.ReadAll(f.Reader)
++		assert.NilError(t, err)
++		files[f.Path] = string(b)
++	}
++	assert.Assert(t, strings.Contains(files["lima.env"], "LIMA_CIDATA_GUEST_OS_VERSION=27.0.0\n"))
++	assert.Assert(t, strings.Contains(files["lima.env"], "LIMA_CIDATA_GUEST_OS_BUILD_VERSION=26A5425a\n"))
++
++	// The two vars must always be emitted (empty) so downstream scripts can rely
++	// on them existing, matching how the other optional LIMA_CIDATA_* vars behave.
++	args.GuestOSVersion = ""
++	args.GuestOSBuildVersion = ""
++	layout, err = ExecuteTemplateCIDataISO(args)
++	assert.NilError(t, err)
++	for _, f := range layout {
++		if f.Path != "lima.env" {
++			continue
++		}
++		b, err := io.ReadAll(f.Reader)
++		assert.NilError(t, err)
++		assert.Assert(t, strings.Contains(string(b), "LIMA_CIDATA_GUEST_OS_VERSION=\n"))
++		assert.Assert(t, strings.Contains(string(b), "LIMA_CIDATA_GUEST_OS_BUILD_VERSION=\n"))
++	}
++}
++
+ // TestTemplateNICRename is a regression test for
+ // https://github.com/lima-vm/lima/issues/4792 (Ubuntu 26.04 first-boot NIC
+ // rename race, LP: #2136392): user-data must contain the rename/wait bootcmd,
 diff --git pkg/driver/vz/vm_darwin_arm64.go pkg/driver/vz/vm_darwin_arm64.go
-index 0a3fc0b6..23f8fc2d 100644
+index 0a3fc0b6..0dab35e0 100644
 --- pkg/driver/vz/vm_darwin_arm64.go
 +++ pkg/driver/vz/vm_darwin_arm64.go
-@@ -65,6 +65,11 @@ func newMacPlatformConfiguration(inst *limatype.Instance) (vz.PlatformConfigurat
+@@ -65,6 +65,21 @@ func newMacPlatformConfiguration(inst *limatype.Instance) (vz.PlatformConfigurat
  		if err != nil {
  			return nil, err
  		}
-+		// The restore image carries the guest's macOS version and build number.
-+		// Lima only consumes the hardware model below, but log the version too so
-+		// it is visible in `limactl create` output; nothing branches on it yet.
-+		logrus.Infof("Guest macOS restore image: version %s, build %s",
-+			ipswImage.OperatingSystemVersion(), ipswImage.BuildVersion())
++		// The restore image also carries the guest's macOS version and build
++		// number. Lima consumes only the hardware model below, but persist the
++		// version next to vz-hwmodel (both are written once, here, at create
++		// time) so boot and provision scripts can read it via
++		// LIMA_CIDATA_GUEST_OS_VERSION / _BUILD_VERSION without calling sw_vers.
++		// Best-effort: a write failure here must not abort VM creation.
++		osVersion := ipswImage.OperatingSystemVersion().String()
++		buildVersion := ipswImage.BuildVersion()
++		logrus.Infof("Guest macOS restore image: version %s, build %s", osVersion, buildVersion)
++		if werr := os.WriteFile(filepath.Join(inst.Dir, filenames.VzGuestOSVersion), []byte(osVersion+"\n"), 0o444); werr != nil {
++			logrus.WithError(werr).Warnf("Failed to write %s", filenames.VzGuestOSVersion)
++		}
++		if werr := os.WriteFile(filepath.Join(inst.Dir, filenames.VzGuestOSBuildVersion), []byte(buildVersion+"\n"), 0o444); werr != nil {
++			logrus.WithError(werr).Warnf("Failed to write %s", filenames.VzGuestOSBuildVersion)
++		}
  		ipswMostFeatureFul := ipswImage.MostFeaturefulSupportedConfiguration()
  		hwModelData = ipswMostFeatureFul.HardwareModel().DataRepresentation()
  		if err = os.WriteFile(hwModelFile, hwModelData, 0o666); err != nil {
+diff --git pkg/limatype/filenames/filenames.go pkg/limatype/filenames/filenames.go
+index 3cad6081..6af8dde1 100644
+--- pkg/limatype/filenames/filenames.go
++++ pkg/limatype/filenames/filenames.go
+@@ -67,10 +67,12 @@ const (
+ 	ExternalDriverStderrLog = "driver.stderr.log"
+ 	BootSession             = "boot-session.tmp" // boot of the host during which the PID files in the same directory were written
+ 	VzIdentifier            = "vz-identifier"
+-	VzHwModel               = "vz-hwmodel"       // macOS guests only
+-	VzAux                   = "vz-aux"           // macOS guests only
+-	VzEfi                   = "vz-efi"           // efi variable store
+-	QemuEfiCodeFD           = "qemu-efi-code.fd" // efi code; not always created
++	VzHwModel               = "vz-hwmodel"                // macOS guests only
++	VzGuestOSVersion        = "vz-guest-os-version"       // macOS guests only; restore-image OS version, e.g. "27.0.0"
++	VzGuestOSBuildVersion   = "vz-guest-os-build-version" // macOS guests only; restore-image build, e.g. "26A5425a"
++	VzAux                   = "vz-aux"                    // macOS guests only
++	VzEfi                   = "vz-efi"                    // efi variable store
++	QemuEfiCodeFD           = "qemu-efi-code.fd"          // efi code; not always created
+ 	AnsibleInventoryYAML    = "ansible-inventory.yaml"
+ 
+ 	// SocketDir is the default location for forwarded sockets with a relative paths in HostSocket.
+diff --git website/content/en/docs/dev/internals.md website/content/en/docs/dev/internals.md
+index fc293f44..c87a265b 100644
+--- website/content/en/docs/dev/internals.md
++++ website/content/en/docs/dev/internals.md
+@@ -69,6 +69,8 @@ VZ:
+ - `vz.pid`: VZ PID
+ - `vz-identifier`: Unique machine identifier file for a VM
+ - `vz-hwmodel`: Hardware model information for a Mac VM
++- `vz-guest-os-version`: macOS version of the restore image a Mac VM was created from, e.g. `27.0.0` (written once, at create time)
++- `vz-guest-os-build-version`: build number of that restore image, e.g. `26A5425a`
+ - `vz-aux`: Auxiliary storage for a Mac VM
+ - `vz-efi`: EFIVariable store file for a VM
+ 
+@@ -227,6 +229,8 @@ The volume label is "cidata", as defined by [cloud-init NoCloud](https://docs.cl
+ - `LIMA_CIDATA_ROSETTA_BINFMT`: set to "true" if the guest should register the Rosetta binfmt_misc handler at boot.
+ - `LIMA_CIDATA_SKIP_DEFAULT_DEPENDENCY_RESOLUTION`: set to "1" to skip Lima's built-in package dependency resolution during provisioning, empty otherwise.
+ - `LIMA_CIDATA_VMTYPE`: the VM driver type ("qemu", "vz", "wsl2", ...), used to conditionally enable VM-specific behavior (e.g. virtiofs mounts on `vz`).
++- `LIMA_CIDATA_GUEST_OS_VERSION`: for macOS guests on the `vz` driver, the macOS version of the restore image the instance was created from, e.g. `27.0.0`. Empty for other guests and for instances created before this was recorded.
++- `LIMA_CIDATA_GUEST_OS_BUILD_VERSION`: the corresponding build number, e.g. `26A5425a`. Empty in the same cases.
+ - `LIMA_CIDATA_VSOCK_PORT`: the vsock port used by the guest agent (0 when vsock is not used).
+ - `LIMA_CIDATA_VIRTIO_PORT`: the virtio-serial port name used by the guest agent (empty when virtio-serial is not used).
+ - `LIMA_CIDATA_PLAIN`: set to "1" when the instance is in [plain mode](../config/plain.md) (no mounts, port forwarding, or containerd), empty otherwise.
