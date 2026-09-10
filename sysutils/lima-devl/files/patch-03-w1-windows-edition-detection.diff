@@ -1,8 +1,8 @@
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index b1d33390..0b6c132e 100644
+index f42f4a0d..0fa938a0 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -600,8 +600,21 @@ func GenerateWindowsISO(ctx context.Context, instDir, name string, instConfig *l
+@@ -623,8 +623,21 @@ func GenerateWindowsISO(ctx context.Context, instDir, name string, instConfig *l
  		return "", err
  	}
  
@@ -27,7 +27,7 @@ index b1d33390..0b6c132e 100644
  	}
  
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index 22b8a3a8..e514b72a 100644
+index 2cfcdb7b..0c7a30b3 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
 @@ -9,17 +9,21 @@ import (
@@ -69,9 +69,9 @@ index 22b8a3a8..e514b72a 100644
  	IsWindowsServer                 bool
 +	ImageIndex                      int
  	TPM                             bool
- }
- 
-@@ -151,19 +152,151 @@ func (t *TemplateArgs) generateWindowsInitialPassword() error {
+ 	SuppressFirstLoginSetup         bool
+ 	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
+@@ -153,19 +154,151 @@ func (t *TemplateArgs) generateWindowsInitialPassword() error {
  	return nil
  }
  
@@ -481,7 +481,7 @@ index 00000000..10b59e0c
 +	}
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index ac0e63b7..ebf93d37 100644
+index f0d53fb2..b40b0bd1 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
 @@ -355,6 +355,20 @@ type OsOpts map[OS]any
@@ -504,7 +504,7 @@ index ac0e63b7..ebf93d37 100644
 +	InstallationType *string `yaml:"installationType,omitempty" json:"installationType,omitempty" jsonschema:"nullable"`
  }
  
- func NewOS(osname string) OS {
+ type DarwinOpts struct {
 diff --git pkg/udfutil/testdata/gen/main.go pkg/udfutil/testdata/gen/main.go
 new file mode 100644
 index 00000000..ee5c8288

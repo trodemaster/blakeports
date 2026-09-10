@@ -1,20 +1,25 @@
 # lima-devl — Upstream PR & Port Tracking
 
 Status of feature patches carried by this port and their upstream submission.
-Patch revs: see `b1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no `b4_rev`).
+Patch revs: see `w1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no `b4_rev`).
 
 ## Feature status
 
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
-| B1 (`patch-05`) | `suppressFirstLoginSetup` | **PR #5336 open** (Issue #5186) — addressing review feedback |
-| B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (depends on B1) |
-| B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11); depends on B1 |
+| B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
+| B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
+| W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`) | carried in port; not yet submitted upstream |
 
 `patch-01-g1-thread-pin.diff` merged upstream in PR #5036 and removed from port.
 `patch-02-g4-window-title.diff` merged upstream in PR #5084 and removed from port.
 `patch-04-g3-screenshot.diff` merged upstream in PR #5098 (2026-06-28) and removed from port.
+`patch-05-b1-fakecloudinit.diff` (`suppressFirstLoginSetup`, Issue #5186) merged upstream in
+PR #5336 (2026-09-10, merge commit `19e75908`) and removed from port; `b1_rev` dropped and the
+`upstream-pr/b1-fakecloudinit-clean` branch deleted locally (still present on `trodemaster` —
+delete from the fork). B2/M1 no longer stack on a local B1 branch; their own commits now rebase
+straight onto `origin/master`.
 `patch-08-b3-dfu-beta27.diff` (DFU install workaround) removed 2026-07-25 — host reached
 macOS 26.6, confirmed via a real throwaway-instance test that the standard `VZMacOSInstaller`
 path no longer hits `VZErrorDomain Code=10007`; `b3_rev` and the `upstream-pr/b3-dfu-beta27`
@@ -31,8 +36,8 @@ it. Was disabled in the Portfile the whole time. `upstream-pr/o1-pid-timeout` br
 ```
 patch-Makefile.diff
 patch-usrlocalgo.diff
-patch-05-b1-fakecloudinit.diff       ← upstream candidate
-patch-06-b2-tcc.diff                 ← upstream candidate (depends on B1)
+patch-03-w1-windows-edition-detection.diff  ← carried in port
+patch-06-b2-tcc.diff                 ← upstream candidate (B1 dependency merged)
 patch-09-m1-fakecloudinit-macos27.diff  ← macOS 27-beta workaround, NOT upstream
 ```
 
