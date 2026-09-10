@@ -15,7 +15,7 @@ homepage            https://lima-vm.io
 set w1_rev  4
 set b1_rev  10
 set b2_rev  10
-set m1_rev  4
+set m1_rev  5
 
 description         Lima ${version} | W1:r${w1_rev} B1:r${b1_rev} B2:r${b2_rev} M1:r${m1_rev} | off: B4 (G1, G3, G4 upstream)
 
