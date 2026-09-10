@@ -194,7 +194,10 @@ jobs:
       - name: Lint Go (golangci-lint)
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.12.2
+          # v2.13.0 added Go 1.27 support (golangci/golangci-lint#6642); the
+          # macOS runners' MacPorts go is now 1.27, which v2.12.2 can't typecheck.
+          # Matches the version upstream lima pins in hack/tools/go.mod.
+          version: v2.13.2
           working-directory: ${{ env.LIMA_SRCDIR }}
         env:
           GOPATH: ${{ env.LIMA_GOPATH }}
