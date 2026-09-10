@@ -481,10 +481,10 @@ index 00000000..10b59e0c
 +	}
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index ca1fae32..e1b124eb 100644
+index ac0e63b7..ebf93d37 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -351,6 +351,20 @@ type OsOpts map[OS]any
+@@ -355,6 +355,20 @@ type OsOpts map[OS]any
  
  type WindowsOpts struct {
  	VirtioWin []File `yaml:"virtioWin,omitempty" json:"virtioWin,omitempty"`

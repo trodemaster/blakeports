@@ -232,10 +232,10 @@ index 249d1510..5a0dd403 100644
  	logrus.Infof("Executing command: %v", cmd.Args)
  	if output, err := cmd.CombinedOutput(); err != nil {
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index ca1fae32..74d883b7 100644
+index ac0e63b7..f0d53fb2 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -353,6 +353,14 @@ type WindowsOpts struct {
+@@ -357,6 +357,14 @@ type WindowsOpts struct {
  	VirtioWin []File `yaml:"virtioWin,omitempty" json:"virtioWin,omitempty"`
  }
  

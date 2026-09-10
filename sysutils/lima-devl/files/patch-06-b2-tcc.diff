@@ -462,7 +462,7 @@ index 00000000..c7f417a0
 +	return strings.Join(names, ", ")
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 74d883b7..082789b5 100644
+index f0d53fb2..8669cffe 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
 @@ -126,8 +126,23 @@ type QEMUOpts struct {
