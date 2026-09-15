@@ -1,0 +1,11 @@
+--- hw/tpm/tpm_tis_sysbus.c.orig
++++ hw/tpm/tpm_tis_sysbus.c
+@@ -94,7 +94,7 @@
+ static const Property tpm_tis_sysbus_properties[] = {
+     DEFINE_PROP_UINT32("irq", TPMStateSysBus, state.irq_num, TPM_TIS_IRQ),
+     DEFINE_PROP_TPMBE("tpmdev", TPMStateSysBus, state.be_driver),
+-    DEFINE_PROP_BOOL("ppi", TPMStateSysBus, state.ppi_enabled, true),
++    DEFINE_PROP_BOOL("ppi", TPMStateSysBus, state.ppi_enabled, false),
+ };
+
+ static void tpm_tis_sysbus_initfn(Object *obj)
