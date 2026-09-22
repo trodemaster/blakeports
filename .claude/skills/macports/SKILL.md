@@ -43,8 +43,24 @@ SourceForge SVN release RSS, which livecheck does not do. In a Portfile:
 
 ### 2. Testing a Port
 
-Standard test sequence for any port modification:
+**Prefer CI over local builds for verification.** Run `portindex` and `port lint
+--nitpick <portname>` locally (fast, no build), update checksums locally (required to
+even fetch the source), then push and trigger the `Build <portname>` GitHub Actions
+workflow rather than running `sudo port install -sv <portname>` on this machine:
 
+```bash
+portindex                                # Regenerate port index
+port lint --nitpick <portname>           # Strict compliance check
+git add <portname-portfile> && git commit -m "..." && git push
+gh workflow run "Build <Portname>"       # e.g. "Build netatalk"
+gh run watch                             # or: gh run list -L 5
+```
+
+Reserve a local `sudo port install -sv <portname>` for when CI itself is failing and
+you need to reproduce/debug the failure interactively on this machine — not as the
+default verification step for an ordinary version bump.
+
+Local test sequence (only when actually debugging on this machine):
 ```bash
 portindex                                # Regenerate port index
 port lint --nitpick <portname>           # Strict compliance check
@@ -599,3 +615,29 @@ Execute without reading into context for efficiency.
     - Reset `revision` to 0 whenever `version` or `epoch` increases.
 25. **Use path-style dependencies (`path:file:portname`) for `pkgconfig` and `glib2`** — `path:bin/pkg-config:pkgconfig` and `path:lib/pkgconfig/glib-2.0.pc:glib2`, not `port:pkgconfig`/`port:glib2`. This is the dominant convention across macports-ports and what reviewers (e.g. reneeotten) flag in review. See [portfile-syntax.md](references/portfile-syntax.md#dependencies) for the mechanism and rationale.
 26. **Don't manually declare `depends_build` for autoconf/automake/libtool when `use_autoreconf`/`use_autoconf`/`use_automake` is set** — MacPorts base (`portconfigure.tcl`) adds those deps automatically. Manually listing them is redundant and gets flagged in review.
+27. **Prefer CI (`gh workflow run "Build <Portname>"`) over local `sudo port install`
+    for verifying a version bump or Portfile change.** Local builds tie up this
+    machine and don't match the runner matrix; push and let CI build across all
+    configured platforms. Only build locally when actively debugging a CI failure
+    that needs interactive reproduction.
+28. **Prefer `compiler.blacklist-append {clang < N}` over hardcoding `configure.compiler`**
+    to a specific toolchain (e.g. `macports-clang-11`) when the real requirement is
+    "system clang below version X lacks feature Y." The blacklist lets MacPorts' own
+    fallback chain pick a working replacement instead of pinning one exact compiler —
+    the idiomatic pattern across macports-ports and what reviewers flag in review
+    (e.g. netatalk PR #34827, replacing a 10.7-10.9 `os.major` version check + pinned
+    `macports-clang-11` with `compiler.blacklist-append {clang < 700}`).
+29. **Keep Portfile comments terse** — state the fact and the reason in one line, not
+    a multi-line paragraph. A reviewer or future editor can find the full story in the
+    commit message or PR discussion; the inline comment only needs to answer "why is
+    this line here."
+30. **blakeports' `Build <Portname>` workflow has one `workflow_dispatch` boolean input
+    per platform** — `run_macos26`, `run_macos27_beta`, `run_macos15`, `run_leopard_ppc`,
+    `run_leopard`, `run_snowleopard`, `run_lion`, `run_mountainlion`, `run_mavericks`,
+    `run_yosemite`, `run_elcapitan` — there is no single `run_legacy` flag. Pass `-f` for
+    each platform you want to include, e.g.:
+    ```bash
+    gh workflow run "Build netatalk" \
+      -f run_leopard_ppc=true -f run_leopard=true -f run_snowleopard=true \
+      -f run_lion=true -f run_mountainlion=true -f run_mavericks=true
+    ```
