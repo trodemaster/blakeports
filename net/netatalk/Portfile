@@ -24,11 +24,7 @@ if {${subport} eq ${name}} {
 
     compiler.c_standard 2011
 
-    # Apple's system clang below clang-700 (e.g. clang-425/503 on macOS
-    # 10.7-10.9) advertises C11 but ships no <stdatomic.h>, which netatalk
-    # 4.x needs for its lock-free worker queues; MacPorts base's C11
-    # capability check does not catch this. Blacklist it so the standard
-    # compiler fallback chain picks a working replacement.
+    # pre-700 system clang lacks <stdatomic.h>, needed by netatalk 4.x
     compiler.blacklist-append {clang < 700}
 
     checksums       rmd160  a5c6193b994fc2d7028bc329c031dea4d291b41f \
