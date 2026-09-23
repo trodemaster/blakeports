@@ -59,10 +59,24 @@ index 2cfcdb7b..74dee89a 100644
  
  func (t *TemplateArgs) generateWindowsInitialPassword() error {
 diff --git pkg/cidata/template_test.go pkg/cidata/template_test.go
-index c7d5fb94..6eb3227c 100644
+index c7d5fb94..9a301dea 100644
 --- pkg/cidata/template_test.go
 +++ pkg/cidata/template_test.go
-@@ -172,6 +172,46 @@ func TestTemplate9p(t *testing.T) {
+@@ -6,11 +6,13 @@ package cidata
+ import (
+ 	"fmt"
+ 	"io"
++	"slices"
+ 	"strings"
+ 	"testing"
+ 
+ 	"gotest.tools/v3/assert"
+ 
++	"github.com/lima-vm/lima/v2/pkg/iso9660util"
+ 	"github.com/lima-vm/lima/v2/pkg/limatype"
+ )
+ 
+@@ -172,6 +174,42 @@ func TestTemplate9p(t *testing.T) {
  	}
  }
  
@@ -95,15 +109,11 @@ index c7d5fb94..6eb3227c 100644
 +	t.Helper()
 +	layout, err := ExecuteTemplateCIDataISO(args)
 +	assert.NilError(t, err)
-+	for _, f := range layout {
-+		if f.Path == "lima.env" {
-+			b, err := io.ReadAll(f.Reader)
-+			assert.NilError(t, err)
-+			return string(b)
-+		}
-+	}
-+	t.Fatal("lima.env not found in cidata layout")
-+	return ""
++	idx := slices.IndexFunc(layout, func(f iso9660util.Entry) bool { return f.Path == "lima.env" })
++	assert.Assert(t, idx >= 0, "lima.env not found in cidata layout")
++	b, err := io.ReadAll(layout[idx].Reader)
++	assert.NilError(t, err)
++	return string(b)
 +}
 +
  // TestTemplateNICRename is a regression test for
