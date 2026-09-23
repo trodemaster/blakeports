@@ -46,7 +46,7 @@ index f42f4a0d..ec3d8b51 100644
  
  	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index 2cfcdb7b..74dee89a 100644
+index 2cfcdb7b..bfad6be9 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
 @@ -139,6 +139,8 @@ type TemplateArgs struct {
@@ -54,12 +54,12 @@ index 2cfcdb7b..74dee89a 100644
  	SuppressFirstLoginSetup         bool
  	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
 +	GuestOSVersion                  string // macOS guests only: restore-image OS version, e.g. "27.0.0"; empty otherwise
-+	GuestOSBuildVersion             string // macOS guests only: restore-image build, e.g. "26A5425a"; empty otherwise
++	GuestOSBuildVersion             string // macOS guests only: restore-image build, e.g. "26A428"; empty otherwise
  }
  
  func (t *TemplateArgs) generateWindowsInitialPassword() error {
 diff --git pkg/cidata/template_test.go pkg/cidata/template_test.go
-index c7d5fb94..9a301dea 100644
+index c7d5fb94..890270a6 100644
 --- pkg/cidata/template_test.go
 +++ pkg/cidata/template_test.go
 @@ -6,11 +6,13 @@ package cidata
@@ -91,11 +91,11 @@ index c7d5fb94..9a301dea 100644
 +		MountType:           "reverse-sshfs",
 +		OS:                  "Darwin",
 +		GuestOSVersion:      "27.0.0",
-+		GuestOSBuildVersion: "26A5425a",
++		GuestOSBuildVersion: "26A428",
 +	}
 +	limaEnv := renderLimaEnv(t, args)
 +	assert.Assert(t, strings.Contains(limaEnv, "LIMA_CIDATA_GUEST_OS_VERSION=27.0.0\n"))
-+	assert.Assert(t, strings.Contains(limaEnv, "LIMA_CIDATA_GUEST_OS_BUILD_VERSION=26A5425a\n"))
++	assert.Assert(t, strings.Contains(limaEnv, "LIMA_CIDATA_GUEST_OS_BUILD_VERSION=26A428\n"))
 +
 +	// Emitted empty when unknown, like the other optional LIMA_CIDATA_* vars.
 +	args.GuestOSVersion = ""
@@ -142,7 +142,7 @@ index 0a3fc0b6..2d4ff936 100644
  		hwModelData = ipswMostFeatureFul.HardwareModel().DataRepresentation()
  		if err = os.WriteFile(hwModelFile, hwModelData, 0o666); err != nil {
 diff --git pkg/limatype/filenames/filenames.go pkg/limatype/filenames/filenames.go
-index 3cad6081..6af8dde1 100644
+index 3cad6081..bc1c0121 100644
 --- pkg/limatype/filenames/filenames.go
 +++ pkg/limatype/filenames/filenames.go
 @@ -67,10 +67,12 @@ const (
@@ -155,7 +155,7 @@ index 3cad6081..6af8dde1 100644
 -	QemuEfiCodeFD           = "qemu-efi-code.fd" // efi code; not always created
 +	VzHwModel               = "vz-hwmodel"                // macOS guests only
 +	VzGuestOSVersion        = "vz-guest-os-version"       // macOS guests only; restore-image OS version, e.g. "27.0.0"
-+	VzGuestOSBuildVersion   = "vz-guest-os-build-version" // macOS guests only; restore-image build, e.g. "26A5425a"
++	VzGuestOSBuildVersion   = "vz-guest-os-build-version" // macOS guests only; restore-image build, e.g. "26A428"
 +	VzAux                   = "vz-aux"                    // macOS guests only
 +	VzEfi                   = "vz-efi"                    // efi variable store
 +	QemuEfiCodeFD           = "qemu-efi-code.fd"          // efi code; not always created
@@ -164,7 +164,7 @@ index 3cad6081..6af8dde1 100644
  	// SocketDir is the default location for forwarded sockets with a relative paths in HostSocket.
 diff --git pkg/store/guestos.go pkg/store/guestos.go
 new file mode 100644
-index 00000000..9c99ce61
+index 00000000..cc682453
 --- /dev/null
 +++ pkg/store/guestos.go
 @@ -0,0 +1,35 @@
@@ -185,7 +185,7 @@ index 00000000..9c99ce61
 +)
 +
 +// ReadGuestOSVersion returns the macOS version (e.g. "27.0.0") and build
-+// version (e.g. "26A5425a") of the restore image that a macOS guest on the vz
++// version (e.g. "26A428") of the restore image that a macOS guest on the vz
 +// driver was installed from. Both are empty when unknown: for non-macOS guests,
 +// and for instances installed before the version was recorded.
 +func ReadGuestOSVersion(instDir string) (version, buildVersion string) {
@@ -205,7 +205,7 @@ index 00000000..9c99ce61
 +}
 diff --git pkg/store/guestos_test.go pkg/store/guestos_test.go
 new file mode 100644
-index 00000000..23ee7b02
+index 00000000..1eba5f6d
 --- /dev/null
 +++ pkg/store/guestos_test.go
 @@ -0,0 +1,28 @@
@@ -232,13 +232,13 @@ index 00000000..23ee7b02
 +	assert.Equal(t, buildVersion, "")
 +
 +	assert.NilError(t, os.WriteFile(filepath.Join(instDir, filenames.VzGuestOSVersion), []byte("27.0.0\n"), 0o644))
-+	assert.NilError(t, os.WriteFile(filepath.Join(instDir, filenames.VzGuestOSBuildVersion), []byte("26A5425a\n"), 0o644))
++	assert.NilError(t, os.WriteFile(filepath.Join(instDir, filenames.VzGuestOSBuildVersion), []byte("26A428\n"), 0o644))
 +	version, buildVersion = ReadGuestOSVersion(instDir)
 +	assert.Equal(t, version, "27.0.0")
-+	assert.Equal(t, buildVersion, "26A5425a")
++	assert.Equal(t, buildVersion, "26A428")
 +}
 diff --git website/content/en/docs/dev/internals.md website/content/en/docs/dev/internals.md
-index fc293f44..3408c681 100644
+index fc293f44..fe8e945d 100644
 --- website/content/en/docs/dev/internals.md
 +++ website/content/en/docs/dev/internals.md
 @@ -69,6 +69,8 @@ VZ:
@@ -246,7 +246,7 @@ index fc293f44..3408c681 100644
  - `vz-identifier`: Unique machine identifier file for a VM
  - `vz-hwmodel`: Hardware model information for a Mac VM
 +- `vz-guest-os-version`: macOS version of the restore image a Mac VM was created from, e.g. `27.0.0` (written once, at create time)
-+- `vz-guest-os-build-version`: build number of that restore image, e.g. `26A5425a`
++- `vz-guest-os-build-version`: build number of that restore image, e.g. `26A428`
  - `vz-aux`: Auxiliary storage for a Mac VM
  - `vz-efi`: EFIVariable store file for a VM
  
@@ -255,7 +255,7 @@ index fc293f44..3408c681 100644
  - `LIMA_CIDATA_VSOCK_PORT`: the vsock port used by the guest agent (0 when vsock is not used).
  - `LIMA_CIDATA_VIRTIO_PORT`: the virtio-serial port name used by the guest agent (empty when virtio-serial is not used).
 +- `LIMA_CIDATA_GUEST_OS_VERSION`: for macOS guests on the `vz` driver, the macOS version of the restore image the instance was created from, e.g. `27.0.0`. Empty for other guests and for instances created before this was recorded.
-+- `LIMA_CIDATA_GUEST_OS_BUILD_VERSION`: the corresponding build number, e.g. `26A5425a`. Empty in the same cases.
++- `LIMA_CIDATA_GUEST_OS_BUILD_VERSION`: the corresponding build number, e.g. `26A428`. Empty in the same cases.
  - `LIMA_CIDATA_PLAIN`: set to "1" when the instance is in [plain mode](../config/plain.md) (no mounts, port forwarding, or containerd), empty otherwise.
  - `LIMA_CIDATA_NO_CLOUD_INIT`: set to "1" if cloud-init should be skipped on this boot, empty otherwise.
  
