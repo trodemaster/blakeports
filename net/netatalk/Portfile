@@ -27,13 +27,10 @@ if {${subport} eq ${name}} {
     # pre-700 system clang lacks <stdatomic.h>, needed by netatalk 4.x
     compiler.blacklist-append {clang < 700}
 
-    # nad_ls.c's scandir comparator trips clang 15+'s default-error
-    # -Wincompatible-function-pointer-types on the fallback compiler the
-    # blacklist above pulls in on 10.9 and earlier. 10.10+ system clang
-    # doesn't even recognize the diagnostic name, so scope this to it.
-    if {${os.platform} eq "darwin" && ${os.major} <= 13} {
-        configure.cflags-append -Wno-error=incompatible-function-pointer-types
-    }
+    # nad_ls.c's scandir comparator trips -Wincompatible-pointer-types
+    # (default-error on clang 15+); portable across clang/gcc, unlike the
+    # narrower -function- variant
+    configure.cflags-append -Wno-error=incompatible-pointer-types
 
     checksums       rmd160  a5c6193b994fc2d7028bc329c031dea4d291b41f \
                     sha256  5d5756c55935df84098cfb5a2c3a90b8864a46d3c1671aa164481bced0724add \
