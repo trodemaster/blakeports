@@ -641,3 +641,14 @@ Execute without reading into context for efficiency.
       -f run_leopard_ppc=true -f run_leopard=true -f run_snowleopard=true \
       -f run_lion=true -f run_mountainlion=true -f run_mavericks=true
     ```
+31. **`-Wno-error=incompatible-pointer-types`, not the `-function-` variant** — the
+    `-function-` form is clang-only and breaks on gcc and on old clang that predates
+    the diagnostic name (unknown-flag error, not just an ignored warning). The
+    non-`-function-` form is older, portable across clang/gcc, and needs no
+    compiler/platform guard. Precedent: `graphics/feh/Portfile` hits the identical
+    `scandir`-comparator error and fixes it this way, unconditionally.
+32. **Don't trust a third-party fork's Portfile "fix" without checking it does
+    something** — a suggested fix borrowed from a community fork (e.g.
+    macos-powerpc/powerpc-ports) may define a macro or flag that the upstream
+    source doesn't actually reference. Grep the real upstream source for the
+    macro/guard before adopting; a plausible-looking define can be a no-op.
