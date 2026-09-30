@@ -216,8 +216,75 @@ Closes: https://trac.macports.org/ticket/12345
 12. Draft PR description using the official template with CI-sourced system info
 13. **SHOW PR description to user — STOP and wait for explicit approval before proceeding**
 14. Create PR only after approval: `gh pr create --repo macports/macports-ports`
-15. If reviewer feedback requires changes: apply fix to blakeports → run CI (both modern and legacy runners) → verify all passing → THEN amend commit and force push to macports-ports
+15. If reviewer feedback requires changes: follow [Handling Review Feedback](#handling-review-feedback) below — fix in blakeports, CI green, amend + force push with the commit message and PR text untouched, reply with a diff, then resolve
 16. If PR doesn't receive attention within a few days, email macports-dev@lists.macports.org
+
+#### Handling Review Feedback
+
+**Classify the reviewer first:**
+- **Committer** — MacPorts project member with merge rights (e.g. reneeotten). Their `CHANGES_REQUESTED` blocks the PR: fix every thread (or give a technical reason they accept), then re-request their review after the force push: `gh pr edit <n> --repo macports/macports-ports --add-reviewer <user>`.
+- **Read-only** — contributor without commit rights. Advisory, no merge/approval authority, nothing to re-request. Still judge on the merits — they are often right, especially on legacy/PowerPC — but verify the claim against the real source before adopting (best practice 32). Decline with a one-line technical reason when it doesn't hold up.
+
+**Prioritize committer feedback.** Address committer threads first and treat them as blocking; read-only threads come after and are advisory.
+
+**Identifying a committer** — check the list below first; if the reviewer isn't on it, run the recipe. Only committers can merge, so **`mergedBy` is the reliable signal**:
+
+```bash
+# everyone who has merged a recent PR = committers (last ~600 merged PRs ≈ a month)
+gh pr list --repo macports/macports-ports --state merged --limit 600 \
+  --json mergedBy --jq '[.[].mergedBy.login]|unique[]'
+```
+
+Weaker signals — a positive is informative, a negative proves nothing:
+- `author_association == MEMBER` (REST: `gh api repos/macports/macports-ports/pulls/<n>/reviews` or `.../pulls`) marks *public* org members only. Private members read as `CONTRIBUTOR` (reneeotten does, and she merges most PRs). Not exposed by `gh pr list --json`.
+- `gh api orgs/macports/public_members` — public members only.
+- The [MacPortsDevelopers](https://trac.macports.org/wiki/MacPortsDevelopers) Trac wiki page is the official commit-access list, but stale (unmaintained for years; lacks reneeotten) and behind an Anubis bot check, so it needs a real browser.
+- `collaborators/<user>/permission` needs push access (403). Not usable.
+
+If someone is on neither list and hasn't merged, treat them as read-only, and ask the user if it matters.
+
+**Known committers** (verified 2026-09-30 from `mergedBy` over 600 merged PRs, Sept 2026; refresh the list when it looks stale). Ordered by merge count — most active first:
+
+| Committer | Merges | Notes |
+|---|---|---|
+| herbygillot | 314 | |
+| reneeotten | 164 | private org member (reads as `CONTRIBUTOR`); frequent reviewer on Portfile conventions |
+| breun | 64 | |
+| mascguy | 22 | |
+| i0ntempest | 9 | |
+| judaew | 5 | |
+| neverpanic | 5 | |
+| mohd-akram | 4 | |
+| Schamschula, eborisch, markemer, raimue | 2 each | raimue: portmgr (Trac list) |
+| adfernandes, danielluke, easye, l2dy, ryandesign | 1 each | ryandesign: portmgr (Trac list) |
+| jmroot | 0 in sample | portmgr per Trac list (official commit-access list, not from `mergedBy`) |
+
+**Observed read-only** (active reviewers who have not been seen merging as of 2026-09-30): barracuda156, commitmaniac. Their suggestions are often technically good, especially for legacy/PowerPC — evaluate on merit.
+
+**Reply format** — terse and technically dense. No thanks, no restating the comment, no hedging.
+- The diff of what changed goes in the comment: a fenced `diff` block with only the relevant hunk, copied from the actual `git diff` of the pushed change.
+- Then at most 1–2 lines: the reason (only if non-obvious) and a tested-on line.
+- **Never mention blakeports or its CI in anything posted to macports-ports** — no links to blakeports workflow runs, repo, or commits, and no phrases like "CI green". This applies to review replies, top-level comments, PR descriptions and commit messages. To show it was verified, just say you tested the port and **list the OS versions individually, no ranges**: `Tested on macOS 27, macOS 26, OS X 10.11, 10.10, 10.9, 10.8, 10.7, 10.6.` (only the versions that actually passed).
+
+````
+```diff
+-    configure.cflags-append -Wno-error=incompatible-pointer-types
++    if {${os.platform} eq "darwin" && ${os.major} <= 12} {
++        configure.cppflags-append -D_MACPORTS_LEGACY_COMPATIBLE_SCANDIR=1
++    }
+```
+Old-SDK `scandir` signature; legacy-support macro. Tested on macOS 27, macOS 26, OS X 10.11, 10.10, 10.9, 10.8, 10.7, 10.6.
+````
+
+**Order of operations — never reorder:**
+1. Fix in blakeports and commit there.
+2. Run CI on every platform the change touches (modern + legacy when relevant). Wait for all green.
+3. Amend the single upstream commit and force push: `git commit --amend --no-edit`, then `git push --force-with-lease`. **Do not edit the commit message, PR title, or PR description in response to review** — new information goes in a comment. The PR stays one commit.
+4. Show the draft reply comment(s) to the user and STOP for approval.
+5. Post the reply on the thread: `gh api repos/macports/macports-ports/pulls/<n>/comments/<comment_id>/replies -f body="..."`.
+6. Only then resolve the thread: `gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' -f id=<threadId>` (thread ids via `reviewThreads` in a GraphQL PR query).
+
+A thread is resolved only after the fix has passed CI **and** the diff reply is posted. Don't resolve a thread whose suggestion you declined — reply with the reason and leave it for the reviewer. (PR #34827: threads were resolved before the change was verified, and reneeotten had to ask why.)
 
 **For new ports:**
 - Set ticket type to "submission" (if using Trac)
@@ -598,7 +665,7 @@ Execute without reading into context for efficiency.
 16. **Don't mention checksums updates** - always required, redundant
 17. **Don't mention revision numbers** (SVN r1234, git SHA) in commits
 18. **MacPorts PRs must contain exactly ONE commit** - squash or amend if needed
-19. **Feature branches can be force-pushed** - use `--force-with-lease` after amends
+19. **Feature branches can be force-pushed** - use `--force-with-lease` after amends. When responding to review, amend with `--no-edit` and leave the PR title/description alone (see [Handling Review Feedback](#handling-review-feedback))
 20. **Use system libraries in place** - avoid bundling frameworks in MacPorts builds
 21. **`platform darwin` version blocks**: sort highest `os.major` threshold first (affects most systems), down to lowest; merge multiple blocks with the same threshold into one
 22. **Never update the upstream macports-ports PR before CI passes** — always fix in blakeports, run CI, verify green, then amend upstream
@@ -632,7 +699,7 @@ Execute without reading into context for efficiency.
     commit message or PR discussion; the inline comment only needs to answer "why is
     this line here."
 30. **blakeports' `Build <Portname>` workflow has one `workflow_dispatch` boolean input
-    per platform** — `run_macos26`, `run_macos27_beta`, `run_macos15`, `run_leopard_ppc`,
+    per platform** — `run_macos26`, `run_macos27`, `run_macos15`, `run_leopard_ppc`,
     `run_leopard`, `run_snowleopard`, `run_lion`, `run_mountainlion`, `run_mavericks`,
     `run_yosemite`, `run_elcapitan` — there is no single `run_legacy` flag. Pass `-f` for
     each platform you want to include, e.g.:
@@ -647,8 +714,22 @@ Execute without reading into context for efficiency.
     non-`-function-` form is older, portable across clang/gcc, and needs no
     compiler/platform guard. Precedent: `graphics/feh/Portfile` hits the identical
     `scandir`-comparator error and fixes it this way, unconditionally.
+    **But for the `scandir`/`alphasort` comparator error specifically, prefer fixing the
+    signature over silencing it:** with `PortGroup legacysupport 1.1`, add
+    `configure.cppflags-append -D_MACPORTS_LEGACY_COMPATIBLE_SCANDIR=1` for
+    `os.major <= 12` (SDKs before 10.9 have the old signature). The macro is documented
+    in macports-legacy-support's `dirent.h`; precedent `gnome/gnome-desktop-gtk4`
+    (trac #71261) and netatalk. Verified green on 10.6–10.11 + macOS 26/27.
 32. **Don't trust a third-party fork's Portfile "fix" without checking it does
     something** — a suggested fix borrowed from a community fork (e.g.
     macos-powerpc/powerpc-ports) may define a macro or flag that the upstream
     source doesn't actually reference. Grep the real upstream source for the
-    macro/guard before adopting; a plausible-looking define can be a no-op.
+    macro/guard before adopting; a plausible-looking define can be a no-op. Also
+    check glob patterns: `*gcc.4.*` (seen in a suggestion) never matches `gcc-4.2`;
+    use `*gcc-4.*`.
+33. **Review feedback follows [Handling Review Feedback](#handling-review-feedback)** —
+    classify the reviewer (committer vs read-only), reply with a terse diff, and resolve
+    a thread only after the fix passed CI and the reply is posted. Never mention
+    blakeports or its CI runs in posted text — say "Tested on" and list the OS versions. Never edit the commit
+    message or PR description in response to review; amend with `--no-edit`, force push,
+    keep one commit.
