@@ -3,6 +3,10 @@
 PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           openssl 1.0
+PortGroup           legacysupport 1.1
+
+# clock_gettime
+legacysupport.newest_darwin_requires_legacy 15
 
 github.setup        stefanberger libtpms 0.10.2 v
 github.tarball_from archive
@@ -28,6 +32,12 @@ depends_build-append \
 
 use_autoreconf      yes
 
+# clang: error: unrecognized command line option "-fstack-protector-strong"
+# VerifyConfiguration.h:72: error: expected declaration specifiers or '...' before '(' token
+compiler.blacklist-append \
+                    *gcc-4.* {clang < 700}
+
 configure.args-append \
                     --with-openssl \
-                    --with-tpm2
+                    --with-tpm2 \
+                    --disable-silent-rules

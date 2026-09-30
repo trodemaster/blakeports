@@ -3,8 +3,12 @@
 PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           openssl 1.0
+PortGroup           legacysupport 1.1
 
-github.setup        stefanberger swtpm 0.10.1 v
+# clock_gettime
+legacysupport.newest_darwin_requires_legacy 15
+
+github.setup        stefanberger swtpm 0.10.2 v
 github.tarball_from archive
 revision            0
 
@@ -18,9 +22,9 @@ long_description    {*}${description}. swtpm provides TPM 1.2 and TPM 2.0 \
                     emulation with a TCP/IP or Unix domain socket interface, \
                     intended primarily for use with hypervisors such as QEMU.
 
-checksums           rmd160  6de58b85fc0242e49adbf22ba6a9468f0c08980c \
-                    sha256  f8da11cadfed27e26d26c5f58a7b8f2d14d684e691927348906b5891f525c684 \
-                    size    415992
+checksums           rmd160  af729c47e3863fad60becd06b10eb3b8927cf863 \
+                    sha256  f61cf6f1e9bbcb4cefb30b70cafaf1c4df54c6961e65cfa63830e8ad0e220134 \
+                    size    417378
 
 depends_build-append \
                     path:bin/pkg-config:pkgconfig
@@ -32,6 +36,10 @@ depends_lib-append  port:libtpms \
                     port:gmp
 
 use_autoreconf      yes
+
+# clang: error: unrecognized command line option "-fstack-protector-strong"
+compiler.blacklist-append \
+                    *gcc-4.* {clang < 700}
 
 configure.args-append \
                     --with-openssl \

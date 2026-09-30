@@ -29,6 +29,46 @@ on:
         required: false
         default: false
         type: boolean
+      run_leopard_ppc:
+        description: 'Mac OS X 10.5 PPC (Leopard)'
+        required: false
+        default: false
+        type: boolean
+      run_leopard:
+        description: 'Mac OS X 10.5 (Leopard)'
+        required: false
+        default: false
+        type: boolean
+      run_snowleopard:
+        description: 'Mac OS X 10.6 (Snow Leopard)'
+        required: false
+        default: false
+        type: boolean
+      run_lion:
+        description: 'Mac OS X 10.7 (Lion)'
+        required: false
+        default: false
+        type: boolean
+      run_mountainlion:
+        description: 'Mac OS X 10.8 (Mountain Lion)'
+        required: false
+        default: false
+        type: boolean
+      run_mavericks:
+        description: 'Mac OS X 10.9 (Mavericks)'
+        required: false
+        default: false
+        type: boolean
+      run_yosemite:
+        description: 'Mac OS X 10.10 (Yosemite)'
+        required: false
+        default: false
+        type: boolean
+      run_elcapitan:
+        description: 'Mac OS X 10.11 (El Capitan)'
+        required: false
+        default: false
+        type: boolean
 
 defaults:
   run:
@@ -52,6 +92,8 @@ jobs:
             MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"sysutils/swtpm"}'
             FIRST=false
           else
+            # For workflow_dispatch, check individual platform selections
+
             # macOS 15
             if [[ "${{ inputs.run_macos15 }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
@@ -66,10 +108,66 @@ jobs:
               FIRST=false
             fi
 
-            # macOS 26 Beta
+            # macOS 27
             if [[ "${{ inputs.run_macos27 }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
               MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"sysutils/swtpm"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.5 PPC
+            if [[ "${{ inputs.run_leopard_ppc }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"leopard-ppc","runner":["self-hosted","leopard-ppc"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"192.168.0.141","vm_username":"blake","vm_name":"Leopard-PPC","os_version":"10.5","arch":"ppc","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.5
+            if [[ "${{ inputs.run_leopard }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"leopard","runner":["self-hosted","leopard"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Leopard","os_version":"10.5","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.6
+            if [[ "${{ inputs.run_snowleopard }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"snowleopard","runner":["self-hosted","snowleopard"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENSIX_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"SnowLeopard","os_version":"10.6","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.7
+            if [[ "${{ inputs.run_lion }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"lion","runner":["self-hosted","lion"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Lion","os_version":"10.7","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.8
+            if [[ "${{ inputs.run_mountainlion }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"mountainlion","runner":["self-hosted","mountainlion"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENEIGHT_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"MountainLion","os_version":"10.8","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.9
+            if [[ "${{ inputs.run_mavericks }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"mavericks","runner":["self-hosted","mavericks"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENNINE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Mavericks","os_version":"10.9","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.10
+            if [[ "${{ inputs.run_yosemite }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"yosemite","runner":["self-hosted","yosemite"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENTEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Yosemite","os_version":"10.10","timeout":"60"}'
+              FIRST=false
+            fi
+
+            # Mac OS X 10.11
+            if [[ "${{ inputs.run_elcapitan }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"elcapitan","runner":["self-hosted","elcapitan"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENELEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"ElCapitan","os_version":"10.11","timeout":"60"}'
               FIRST=false
             fi
 
@@ -95,16 +193,22 @@ jobs:
       fail-fast: false
 
     steps:
+      #
+      # MODERN PLATFORM STEPS
+      #
       - name: Gather system information
+        if: matrix.type == 'modern'
         id: system-info
         continue-on-error: true
         run: |
           echo "Running on: ${{ matrix.platform }}"
           echo "Building port: swtpm"
           echo "Building from branch: ${{ inputs.branch || github.ref_name }}"
-
+          
+          # Use centralized system info script
           eval $(./scripts/getsysteminfo)
-
+          
+          # Export variables for GitHub Actions
           echo "macos_version=${MACOS_VERSION}" >> $GITHUB_OUTPUT
           echo "macos_major=${MACOS_MAJOR}" >> $GITHUB_OUTPUT
           echo "macos_minor=${MACOS_MINOR}" >> $GITHUB_OUTPUT
@@ -112,58 +216,355 @@ jobs:
           echo "arch=${ARCH}" >> $GITHUB_OUTPUT
           echo "xcode_version=${XCODE_VERSION}" >> $GITHUB_OUTPUT
           echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
-
+          
           echo ""
           echo "System Information:"
-          sw_vers || echo "Could not determine macOS version"
+          sw_vers || echo "⚠️  Could not determine macOS version"
           echo ""
           echo "Xcode Version: ${XCODE_VERSION}"
           echo "Command Line Tools: ${CLT_VERSION}"
           echo "Architecture: ${ARCH}"
 
       - name: Checkout repository
+        if: matrix.type == 'modern'
         uses: actions/checkout@v6
         with:
           ref: ${{ inputs.branch || github.ref }}
 
       - name: Setup MacPorts and BlakePorts Environment
+        if: matrix.type == 'modern'
         run: ./scripts/installmacports
 
       - name: Lint portfile
+        if: matrix.type == 'modern'
         run: |
           source ./setupenv.bash
           port lint --nitpick ${{ matrix.port }}
 
       - name: Clean existing installation
+        if: matrix.type == 'modern'
         run: |
           source ./setupenv.bash
           if port installed swtpm 2>/dev/null | grep -q swtpm; then
             echo "Removing existing swtpm installation..."
-            sudo port uninstall swtpm || true
+            # Uninstall all installed versions (including variants)
+            port installed swtpm | grep -E "^  swtpm @" | awk '{print $1 " " $2}' | while read -r version_spec; do
+              echo "Uninstalling $version_spec..."
+              sudo port uninstall "$version_spec" || true
+            done
             sudo port clean --dist swtpm || true
-            echo "Clean complete"
+            echo "✅ Clean complete"
           else
             echo "No existing swtpm installation found"
           fi
 
       - name: Install dependencies
+        if: matrix.type == 'modern'
         run: ./scripts/install-deps swtpm
 
       - name: Build port
+        if: matrix.type == 'modern'
         run: |
           source ./setupenv.bash
           sudo port -v install swtpm
 
       - name: Verify installation
+        if: matrix.type == 'modern'
         run: |
           source ./setupenv.bash
           port installed swtpm
           /opt/local/bin/swtpm --version
 
       - name: Functional smoke test
+        if: matrix.type == 'modern'
         run: |
           TMPD=$(mktemp -d)
           /opt/local/bin/swtpm socket --tpmstate dir="$TMPD" --ctrl type=tcp,port=12345 --tpm2 -d
           sleep 1
           /opt/local/bin/swtpm_ioctl --tcp 127.0.0.1:12345 -s
           rm -rf "$TMPD"
+
+      #
+      # LEGACY PLATFORM STEPS
+      #
+      - name: Checkout repository (for tarball)
+        if: matrix.type == 'legacy'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Verify VM configuration
+        if: matrix.type == 'legacy'
+        run: |
+          # Read VM configuration from mounted config file
+          CONFIG_FILE="/config/runners.json"
+          
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Error: Config file not found at $CONFIG_FILE"
+            ls -la /config/ 2>/dev/null || echo "  /config directory not accessible"
+            exit 1
+          fi
+          
+          VM_IP=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_ip // empty" "$CONFIG_FILE")
+          VM_USERNAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].vm_user // empty" "$CONFIG_FILE")
+          SSH_KEY_NAME=$(jq -r ".runners[\"${{ matrix.platform }}\"].ssh_key // \"oldmac\"" "$CONFIG_FILE")
+          SSH_KEY_PATH="/config/ssh_keys/${SSH_KEY_NAME}"
+          
+          if [ -z "$VM_IP" ]; then
+            echo "Error: VM IP not set for ${{ matrix.platform }} in config"
+            exit 1
+          fi
+          if [ -z "$VM_USERNAME" ]; then
+            echo "Error: VM username not set for ${{ matrix.platform }} in config"
+            exit 1
+          fi
+          if [ ! -f "$SSH_KEY_PATH" ]; then
+            echo "Error: SSH key not found at $SSH_KEY_PATH"
+            exit 1
+          fi
+          
+          echo "VM_IP=$VM_IP" >> $GITHUB_ENV
+          echo "VM_USERNAME=$VM_USERNAME" >> $GITHUB_ENV
+          echo "SSH_KEY_PATH=$SSH_KEY_PATH" >> $GITHUB_ENV
+          
+          echo "✅ Configuration verified. Will connect to: $VM_USERNAME@$VM_IP"
+
+      - name: Gather system information (legacy VM)
+        if: matrix.type == 'legacy'
+        id: legacy-system-info
+        continue-on-error: true
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set +e
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            echo "=================================================="
+            echo "  Building swtpm on Mac OS X ${{ matrix.os_version }} (${{ matrix.vm_name }})"
+            echo "=================================================="
+            
+            # Use centralized system info script if available
+            if [ -f /Users/blake/code/blakeports/scripts/getsysteminfo ]; then
+              cd /Users/blake/code/blakeports
+              eval $(./scripts/getsysteminfo)
+              echo ""
+              echo "System Information:"
+              sw_vers || echo "⚠️  Could not determine macOS version"
+              echo ""
+              echo "Architecture: ${ARCH}"
+              echo "Xcode Version: ${XCODE_VERSION}"
+              echo "Command Line Tools: ${CLT_VERSION}"
+            else
+              # Fallback to basic detection if script not available
+              sw_vers || echo "⚠️  Could not determine macOS version"
+              echo ""
+              echo "Architecture: $(uname -m 2>/dev/null || echo 'Unknown')"
+              echo ""
+              
+              if command -v xcodebuild &> /dev/null; then
+                echo "Xcode Version:"
+                if xcodebuild -version 2>&1 | head -1; then
+                  : # Success
+                else
+                  echo "⚠️  xcodebuild requires Xcode (only Command Line Tools available)"
+                fi
+              else
+                echo "Xcode: Not installed"
+              fi
+              
+              if [ -f /Library/Developer/CommandLineTools/version.txt ]; then
+                echo "Command Line Tools:"
+                cat /Library/Developer/CommandLineTools/version.txt 2>/dev/null || echo "⚠️  Could not read version"
+              elif [ -d /Applications/Xcode.app ]; then
+                echo "Command Line Tools: Bundled with Xcode"
+              else
+                echo "Command Line Tools: Not found"
+              fi
+            fi
+            
+            echo ""
+            uname -a || echo "⚠️  Could not get system information"
+          EOF
+
+      - name: Download repository tarball
+        if: matrix.type == 'legacy'
+        run: |
+          echo "Downloading blakeports repository..."
+          BRANCH="${{ inputs.branch || 'main' }}"
+          curl -L -o /tmp/blakeports.tar.gz "https://github.com/trodemaster/blakeports/archive/refs/heads/${BRANCH}.tar.gz"
+          echo "✅ Tarball downloaded: $(ls -lh /tmp/blakeports.tar.gz)"
+
+      - name: Transfer tarball to legacy VM
+        if: matrix.type == 'legacy'
+        run: |
+          echo "Transferring tarball to ${{ matrix.vm_name }} VM..."
+          scp -i ${{ env.SSH_KEY_PATH }} \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o HostKeyAlgorithms=+ssh-rsa \
+              -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+              /tmp/blakeports.tar.gz \
+              ${{ env.VM_USERNAME }}@${{ env.VM_IP }}:/tmp/
+          echo "✅ Tarball transferred"
+
+      - name: Extract repository on legacy VM
+        if: matrix.type == 'legacy'
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set -e
+            set -o pipefail
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            echo "Setting up blakeports directory..."
+            mkdir -p /Users/blake/code
+            if [ -d /Users/blake/code/blakeports ]; then
+              echo "Cleaning existing directory..."
+              rm -rf /Users/blake/code/blakeports/*
+              rm -rf /Users/blake/code/blakeports/.[!.]*
+            else
+              mkdir -p /Users/blake/code/blakeports
+            fi
+            cd /Users/blake/code/blakeports
+            echo "Extracting tarball..."
+            tar xzf /tmp/blakeports.tar.gz --strip-components=1
+            rm /tmp/blakeports.tar.gz
+            echo "✅ Repository ready"
+          EOF
+
+      - name: Verify MacPorts and setup environment
+        if: matrix.type == 'legacy'
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set -e
+            set -o pipefail
+            set -x
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            if ! command -v port &> /dev/null; then
+              echo "❌ ERROR: MacPorts not found"
+              exit 1
+            fi
+            port version
+            cd /Users/blake/code/blakeports
+            source ./setupenv.bash
+            portindex
+            echo "✅ MacPorts verified"
+          EOF
+
+      - name: Lint portfile (legacy)
+        if: matrix.type == 'legacy'
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set -e
+            set -o pipefail
+            set -x
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            source ./setupenv.bash
+            
+            # Try lint first, if "Unknown dependency" error occurs, run port selfupdate and retry once
+            LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1) || true
+            echo "$LINT_OUTPUT"
+            
+            if echo "$LINT_OUTPUT" | grep -q "Unknown dependency"; then
+              echo "⚠️  Unknown dependency error - running port selfupdate and retrying..."
+              sudo port selfupdate
+              LINT_OUTPUT=$(port lint --nitpick ${{ matrix.port }} 2>&1)
+              echo "$LINT_OUTPUT"
+            fi
+            
+            if echo "$LINT_OUTPUT" | grep -q "Error:"; then
+              echo "❌ Lint failed"
+              exit 1
+            fi
+            echo "✅ Lint passed"
+          EOF
+
+      - name: Clean existing installation (legacy)
+        if: matrix.type == 'legacy'
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set -e
+            set -o pipefail
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            source ./setupenv.bash
+            if port installed swtpm 2>/dev/null | grep -q swtpm; then
+              echo "Removing existing swtpm installation..."
+              port installed swtpm | grep -E "^  swtpm @" | awk '{print $1 " " $2}' | while read -r version_spec; do
+                echo "Uninstalling $version_spec..."
+                sudo port uninstall "$version_spec" || true
+              done
+              sudo port clean --dist swtpm || true
+            fi
+            echo "✅ Clean complete"
+          EOF
+
+      - name: Install dependencies (legacy)
+        if: matrix.type == 'legacy'
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set -e
+            set -o pipefail
+            set -x
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            ./scripts/install-deps swtpm
+            echo "✅ Dependencies installed"
+          EOF
+
+      - name: Build port (legacy)
+        if: matrix.type == 'legacy'
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set -e
+            set -o pipefail
+            set -x
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            source ./setupenv.bash
+            sudo port -v install swtpm
+            echo "✅ Build complete"
+          EOF
+
+      - name: Verify installation (legacy)
+        if: matrix.type == 'legacy'
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set -e
+            set -o pipefail
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            source ./setupenv.bash
+            port installed swtpm
+            /opt/local/bin/swtpm --version
+            TMPD=$(mktemp -d /tmp/swtpm.XXXXXX)
+            /opt/local/bin/swtpm socket --tpmstate dir="$TMPD" --ctrl type=tcp,port=12345 --tpm2 -d
+            sleep 1
+            /opt/local/bin/swtpm_ioctl --tcp 127.0.0.1:12345 -s
+            rm -rf "$TMPD"
+            echo "✅ Installation verified"
+          EOF
+
+      - name: Cleanup (legacy)
+        if: matrix.type == 'legacy' && always()
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            rm -f /tmp/blakeports.tar.gz
+            echo "✅ Cleanup complete"
+          EOF
