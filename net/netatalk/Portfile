@@ -27,10 +27,11 @@ if {${subport} eq ${name}} {
     # pre-700 system clang lacks <stdatomic.h>, needed by netatalk 4.x
     compiler.blacklist-append {clang < 700}
 
-    # nad_ls.c's scandir comparator trips -Wincompatible-pointer-types
-    # (default-error on clang 15+); portable across clang/gcc, unlike the
-    # narrower -function- variant
-    configure.cflags-append -Wno-error=incompatible-pointer-types
+    # scandir signature mismatch on SDKs before 10.9
+    if {${os.platform} eq "darwin" && ${os.major} <= 12} {
+        configure.cppflags-append \
+                        -D_MACPORTS_LEGACY_COMPATIBLE_SCANDIR=1
+    }
 
     checksums       rmd160  a5c6193b994fc2d7028bc329c031dea4d291b41f \
                     sha256  5d5756c55935df84098cfb5a2c3a90b8864a46d3c1671aa164481bced0724add \
