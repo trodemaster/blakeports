@@ -113,7 +113,8 @@ steps:
 
 **Modern runners** (Tart VMs):
 - `macOS_15` - macOS Sequoia (15.x)
-- `macOS_26` - macOS Tahoe Beta (26.x)
+- `macOS_26` - macOS Tahoe (26.x)
+- `macOS_27` - macOS 27.x
 
 **Legacy runners** (self-hosted with tags):
 - `[self-hosted, tenfive]` - Mac OS X 10.5

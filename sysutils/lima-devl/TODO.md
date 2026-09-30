@@ -10,7 +10,7 @@ Patch revs: see `w1_rev` / `v1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is
 | V1 (`patch-04`) | Detect guest macOS version + build from the restore image; persist to `vz-guest-os-version` / `vz-guest-os-build-version` sentinels at create time and expose as `LIMA_CIDATA_GUEST_OS_VERSION` / `_BUILD_VERSION` | branch `feat/vz-guest-os-version-log` (`origin/master`, 2 commits: log, then cidata propagation); this is "PR 1", ready for upstream once the issue is filed. Nothing consumes the value yet. Issue draft: `~/orac/Computer/blakeports/lima guest os version issue draft.md` |
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
-| M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27-beta only |
+| M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27 only |
 | W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`) | carried in port; not yet submitted upstream |
 
 `patch-01-g1-thread-pin.diff` merged upstream in PR #5036 and removed from port.
@@ -40,7 +40,7 @@ patch-usrlocalgo.diff
 patch-03-w1-windows-edition-detection.diff  ← carried in port
 patch-04-v1-guest-os-version.diff    ← "PR 1" precursor, log-only
 patch-06-b2-tcc.diff                 ← upstream candidate (B1 dependency merged)
-patch-09-m1-fakecloudinit-macos27.diff  ← macOS 27-beta workaround, NOT upstream
+patch-09-m1-fakecloudinit-macos27.diff  ← macOS 27 workaround, NOT upstream
 ```
 
 `patch-04-v1-guest-os-version.diff` — the full "PR 1". Branch
@@ -306,7 +306,7 @@ sync), regenerate patch-05 against whatever `go.setup` points to, not a live
       unmerged, in case Apple's framework behavior changes in a future macOS release.
 
 ### macOS 27 workarounds (M1)
-- [ ] Revisit M1 (fakecloudinit) when macOS 27 is released — may be partially upstreamable
+- [ ] Revisit M1 (fakecloudinit) now that macOS 27 is released — may be partially upstreamable
       if ISRootMigrator behavior is documented.
 - [x] **B3 (DFU install workaround) removed 2026-07-25.** Host reached stable macOS 26.6
       (25G70). Re-tested against the same beta-4 IPSW (`26A5388g`) with a throwaway instance:
@@ -319,7 +319,7 @@ sync), regenerate patch-05 against whatever `go.setup` points to, not a live
       package. `patch-08-b3-dfu-beta27.diff`, `b3_rev`, and the `upstream-pr/b3-dfu-beta27`
       branch (local + `trodemaster`) are deleted. Full log:
       `lima_mac/docs/dfu-install.md` § "2026-07-25 Removal Confirmed".
-- [ ] Test TCC patching against a macOS 27-beta guest (template exists in lima_mac, untested).
+- [ ] Test TCC patching against a macOS 27 guest (template exists in lima_mac, untested).
 - Related flakiness observed 2026-07-05 (not in the M1 patch itself — in `lima_mac`'s
   `configure.sh`, which runs after Lima's own fakecloudinit as a provisioning script):
   on a macOS 27 beta guest, Setup Assistant hung at the first-boot progress screen

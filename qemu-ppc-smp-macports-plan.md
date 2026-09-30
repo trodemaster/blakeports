@@ -328,7 +328,7 @@ plan called "the novel QEMU work" was three real bugs, all now fixed.
 | `devel/fcode-utils` | `toke`, the FCode tokenizer OpenBIOS needs |
 
 All install side by side with `port:qemu` (private prefix + suffixed symlinks),
-build green in CI on macOS 26 and 27 beta, and are installed on the host.
+build green in CI on macOS 26 and 27, and are installed on the host.
 
 ### Correction to the plan's premises
 
