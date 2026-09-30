@@ -14,8 +14,8 @@ on:
         required: false
         default: true
         type: boolean
-      run_macos27_beta:
-        description: 'macOS 27 Beta (Tahoe Beta)'
+      run_macos27:
+        description: 'macOS 27'
         required: false
         default: false
         type: boolean
@@ -93,9 +93,9 @@ jobs:
             FIRST=false
           fi
 
-          if [[ "${{ inputs.run_macos27_beta }}" == "true" ]]; then
+          if [[ "${{ inputs.run_macos27 }}" == "true" ]]; then
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern"}'
+            MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern"}'
             FIRST=false
           fi
 
@@ -150,7 +150,7 @@ jobs:
           # Default to modern platforms if nothing selected
           if [[ "$FIRST" == "true" ]]; then
             MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern"},'
-            MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern"}'
+            MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern"}'
           fi
 
           MATRIX+=']}'

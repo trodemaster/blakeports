@@ -61,12 +61,12 @@ blakeports/
 ### Self-Hosted Runners
 - Runners are managed by [jibb-runners](https://github.com/trodemaster/jibb-runners) tool
 - Each runner runs in an isolated tart VM
-- Base VMs: `macOS_26` (Tahoe) and `macOS_27_beta` (Tahoe Beta)
+- Base VMs: `macOS_26` (Tahoe) and `macOS_27`
 
 ### Matrix Build Strategy
 **Modern builds** (automatic on push/PR):
 - **macOS 26 (Tahoe)** - Latest stable
-- **macOS 27 beta (Tahoe Beta)** - Beta preview
+- **macOS 27** - Latest
 
 **Optional modern builds** (manual workflow dispatch only):
 - **macOS 15 (Sequoia)** - Previous stable

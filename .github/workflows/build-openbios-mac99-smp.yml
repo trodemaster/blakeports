@@ -22,8 +22,8 @@ on:
         required: false
         default: 'main'
         type: string
-      run_macos27_beta:
-        description: 'macOS 27 Beta (Golden Gate)'
+      run_macos27:
+        description: 'macOS 27'
         required: false
         default: false
         type: boolean
@@ -60,9 +60,9 @@ jobs:
               MATRIX+='{"platform":"macOS_26","runner":"macOS_26","port":"emulators/openbios-mac99-smp"}'
               FIRST=false
             fi
-            if [[ "${{ inputs.run_macos27_beta }}" == "true" ]]; then
+            if [[ "${{ inputs.run_macos27 }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","port":"emulators/openbios-mac99-smp"}'
+              MATRIX+='{"platform":"macOS_27","runner":"macOS_27","port":"emulators/openbios-mac99-smp"}'
               FIRST=false
             fi
             if [[ "$FIRST" == "true" ]]; then

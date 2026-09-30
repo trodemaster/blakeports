@@ -14,8 +14,8 @@ on:
         required: false
         default: 'main'
         type: string
-      run_macos27_beta:
-        description: 'macOS 27 Beta (Golden Gate)'
+      run_macos27:
+        description: 'macOS 27'
         required: false
         default: true
         type: boolean
@@ -49,7 +49,7 @@ jobs:
           # For non-workflow_dispatch events (push/PR), default to modern platforms
           if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
             MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/qemu-mac99-smp"},'
-            MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"emulators/qemu-mac99-smp"}'
+            MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"emulators/qemu-mac99-smp"}'
             FIRST=false
           else
             # macOS 15
@@ -66,17 +66,17 @@ jobs:
               FIRST=false
             fi
 
-            # macOS 27 Beta
-            if [[ "${{ inputs.run_macos27_beta }}" == "true" ]]; then
+            # macOS 27
+            if [[ "${{ inputs.run_macos27 }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"emulators/qemu-mac99-smp"}'
+              MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"emulators/qemu-mac99-smp"}'
               FIRST=false
             fi
 
             # If no platforms selected, default to modern platforms
             if [[ "$FIRST" == "true" ]]; then
               MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/qemu-mac99-smp"},'
-              MATRIX+='{"platform":"macOS_27_beta","runner":"macOS_27_beta","type":"modern","port":"emulators/qemu-mac99-smp"}'
+              MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"emulators/qemu-mac99-smp"}'
             fi
           fi
 
