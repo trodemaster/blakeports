@@ -43,7 +43,7 @@ variant tests description {Run the test suite} {
 
 destroot {
     xinstall -m 0755 \
-        ${worksrcpath}/.build/${configure.build_arch}-apple-macosx/release/SwiftKHD \
+        ${worksrcpath}/.build/release/SwiftKHD \
         ${destroot}${prefix}/bin/swiftkhd
 
     xinstall -d ${destroot}${prefix}/share/man/man1
