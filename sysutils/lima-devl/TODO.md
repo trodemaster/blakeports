@@ -254,7 +254,7 @@ sync), regenerate patch-05 against whatever `go.setup` points to, not a live
       CI: NOT lima-vm/lima's own Actions (a fork-internal PR was tried and reverted — wrong
       approach, see workflow note below). Testing goes through blakeports' own
       `build-lima-devl.yml` GitHub Actions workflow instead, which does a real
-      `sudo port -kv install lima-devl` on self-hosted macOS runners (15/26/27-beta) plus
+      `sudo port -kv install lima-devl` on self-hosted macOS runners (15/26/27) plus
       `port lint` and `golangci-lint` — this is the CI blakeports actually uses for this port.
       **2026-07-11: end-to-end test done, clipboard sharing does not work — parked.**
       Tested on a real macos-26 guest with utmapp/vd_agent 0.22.1 installed. Two real bugs

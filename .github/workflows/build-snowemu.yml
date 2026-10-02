@@ -27,7 +27,7 @@ on:
       run_macos15:
         description: 'macOS 15 (Sequoia)'
         required: false
-        default: false
+        default: true
         type: boolean
 
 defaults:
@@ -48,6 +48,7 @@ jobs:
 
           # For non-workflow_dispatch events (push/PR), default to modern platforms
           if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"emulators/snowemu"},'
             MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/snowemu"},'
             MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"emulators/snowemu"}'
             FIRST=false
@@ -66,7 +67,7 @@ jobs:
               FIRST=false
             fi
 
-            # macOS 26 Beta
+            # macOS 27
             if [[ "${{ inputs.run_macos27 }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
               MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"emulators/snowemu"}'
@@ -75,6 +76,7 @@ jobs:
 
             # If no platforms selected, default to modern platforms
             if [[ "$FIRST" == "true" ]]; then
+              MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"emulators/snowemu"},'
               MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/snowemu"},'
               MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"emulators/snowemu"}'
             fi

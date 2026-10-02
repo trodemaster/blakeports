@@ -7,7 +7,7 @@ on:
       run_macos15:
         description: 'macOS 15 (Sequoia)'
         required: false
-        default: false
+        default: true
         type: boolean
       run_macos26:
         description: 'macOS 26 (Tahoe)'
@@ -149,6 +149,7 @@ jobs:
 
           # Default to modern platforms if nothing selected
           if [[ "$FIRST" == "true" ]]; then
+            MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern"},'
             MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern"},'
             MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern"}'
           fi
