@@ -1,0 +1,91 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           github 1.0
+
+github.setup        jundot omlx 0.7.0 v
+name                omlx-app
+revision            0
+
+categories          aqua llm
+maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+license             Apache-2
+platforms           {darwin >= 24}
+supported_archs     arm64
+
+homepage            https://omlx.ai
+
+description         oMLX menu bar app for a MacPorts-based MLX server
+
+long_description    {*}${description}. Builds only the native SwiftUI menu bar \
+                    app from the oMLX project, without the bundled Python \
+                    runtime. The server runs from a Python virtual \
+                    environment you create (see notes).
+
+checksums           rmd160  c1e5224c0ac23824c776001f2d54e66264238b85 \
+                    sha256  cd58f72b7390896d8484ae0056cb8f578e21b18b448a5199caa023118a215c83 \
+                    size    54462019
+
+if {${os.platform} ne "darwin" || ${os.major} < 24} {
+    pre-fetch {
+        ui_error "${name} requires macOS 15 or later."
+        return -code error "incompatible macOS version"
+    }
+}
+
+depends_run         port:python313 \
+                    port:py313-pip
+
+use_xcode           yes
+use_configure       no
+universal_variant   no
+
+build.type          xcode
+build.dir           ${worksrcpath}/apps/omlx-mac
+build.target        build
+
+# SwiftPM fetches swift-markdown-ui from GitHub, so this build needs network.
+set app_build_dir   ${workpath}/xcbuild
+build.args          -project oMLX.xcodeproj \
+                    -scheme oMLX \
+                    -configuration Release \
+                    -destination "platform=macOS" \
+                    -derivedDataPath ${app_build_dir} \
+                    -clonedSourcePackagesDirPath ${workpath}/spm \
+                    ARCHS=${build_arch} \
+                    ONLY_ACTIVE_ARCH=NO \
+                    CODE_SIGN_IDENTITY=- \
+                    CODE_SIGNING_REQUIRED=NO \
+                    CODE_SIGNING_ALLOWED=NO \
+                    MARKETING_VERSION=${version} \
+                    CURRENT_PROJECT_VERSION=1
+
+destroot {
+    xinstall -d ${destroot}${applications_dir}
+    copy ${app_build_dir}/Build/Products/Release/oMLX.app \
+        ${destroot}${applications_dir}/oMLX.app
+
+    # Launcher that points the app at the venv Python instead of a bundled one
+    xinstall -m 0755 ${filespath}/omlx-app.in ${destroot}${prefix}/bin/omlx-app
+    reinplace "s|@APPLICATIONS_DIR@|${applications_dir}|g" \
+        ${destroot}${prefix}/bin/omlx-app
+}
+
+post-destroot {
+    system "codesign --force --sign - ${destroot}${applications_dir}/oMLX.app"
+}
+
+notes "
+oMLX.app is installed without Python. Create the server environment, then\
+start the app with the launcher (it sets OMLX_PYTHON_OVERRIDE):
+
+    ${prefix}/bin/python3.13 -m venv ~/.local/share/omlx/venv
+    ~/.local/share/omlx/venv/bin/pip install 'omlx\[mcp\] @ git+https://github.com/jundot/omlx@v${version}'
+    ${prefix}/bin/omlx-app
+
+Set OMLX_PYTHON_OVERRIDE to use a different interpreter. The app starts its\
+own server, so stop any other oMLX server on the same port first.
+"
+
+github.livecheck.regex  {([0-9.]+)}
+livecheck.url       ${github.homepage}/releases/latest

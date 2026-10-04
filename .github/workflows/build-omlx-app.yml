@@ -1,0 +1,153 @@
+name: Build omlx-app
+
+# macOS 15+ only: the app is a SwiftUI menu bar app built with xcodebuild.
+
+on:
+  push:
+    paths: ['aqua/omlx-app/**']
+    branches: [main]
+  pull_request:
+    paths: ['aqua/omlx-app/**']
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: false
+        default: 'main'
+        type: string
+      run_macos27:
+        description: 'macOS 27'
+        required: false
+        default: true
+        type: boolean
+      run_macos26:
+        description: 'macOS 26 (Tahoe)'
+        required: false
+        default: true
+        type: boolean
+      run_macos15:
+        description: 'macOS 15 (Sequoia)'
+        required: false
+        default: true
+        type: boolean
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          MATRIX='{"include":['
+          FIRST=true
+
+          add() {
+            [[ "$FIRST" == "false" ]] && MATRIX+=','
+            MATRIX+="{\"platform\":\"$1\",\"runner\":\"$1\",\"port\":\"aqua/omlx-app\"}"
+            FIRST=false
+          }
+
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            add macOS_15; add macOS_26; add macOS_27
+          else
+            [[ "${{ inputs.run_macos15 }}" == "true" ]] && add macOS_15
+            [[ "${{ inputs.run_macos26 }}" == "true" ]] && add macOS_26
+            [[ "${{ inputs.run_macos27 }}" == "true" ]] && add macOS_27
+            # If no platforms selected, default to all modern platforms
+            if [[ "$FIRST" == "true" ]]; then
+              add macOS_15; add macOS_26; add macOS_27
+            fi
+          fi
+
+          MATRIX+=']}'
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix for trigger: ${{ github.event_name }}"
+          echo "$MATRIX" | jq '.'
+
+  build-omlx-app:
+    needs: setup-matrix
+    name: build-omlx-app (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Gather system information
+        id: system-info
+        continue-on-error: true
+        run: |
+          echo "Running on: ${{ matrix.platform }}"
+          echo "Building port: omlx-app"
+          echo "Building from branch: ${{ inputs.branch || github.ref_name }}"
+
+          # Use centralized system info script
+          eval $(./scripts/getsysteminfo)
+
+          echo "macos_version=${MACOS_VERSION}" >> $GITHUB_OUTPUT
+          echo "macos_major=${MACOS_MAJOR}" >> $GITHUB_OUTPUT
+          echo "macos_minor=${MACOS_MINOR}" >> $GITHUB_OUTPUT
+          echo "macos_build=${MACOS_BUILD}" >> $GITHUB_OUTPUT
+          echo "arch=${ARCH}" >> $GITHUB_OUTPUT
+          echo "xcode_version=${XCODE_VERSION}" >> $GITHUB_OUTPUT
+          echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
+
+          echo ""
+          echo "System Information:"
+          sw_vers || echo "⚠️  Could not determine macOS version"
+          echo ""
+          echo "Xcode Version: ${XCODE_VERSION}"
+          echo "Command Line Tools: ${CLT_VERSION}"
+          echo "Architecture: ${ARCH}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Setup MacPorts and BlakePorts Environment
+        run: ./scripts/installmacports
+
+      - name: Lint portfile
+        run: |
+          source ./setupenv.bash
+          port lint --nitpick ${{ matrix.port }}
+
+      - name: Clean existing installation
+        run: |
+          source ./setupenv.bash
+          if port installed omlx-app | grep -q omlx-app; then
+            echo "Removing existing omlx-app installation..."
+            sudo port uninstall omlx-app
+            sudo port clean --dist omlx-app
+          else
+            echo "No existing omlx-app installation found"
+          fi
+
+      - name: Install dependencies
+        run: ./scripts/install-deps omlx-app
+
+      - name: Build port
+        run: |
+          source ./setupenv.bash
+          sudo port -v install omlx-app
+
+      - name: Verify installation
+        run: |
+          source ./setupenv.bash
+          port installed omlx-app
+          APP=/Applications/MacPorts/oMLX.app
+          ls -la "$APP/Contents/MacOS/"
+          codesign --verify --deep --strict "$APP"
+          lipo -archs "$APP/Contents/MacOS/oMLX"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist"
+          test -x /opt/local/bin/omlx-app
+          sh -n /opt/local/bin/omlx-app

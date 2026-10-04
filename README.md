@@ -102,6 +102,7 @@ Complete end-to-end testing script that recreates the entire CI/CD pipeline from
 ## Ports
 
 - `audio/nrsc5` - Software-defined radio for NRSC-5 (HD Radio)
+- `aqua/omlx-app` - oMLX menu bar app (Swift only; server runs from a Python venv)
 - `devel/libcbor` - CBOR protocol implementation library  
 - `security/libfido2` - FIDO2 authentication library
 - `net/netatalk4` - Apple Filing Protocol (AFP) server

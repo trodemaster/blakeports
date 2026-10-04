@@ -1,0 +1,5 @@
+#!/bin/sh
+# Launch the oMLX menu bar app using a Python venv for the server.
+: "${OMLX_PYTHON_OVERRIDE:=$HOME/.local/share/omlx/venv/bin/python3}"
+export OMLX_PYTHON_OVERRIDE
+exec "@APPLICATIONS_DIR@/oMLX.app/Contents/MacOS/oMLX" "$@"
