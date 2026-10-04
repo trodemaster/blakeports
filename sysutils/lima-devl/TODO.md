@@ -1,13 +1,13 @@
 # lima-devl — Upstream PR & Port Tracking
 
 Status of feature patches carried by this port and their upstream submission.
-Patch revs: see `w1_rev` / `v1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no `b4_rev`).
+Patch revs: see `w1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no `b4_rev`).
 
 ## Feature status
 
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
-| V1 (`patch-04`) | Detect guest macOS version + build from the restore image; persist to `vz-guest-os-version` / `vz-guest-os-build-version` sentinels at create time and expose as `LIMA_CIDATA_GUEST_OS_VERSION` / `_BUILD_VERSION` | branch `feat/vz-guest-os-version-log` (`origin/master`, 2 commits: log, then cidata propagation); this is "PR 1", ready for upstream once the issue is filed. Nothing consumes the value yet. Issue draft: `~/orac/Computer/blakeports/lima guest os version issue draft.md` |
+| V1 (`patch-04`) | ~~Guest macOS version detection~~ — **merged upstream as PR #5528 (2026-09-23)**, patch removed from port 2026-10-04 | done |
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27 only |

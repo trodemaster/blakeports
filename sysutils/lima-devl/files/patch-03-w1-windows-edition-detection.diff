@@ -1,8 +1,8 @@
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index f42f4a0d..0fa938a0 100644
+index 8b832bf9..89755b0c 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -623,8 +623,21 @@ func GenerateWindowsISO(ctx context.Context, instDir, name string, instConfig *l
+@@ -638,8 +638,21 @@ func GenerateWindowsISO(ctx context.Context, instDir, name string, instConfig *l
  		return "", err
  	}
  
@@ -27,7 +27,7 @@ index f42f4a0d..0fa938a0 100644
  	}
  
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index 2cfcdb7b..0c7a30b3 100644
+index d4a15036..4d438d36 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
 @@ -9,17 +9,21 @@ import (
@@ -63,7 +63,7 @@ index 2cfcdb7b..0c7a30b3 100644
  type CACerts struct {
  	RemoveDefaults *bool
  	Trusted        []Cert
-@@ -136,6 +136,7 @@ type TemplateArgs struct {
+@@ -138,6 +138,7 @@ type TemplateArgs struct {
  	WindowsInitialPassword          string
  	LegacyBIOS                      bool
  	IsWindowsServer                 bool
@@ -71,7 +71,7 @@ index 2cfcdb7b..0c7a30b3 100644
  	TPM                             bool
  	SuppressFirstLoginSetup         bool
  	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
-@@ -153,19 +154,151 @@ func (t *TemplateArgs) generateWindowsInitialPassword() error {
+@@ -157,19 +158,151 @@ func (t *TemplateArgs) generateWindowsInitialPassword() error {
  	return nil
  }
  
@@ -229,18 +229,18 @@ index 2cfcdb7b..0c7a30b3 100644
  	if err := identifiers.Validate(args.Name); err != nil {
  		return err
 diff --git pkg/cidata/template_test.go pkg/cidata/template_test.go
-index c7d5fb94..7a320965 100644
+index 12ed5696..cba09ece 100644
 --- pkg/cidata/template_test.go
 +++ pkg/cidata/template_test.go
-@@ -12,6 +12,7 @@ import (
- 	"gotest.tools/v3/assert"
+@@ -14,6 +14,7 @@ import (
  
+ 	"github.com/lima-vm/lima/v2/pkg/iso9660util"
  	"github.com/lima-vm/lima/v2/pkg/limatype"
 +	"github.com/lima-vm/lima/v2/pkg/wimutil"
  )
  
  var defaultRemoveDefaults = false
-@@ -233,6 +234,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -310,6 +311,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  				WindowsInitialPassword: "dummy-password",
  				TPM:                    true,
  				IsWindowsServer:        true,
@@ -248,7 +248,7 @@ index c7d5fb94..7a320965 100644
  			},
  			expectedAutounattendStrings: []string{
  				`<Path>E:\viostor\2k25\amd64</Path>`,
-@@ -257,6 +259,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -334,6 +336,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  				User:                   "windows-user",
  				WindowsInitialPassword: "dummy-password",
  				TPM:                    true,
@@ -256,7 +256,7 @@ index c7d5fb94..7a320965 100644
  			},
  			expectedAutounattendStrings: []string{
  				`<Path>E:\viostor\w11\amd64</Path>`,
-@@ -283,6 +286,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -360,6 +363,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  				LegacyBIOS:             true,
  				TPM:                    true,
  				IsWindowsServer:        true,
@@ -264,7 +264,7 @@ index c7d5fb94..7a320965 100644
  			},
  			expectedAutounattendStrings: []string{
  				`<Path>E:\viostor\2k25\amd64</Path>`,
-@@ -307,6 +311,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -384,6 +388,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  				User:                   "windows-user",
  				WindowsInitialPassword: "dummy-password",
  				TPM:                    false,
@@ -272,7 +272,7 @@ index c7d5fb94..7a320965 100644
  			},
  			expectedAutounattendStrings: []string{
  				`<Path>E:\viostor\w11\amd64</Path>`,
-@@ -332,6 +337,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -409,6 +414,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  				User:                   "windows-user",
  				WindowsInitialPassword: "dummy-password",
  				TPM:                    false,
@@ -280,7 +280,7 @@ index c7d5fb94..7a320965 100644
  			},
  			expectedAutounattendStrings: []string{
  				`<Path>E:\viostor\w11\arm64</Path>`,
-@@ -369,3 +375,70 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -446,3 +452,70 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  		})
  	}
  }
@@ -481,10 +481,10 @@ index 00000000..10b59e0c
 +	}
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index f0d53fb2..b40b0bd1 100644
+index 6de40836..0c27e633 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -355,6 +355,20 @@ type OsOpts map[OS]any
+@@ -358,6 +358,20 @@ type OsOpts map[OS]any
  
  type WindowsOpts struct {
  	VirtioWin []File `yaml:"virtioWin,omitempty" json:"virtioWin,omitempty"`
