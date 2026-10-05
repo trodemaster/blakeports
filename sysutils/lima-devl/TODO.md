@@ -1,7 +1,7 @@
 # lima-devl — Upstream PR & Port Tracking
 
 Status of feature patches carried by this port and their upstream submission.
-Patch revs: see `w1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no `b4_rev`).
+Patch revs: see `w1_rev` / `b2_rev` / `p1_rev` in the Portfile (B4 is parked, no `b4_rev`).
 
 ## Feature status
 
@@ -10,7 +10,8 @@ Patch revs: see `w1_rev` / `b2_rev` / `m1_rev` in the Portfile (B4 is parked, no
 | V1 (`patch-04`) | ~~Guest macOS version detection~~ — **merged upstream as PR #5528 (2026-09-23)**, patch removed from port 2026-10-04 | done |
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
-| M1 (`patch-09`) | macOS 27 fakecloudinit workarounds | **NOT for upstream** — macOS 27 only |
+| M1 (`patch-09`) | ~~macOS 27 fakecloudinit workarounds~~ — **removed from port 2026-10-05** (beta-era; branch `macports/m1-fakecloudinit-macos27` kept in case any SA plist keys are still needed on 27 GA) | dropped |
+| P1 (`patch-10`) | Experimental macOS 27 native guest provisioning via forked vz (`trodemaster/vz` `feat/guest-provisioning`); see upstream issue #5516 | local only — no upstream noise |
 | W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`) | carried in port; not yet submitted upstream |
 
 `patch-01-g1-thread-pin.diff` merged upstream in PR #5036 and removed from port.
@@ -40,7 +41,7 @@ patch-usrlocalgo.diff
 patch-03-w1-windows-edition-detection.diff  ← carried in port
 patch-04-v1-guest-os-version.diff    ← "PR 1" precursor, log-only
 patch-06-b2-tcc.diff                 ← upstream candidate (B1 dependency merged)
-patch-09-m1-fakecloudinit-macos27.diff  ← macOS 27 workaround, NOT upstream
+patch-10-p1-guest-provisioning.diff  ← experimental macOS 27 provisioning, local only
 ```
 
 `patch-04-v1-guest-os-version.diff` — the full "PR 1". Branch
