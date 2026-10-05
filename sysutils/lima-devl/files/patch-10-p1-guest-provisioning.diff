@@ -201,7 +201,7 @@ index 2d4ff936..f3afcb1c 100644
 +	}, nil
 +}
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index 11df0eb0..3906e54e 100644
+index 11df0eb0..2647285f 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -15,9 +15,11 @@ import (
@@ -225,7 +225,21 @@ index 11df0eb0..3906e54e 100644
  )
  
  var knownYamlProperties = []string{
-@@ -477,7 +480,54 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
+@@ -414,6 +417,13 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+ 			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
+ 				return err
+ 			}
++			// Guest provisioning is expected to be applied by Setup Assistant, which Patch skips.
++			if osutil.FileExists(filepath.Join(l.Instance.Dir, filenames.VzGuestProvisioning)) {
++				logrus.Info("Letting Setup Assistant run on first boot for guest provisioning")
++				if err := macos.RemoveSetupAssistantMarkers(ctx, disk); err != nil {
++					return err
++				}
++			}
+ 		}
+ 	}
+ 	return driverutil.EnsureDisk(ctx, l.Instance.Dir, *l.Instance.Config.Disk, l.diskImageFormat)
+@@ -477,7 +487,54 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
  		}
  	}
  
@@ -323,6 +337,80 @@ index e7519196..0d6bcc05 100644
 +			}
 +		})
 +	}
++}
+diff --git pkg/guestpatch/macos/provisioning_darwin.go pkg/guestpatch/macos/provisioning_darwin.go
+new file mode 100644
+index 00000000..1503f487
+--- /dev/null
++++ pkg/guestpatch/macos/provisioning_darwin.go
+@@ -0,0 +1,68 @@
++// SPDX-FileCopyrightText: Copyright The Lima Authors
++// SPDX-License-Identifier: Apache-2.0
++
++package macos
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"os"
++	"path/filepath"
++
++	"github.com/sirupsen/logrus"
++
++	"github.com/lima-vm/lima/v2/pkg/imgutil/nativeimgutil/asifutil"
++	"github.com/lima-vm/lima/v2/pkg/limatype/filenames"
++	"github.com/lima-vm/lima/v2/pkg/osutil"
++)
++
++// setupAssistantMarkers are the files Patch writes to skip Setup Assistant.
++var setupAssistantMarkers = []string{
++	"private/var/db/.AppleSetupDone",
++	"Library/User Template/.skipbuddy",
++}
++
++// RemoveSetupAssistantMarkers removes the Setup Assistant skip markers written
++// by Patch, so that the first boot runs Setup Assistant, which is expected to
++// apply VZMacGuestProvisioningOptions (macOS 27 or later).
++func RemoveSetupAssistantMarkers(ctx context.Context, disk string) error {
++	attached, err := attachImageWithRetry(ctx, disk, 3)
++	if err != nil {
++		return fmt.Errorf("failed to attach disk: %w", err)
++	}
++	if attached == nil || attached.Data == "" {
++		return errors.New("failed to find data slice in attached disk")
++	}
++	dataDevPath := "/dev/" + attached.Data
++	defer func() {
++		if err := asifutil.DetachASIF(dataDevPath); err != nil {
++			logrus.WithError(err).Warnf("failed to detach %#q (%#q)", dataDevPath, disk)
++		}
++	}()
++
++	mnt := filepath.Join(filepath.Dir(disk), filenames.MntDir)
++	if err := os.MkdirAll(mnt, 0o755); err != nil {
++		return fmt.Errorf("failed to create mount point %#q: %w", mnt, err)
++	}
++	defer func() {
++		if err := os.Remove(mnt); err != nil {
++			logrus.WithError(err).Warnf("failed to remove mount point %#q", mnt)
++		}
++	}()
++	if err := osutil.Mount(ctx, "apfs", dataDevPath, mnt, []string{"noowners"}); err != nil {
++		return err
++	}
++	defer func() {
++		if err := osutil.Umount(ctx, mnt); err != nil {
++			logrus.WithError(err).Warnf("failed to unmount %#q", mnt)
++		}
++	}()
++
++	for _, f := range setupAssistantMarkers {
++		if err := os.Remove(filepath.Join(mnt, f)); err != nil && !errors.Is(err, os.ErrNotExist) {
++			return fmt.Errorf("failed to remove %#q: %w", f, err)
++		}
++	}
++	return nil
 +}
 diff --git pkg/limatype/filenames/filenames.go pkg/limatype/filenames/filenames.go
 index 70ab9aac..00e7eeb2 100644
