@@ -52,7 +52,7 @@ index c67e20c9..a2955d1e 100644
  github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701/go.mod h1:P3a5rG4X7tI17Nn3aOIAYr5HbIMukwXG0urG0WuL8OA=
  github.com/ulikunitz/xz v0.5.15 h1:9DNdB5s+SgV3bQ2ApL10xRc35ck0DuIX/isZvIk+ubY=
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 8b832bf9..afa3cbba 100644
+index 8b832bf9..363b3acd 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
 @@ -137,6 +137,12 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
@@ -68,15 +68,20 @@ index 8b832bf9..afa3cbba 100644
  	args := TemplateArgs{
  		Debug:              debugutil.Debug,
  		OS:                 *instConfig.OS,
-@@ -171,6 +177,7 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+@@ -171,6 +177,12 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
  		SuppressFirstLoginSetupPlist: suppressFirstLoginSetupPlist,
  		GuestOSVersion:               guestOSVersion,
  		GuestOSBuildVersion:          guestOSBuildVersion,
 +		GuestProvisioningPassword:    guestProvisioningPassword,
++	}
++	if darwinOpts.GuestProvisioning != nil {
++		// Setup Assistant creates the provisioned user with the macOS default home,
++		// not the Lima default for macOS guests (/Users/<user>.guest).
++		args.Home = "/Users/" + args.User
  	}
  
  	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
-@@ -447,6 +454,15 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+@@ -447,6 +459,15 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
  			Reader: strings.NewReader(args.SuppressFirstLoginSetupPlist),
  		})
  	}
