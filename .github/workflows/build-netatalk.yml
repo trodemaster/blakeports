@@ -90,7 +90,7 @@ jobs:
           if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
             MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"net/netatalk"},'
             MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"net/netatalk"},'
-            MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"net/netatalk"}'
+            MATRIX+='{"platform":"macOS_27","runner":"macOS_27_custo","type":"modern","port":"net/netatalk"}'
             FIRST=false
           else
             # For workflow_dispatch, check individual platform selections
@@ -112,7 +112,7 @@ jobs:
             # macOS 27
             if [[ "${{ inputs.run_macos27 }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"net/netatalk"}'
+              MATRIX+='{"platform":"macOS_27","runner":"macOS_27_custo","type":"modern","port":"net/netatalk"}'
               FIRST=false
             fi
 
@@ -176,7 +176,7 @@ jobs:
             if [[ "$FIRST" == "true" ]]; then
               MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"net/netatalk"},'
               MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"net/netatalk"},'
-              MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"net/netatalk"}'
+              MATRIX+='{"platform":"macOS_27","runner":"macOS_27_custo","type":"modern","port":"net/netatalk"}'
             fi
           fi
 
