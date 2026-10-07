@@ -621,6 +621,8 @@ get_lima_instance_for_label() {
         "macOS_26")      echo "macos-26" ;;
         "macOS_26_beta") echo "macos-26-beta" ;;
         "macOS_15")      echo "macos-15" ;;
+        "macOS_27")      echo "macos-27" ;;
+        "macOS_27_custo") echo "macos-27-custo" ;;
         *)               echo "" ;;
     esac
 }
