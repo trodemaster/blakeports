@@ -619,7 +619,7 @@ index 70ab9aac..00e7eeb2 100644
  	QemuEfiCodeFD           = "qemu-efi-code.fd"          // efi code; not always created
  	AnsibleInventoryYAML    = "ansible-inventory.yaml"
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 6de40836..bad13674 100644
+index 6de40836..3cf3f22a 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
 @@ -366,6 +366,21 @@ type DarwinOpts struct {
@@ -635,7 +635,7 @@ index 6de40836..bad13674 100644
 +// macOS evaluates these only on the first boot after the OS is installed;
 +// changing them on an existing instance has no effect.
 +// The account's username and full name are the Lima user's `user.name` and
-+// `user.comment`; with this option `user.name` defaults to "lima.<host user>",
++// `user.comment`; with this option `user.name` defaults to "<host user>.guest",
 +// and `user.home` to "/Users/<user.name>", where Setup Assistant creates it.
 +type DarwinGuestProvisioning struct {
 +	Password            string `yaml:"password,omitempty" json:"password,omitempty"`
@@ -645,28 +645,29 @@ index 6de40836..bad13674 100644
  
  func NewOS(osname string) OS {
 diff --git pkg/limayaml/defaults.go pkg/limayaml/defaults.go
-index e5dd13cd..99df057f 100644
+index e5dd13cd..c08b7aee 100644
 --- pkg/limayaml/defaults.go
 +++ pkg/limayaml/defaults.go
-@@ -199,8 +199,16 @@ func FillDefault(ctx context.Context, y, d, o *limatype.LimaYAML, filePath strin
+@@ -199,8 +199,17 @@ func FillDefault(ctx context.Context, y, d, o *limatype.LimaYAML, filePath strin
  	if o.User.PasswordlessSudo != nil {
  		y.User.PasswordlessSudo = o.User.PasswordlessSudo
  	}
 +	// With osOpts.Darwin.guestProvisioning, Setup Assistant creates the account and names
-+	// its home directory after it (/Users/<name>), so the account gets a name that cannot
-+	// clash with the host user's home mounted in the guest, and the home follows the name.
++	// its home directory after it (/Users/<name>). The account is named <host user>.guest,
++	// like Lima's usual home directory for macOS guests, which cannot clash with the host
++	// user's home mounted in the guest, and the home follows the name.
 +	provisioned := *y.OS == limatype.DARWIN && guestProvisioningConfigured(y, d, o)
  	if y.User.Name == nil {
 -		y.User.Name = new(osutil.LimaUser(ctx, existingLimaVersion, warn, y.OS).Username)
 +		name := osutil.LimaUser(ctx, existingLimaVersion, warn, y.OS).Username
 +		if provisioned {
-+			name = GuestProvisioningUserPrefix + name
++			name += GuestProvisioningUserSuffix
 +		}
 +		y.User.Name = new(name)
  		warn = false
  	}
  	if y.User.Comment == nil {
-@@ -208,7 +216,11 @@ func FillDefault(ctx context.Context, y, d, o *limatype.LimaYAML, filePath strin
+@@ -208,7 +217,11 @@ func FillDefault(ctx context.Context, y, d, o *limatype.LimaYAML, filePath strin
  		warn = false
  	}
  	if y.User.Home == nil {
@@ -679,13 +680,13 @@ index e5dd13cd..99df057f 100644
  		warn = false
  	}
  	if y.User.Shell == nil {
-@@ -928,6 +940,25 @@ func ExistingLimaVersion(instDir string) string {
+@@ -928,6 +941,25 @@ func ExistingLimaVersion(instDir string) string {
  	}
  }
  
-+// GuestProvisioningUserPrefix is prepended to the host username to name the guest account
++// GuestProvisioningUserSuffix is appended to the host username to name the guest account
 +// that Setup Assistant creates from osOpts.Darwin.guestProvisioning.
-+const GuestProvisioningUserPrefix = "lima."
++const GuestProvisioningUserSuffix = ".guest"
 +
 +// guestProvisioningConfigured reports whether osOpts.Darwin.guestProvisioning is set in
 +// the effective configuration: the override, else the instance, else the default.
@@ -706,7 +707,7 @@ index e5dd13cd..99df057f 100644
  	if !*y.Plain {
  		return
 diff --git pkg/limayaml/defaults_test.go pkg/limayaml/defaults_test.go
-index 68b9e027..b04905a6 100644
+index 68b9e027..f5f9144d 100644
 --- pkg/limayaml/defaults_test.go
 +++ pkg/limayaml/defaults_test.go
 @@ -12,6 +12,7 @@ import (
@@ -731,9 +732,9 @@ index 68b9e027..b04905a6 100644
 +	}
 +	darwin := new(limatype.DARWIN)
 +
-+	t.Run("account is lima.<host user> and the home follows it", func(t *testing.T) {
++	t.Run("account is <host user>.guest and the home follows it", func(t *testing.T) {
 +		y := fill(limatype.LimaYAML{OS: darwin, OsOpts: provisioning}, limatype.LimaYAML{}, limatype.LimaYAML{})
-+		assert.Assert(t, strings.HasPrefix(*y.User.Name, GuestProvisioningUserPrefix), "got %q", *y.User.Name)
++		assert.Assert(t, strings.HasSuffix(*y.User.Name, GuestProvisioningUserSuffix), "got %q", *y.User.Name)
 +		assert.Equal(t, *y.User.Home, "/Users/"+*y.User.Name)
 +		// The minimal config has other validation errors (e.g. no images), but none about the home.
 +		if err := Validate(&y, false); err != nil {
@@ -749,7 +750,7 @@ index 68b9e027..b04905a6 100644
 +
 +	t.Run("provisioning set in the default template applies too", func(t *testing.T) {
 +		y := fill(limatype.LimaYAML{OS: darwin}, limatype.LimaYAML{OsOpts: provisioning}, limatype.LimaYAML{})
-+		assert.Assert(t, strings.HasPrefix(*y.User.Name, GuestProvisioningUserPrefix), "got %q", *y.User.Name)
++		assert.Assert(t, strings.HasSuffix(*y.User.Name, GuestProvisioningUserSuffix), "got %q", *y.User.Name)
 +	})
 +
 +	t.Run("an explicit user.home that Setup Assistant would not create is rejected", func(t *testing.T) {
@@ -759,7 +760,7 @@ index 68b9e027..b04905a6 100644
 +
 +	t.Run("without provisioning the macOS defaults are unchanged", func(t *testing.T) {
 +		y := fill(limatype.LimaYAML{OS: darwin}, limatype.LimaYAML{}, limatype.LimaYAML{})
-+		assert.Assert(t, !strings.HasPrefix(*y.User.Name, GuestProvisioningUserPrefix), "got %q", *y.User.Name)
++		assert.Assert(t, !strings.HasSuffix(*y.User.Name, GuestProvisioningUserSuffix), "got %q", *y.User.Name)
 +		assert.Equal(t, *y.User.Home, "/Users/"+*y.User.Name+".guest")
 +	})
 +}
@@ -787,10 +788,10 @@ index 5eef3358..1855f099 100644
  	if len(y.Images) == 0 {
  		errs = errors.Join(errs, errors.New("field `images` must be set"))
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index c0bb1076..831d0538 100644
+index c0bb1076..b11705e0 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -116,6 +116,40 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
+@@ -116,6 +116,41 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
  template above, then supply the actual build and version strings for your
  target OS release if needed.
  
@@ -813,8 +814,9 @@ index c0bb1076..831d0538 100644
 +```
 +
 +The account is the Lima user: `user.comment` is its full name and `user.name` its
-+username, which defaults to `lima.` followed by your host username so that it
-+cannot clash with your host home directory when that is mounted in the guest.
++username, which defaults to your host username followed by `.guest`, like the home
++directory Lima uses for other macOS guests, so that it cannot clash with your host
++home directory when that is mounted in the guest.
 +Setup Assistant creates the home directory at `/Users/<user.name>`, so
 +`user.home` must be left at that value.
 +
