@@ -1,0 +1,11 @@
+--- meson.build.orig
++++ meson.build
+@@ -153,7 +153,7 @@
+ dnssd_lib = cc.find_library('dns_sd', required: false)
+ dnssd_dependencies = []
+ 
+-if dnssd_lib.found()
++if host_os != 'darwin' and dnssd_lib.found()
+     dnssd_dependencies += dnssd_lib
+ endif
+ 

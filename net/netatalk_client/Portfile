@@ -31,6 +31,9 @@ checksums           rmd160  3f088b7e103f4a391fcc58afcf5fea30e00aedd8 \
                     sha256  7320202ba8bd962bbc23f9c6851cf7e257e00671d361a92eac2df55529d8d730 \
                     size    336293
 
+# DNS-SD lives in libSystem on macOS; don't link Avahi's libdns_sd shim
+patchfiles          patch-dnssd-libsystem.diff
+
 meson.wrap_mode     nodownload
 
 depends_lib-append  port:libgcrypt \
