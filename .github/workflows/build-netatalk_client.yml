@@ -169,11 +169,11 @@ jobs:
             exit 1
           fi
           echo ""
-          echo "Checking afp_client (FUSE mount client):"
-          if [ -x /opt/local/bin/afp_client ]; then
-            echo "afp_client binary found"
+          echo "Checking mount_afpfs (FUSE mount client):"
+          if [ -x /opt/local/bin/mount_afpfs ]; then
+            echo "mount_afpfs binary found"
           else
-            echo "afp_client binary not found (expected with default +fuse variant)"
+            echo "mount_afpfs binary not found (expected with default +fuse variant)"
             exit 1
           fi
 
@@ -194,9 +194,9 @@ jobs:
             echo "afpcmd binary not found"
             exit 1
           fi
-          if [ -x /opt/local/bin/afp_client ]; then
-            echo "afp_client binary present but should not be built without +fuse"
+          if [ -x /opt/local/bin/mount_afpfs ]; then
+            echo "mount_afpfs binary present but should not be built without +fuse"
             exit 1
           else
-            echo "afp_client correctly absent from CLI-only build"
+            echo "mount_afpfs correctly absent from CLI-only build"
           fi
