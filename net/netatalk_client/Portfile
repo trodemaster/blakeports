@@ -56,5 +56,3 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # Point the FUSE daemon sources at fuse3/fuse.h explicitly.
     patchfiles-append      patch-fuse3-header.diff
 }
-
-default_variants    +fuse
