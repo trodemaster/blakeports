@@ -4,7 +4,7 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           meson 1.0
 
-github.setup        Netatalk netatalk-client 0.9.5
+github.setup        Netatalk netatalk-client 1.0.0
 name                netatalk_client
 revision            0
 categories-append   net fuse
@@ -27,9 +27,9 @@ long_description    Netatalk Client is a file sharing client written \
 
 homepage            https://netatalk.io/
 
-checksums           rmd160  1884356de2582f0846a0348b19158b63cdb0c82b \
-                    sha256  db7ae6db3fd68349bbb143ad9843d88abb3c8595c6fedb0cf3ea34e58f1ece13 \
-                    size    277352
+checksums           rmd160  3f088b7e103f4a391fcc58afcf5fea30e00aedd8 \
+                    sha256  7320202ba8bd962bbc23f9c6851cf7e257e00671d361a92eac2df55529d8d730 \
+                    size    336293
 
 meson.wrap_mode     nodownload
 
