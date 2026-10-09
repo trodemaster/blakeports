@@ -163,7 +163,7 @@ jobs:
           echo "Checking afpcmd (CLI client):"
           if [ -x /opt/local/bin/afpcmd ]; then
             echo "afpcmd binary found"
-            /opt/local/bin/afpcmd -V
+            /opt/local/bin/afpcmd -h
           else
             echo "afpcmd binary not found"
             exit 1
