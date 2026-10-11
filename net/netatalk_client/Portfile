@@ -58,4 +58,8 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # picks up the wrong (FUSE 2.x) struct layout even when linking fuse3.
     # Point the FUSE daemon sources at fuse3/fuse.h explicitly.
     patchfiles-append      patch-fuse3-header.diff
+
+    # Without the macFUSE kernel extension there is no /dev/macfuse0; don't
+    # require it, and mount via macFUSE's FSKit backend instead.
+    patchfiles-append      patch-fuse-macos-fskit.diff
 }

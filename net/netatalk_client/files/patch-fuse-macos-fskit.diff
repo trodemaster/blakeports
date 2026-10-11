@@ -1,0 +1,37 @@
+--- fuse/commands.c.orig
++++ fuse/commands.c
+@@ -375,6 +375,12 @@
+     fuseargv[fuseargc] = fsoption_buf;
+     fuseargc++;
+ #ifdef __APPLE__
++    /* Without the macFUSE kernel extension, mount via its FSKit backend */
++    if (access(FUSE_DEVICE, F_OK) != 0) {
++        fuseargv[fuseargc] = "-obackend=fskit";
++        fuseargc++;
++    }
++
+     /* Add volname option for macOS to display custom name in Finder */
+     snprintf(volname_option_buf, volname_option_buf_len, "-ovolname=%s",
+              volume->volume_name_printable);
+@@ -661,12 +667,20 @@
+         goto error;
+     }
+ 
++#ifdef __APPLE__
++    /* macFUSE's FSKit backend mounts over XPC and creates no device node;
++     * only the kernel backend needs /dev/macfuse0 (checked below if present). */
++    if (stat(FUSE_DEVICE, &lstat) == 0 &&
++            access(FUSE_DEVICE, R_OK | W_OK) != 0) {
++#else
+     if (stat(FUSE_DEVICE, &lstat)) {
+-        printf("Could not find %s\n", FUSE_DEVICE);
++        log_for_client((void *)c, AFPFSD, LOG_ERR,
++                       "Could not find %s", FUSE_DEVICE);
+         goto error;
+     }
+ 
+     if (access(FUSE_DEVICE, R_OK | W_OK) != 0) {
++#endif
+         log_for_client((void *)c, AFPFSD, LOG_NOTICE,
+                        "Incorrect permissions on %s, mode of device"
+                        " is %o, uid/gid is %d/%d.  But your effective "
