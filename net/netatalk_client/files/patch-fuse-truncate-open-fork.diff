@@ -1,0 +1,45 @@
+--- fuse/fuse_fs.c.orig
++++ fuse/fuse_fs.c
+@@ -664,16 +664,15 @@
+         log_for_client(NULL, AFPFSD, LOG_DEBUG, "*** truncate using open forkid %d",
+                        fp->forkid);
+ 
+-        /* Avoid a redundant SetForkParms request when the size is unchanged. */
+-        if (fp->size != (uint64_t)offset) {
+-            ret = ml_setfork_size(volume, fp->forkid, 0, offset);
++        /* Always send SetForkParms: fp->size starts at 0 when the fork is
++         * opened rather than at the file's real length, so comparing
++         * against it skipped truncation to 0 (O_TRUNC, ftruncate) and left
++         * the old contents on the server. */
++        ret = ml_setfork_size(volume, fp->forkid, 0, offset);
+ 
+-            if (ret == 0) {
+-                /* Update the cached size */
+-                fp->size = offset;
+-            }
+-        } else {
+-            ret = 0;
++        if (ret == 0) {
++            /* Update the cached size */
++            fp->size = offset;
+         }
+     } else if (fi) {
+         /* fi is provided but fh is not set yet (create in progress).
+@@ -1100,12 +1099,12 @@
+         if (fi && fi->fh) {
+             struct afp_file_info *fp = (struct afp_file_info *) fi->fh;
+ 
+-            if (fp->size != (uint64_t)attr->size) {
+-                ret = ml_setfork_size(volume, fp->forkid, 0, attr->size);
++            /* Always send SetForkParms; fp->size isn't the file's real length
++             * (see fuse_truncate). */
++            ret = ml_setfork_size(volume, fp->forkid, 0, attr->size);
+ 
+-                if (ret == 0) {
+-                    fp->size = attr->size;
+-                }
++            if (ret == 0) {
++                fp->size = attr->size;
+             }
+         } else {
+             ret = ml_truncate(volume, path, attr->size);

@@ -87,4 +87,9 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # socket without reading the reply, so the daemon printed "Writing:
     # Broken pipe". Send once per daemon and wait for its reply.
     patchfiles-append      patch-fuse-manager-exit-reply.diff
+
+    # Truncating through an open fork (O_TRUNC, ftruncate) compared against
+    # a cached size that starts at 0, so truncation to 0 was skipped and the
+    # server kept the old contents. Always send SetForkParms.
+    patchfiles-append      patch-fuse-truncate-open-fork.diff
 }
