@@ -147,15 +147,34 @@ the umac session).
        `afpc fs unmount` now prints "Volume unmounted", and the wire shows
        FPFlush, then FPLogout (AFP 20) with an OK reply, then FIN. That's a
        clean logout.
-     - **`afpc fs exit` is still not clean (open).** FPFlush goes out about
-       5 s after the exit command, and no FPLogout showed up before the
-       capture stopped (about 5 s later). Likely cause, from reading
-       `lib/loop.c`: once `trigger_exit()` sets `exit_program = 1`, the main
-       loop does `start_ending_thread(); continue;` without calling
-       `pselect()`, so it stops reading server replies while the ending
-       thread's unmount waits on DSI replies. The ending thread then sets
-       `exit_program = 2` and the process exits. Unconfirmed; waiting on the
-       darkstar log for how session 56740 ended.
+     - **`afpc fs exit`: fixed (two patches).**
+       - **Starved main loop:** after `trigger_exit()` the main loop
+         (`lib/loop.c`) stops reading server sockets, so unmounting from the
+         forced-ending hook waited out DSI timeouts and ended in a reset.
+         Fix: `files/patch-fuse-exit-unmount.diff` makes `process_exit()`
+         in `fuse/commands.c` unmount every mounted volume itself before
+         returning, while replies still flow.
+       - **Duplicate exit commands:** `afpc fs exit` goes to the manager
+         daemon. Its `cleanup_all_children()` (`fuse/daemon.c`) sends the
+         exit byte to every `/tmp/afp_server-<uid>*` socket it globs, then
+         again to each tracked child, so a mount daemon gets two exits.
+         lldb (14:05) showed the second exit find no volume still in the
+         mounted state (the first was mid-`unmount(2)`), trigger exit, and
+         the daemon die mid-unmount. That left the FSKit volume hung, the
+         process stuck in state `E`, and no FPLogout. Fix: the same patch
+         holds a mutex across `process_exit()`'s unmount loop (commit
+         `ea15c00`, CI run 38174978868 green).
+       - **Manager kill logic doesn't help:** the manager's SIGTERM/SIGKILL
+         escalation targets the pid it forked. That process exits right
+         away, because the mount daemon forks again to daemonize, so the
+         signals never reach the real daemon.
+       - **Result (14:07, clean install, capture):** both `fs unmount` and
+         `fs exit` sessions end with FPFlush, then FPLogout (OK), then FIN.
+         The exit session closed 26 ms after the command. No crashes,
+         nothing hung, afpfsd gone.
+       - **Still present:** "Writing: Broken pipe". The mount daemon writes
+         its reply to the manager, which already closed the socket, and the
+         manager was started from the same terminal. It's cosmetic.
 9. **Mount point is deleted on unmount.** After an unmount,
    `/Volumes/guestshare` is gone, and `/Volumes` is root-owned, so the next
    mount needs `sudo mkdir /Volumes/guestshare && sudo chown blake:staff
@@ -176,9 +195,10 @@ helper install wasn't needed) and the first guest mount worked.
 
 1. If a read test is wanted, ask the user to OK the darkstar session adding
    a file to GuestShare.
-2. Unmount fix done (finding 7). Still open: no clean AFP logout on
-   unmount or exit (finding 7, last item), and the deleted mount point
-   (finding 9).
+2. Unmount, exit and logout are fixed (finding 7). Confirm with the
+   darkstar session that the 14:07 sessions logged "AFP logout" and "AFP
+   statistics". Still open: the deleted mount point (finding 9) and the
+   cosmetic "Writing: Broken pipe".
 3. Mount test procedure (desktop Terminal, or `open -a Terminal x.command`
    from Claude, which gets Local Network permission via Terminal). Tell the
    darkstar session before and after:
@@ -196,6 +216,20 @@ helper install wasn't needed) and the first guest mount worked.
    revision then (not bumped while testing).
 
 ## Debugging tips
+
+- **Crashes:** `~/Library/Logs/DiagnosticReports/afpfsd-*.ips`.
+- **Wire:** `sudo tcpdump -n -i en0 -U -w x.pcap host 192.168.234.23 and
+  tcp port 548`. DSI header is 16 bytes, then the AFP command byte:
+  FPLogout 20, FPFlush 10, FPGetVolParms 17, FPGetFileDirParms 34.
+- **lldb on the mount daemon** (`afpfsd --socket-id ...`): `sudo lldb -p
+  <pid> -s file`. In the file, start with `script
+  lldb.debugger.SetAsync(False)` so breakpoint `-C` commands print, and
+  detach before the test ends; a stopped daemon blocks FSKit. afpfsd uses
+  SIGUSR2 to wake its main loop, so lldb will stop on it unless told to
+  pass it (`process handle SIGUSR2 -s false -p true`).
+- **Debug logging:** start the manager yourself first (`afpfsd --manager
+  --logmethod syslog --loglevel LOG_DEBUG`); mount daemons inherit the
+  level. Little shows up in `log show` anyway.
 
 - Run the manager in the foreground with debug logs:
   `afpfsd --manager -d > /tmp/afpfsd.log 2>&1 &`. Per-mount daemons then log
