@@ -1,9 +1,11 @@
 --- fuse/commands.c.orig
 +++ fuse/commands.c
-@@ -600,8 +600,42 @@
+@@ -598,10 +598,50 @@
+     log_for_client((void *)c, AFPFSD, LOG_INFO,
+                    "Ping!");
      return AFPFSD_IPC_RESULT_OK;
- }
- 
++}
++
 +/* Find a volume that is still mounted, on any server. */
 +static struct afp_volume *first_mounted_volume(void)
 +{
@@ -16,16 +18,21 @@
 +    }
 +
 +    return NULL;
-+}
-+
+ }
+ 
  static unsigned char process_exit(struct afpfsd_client * c)
  {
++    static pthread_mutex_t exit_mutex = PTHREAD_MUTEX_INITIALIZER;
 +    struct afp_volume *v;
 +
 +    /* Unmount here, while the main loop still services server replies, so
 +     * each volume is flushed and the session logged out cleanly.  Once
 +     * exit is triggered the main loop stops reading the server sockets.
++     * The manager can send more than one exit command; serialize them so a
++     * later one cannot trigger exit while an earlier one is mid-unmount.
 +     * Unmounting can remove a server, so rescan from the top each time. */
++    pthread_mutex_lock(&exit_mutex);
++
 +    while ((v = first_mounted_volume()) != NULL) {
 +        char mountpoint[sizeof(v->mountpoint)];
 +        snprintf(mountpoint, sizeof(mountpoint), "%s", v->mountpoint);
@@ -40,6 +47,7 @@
 +                       "Volume %s unmounted", mountpoint);
 +    }
 +
++    pthread_mutex_unlock(&exit_mutex);
      log_for_client((void *)c, AFPFSD, LOG_INFO,
                     "Exiting");
      return AFPFSD_IPC_RESULT_OK;
