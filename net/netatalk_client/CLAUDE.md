@@ -192,9 +192,10 @@ the umac session).
     "jonesfarm" isn't an AFP volume; it's the ext4 disk on darkstar
     (`/media/blake/jonesfarm`) holding both shares. Bomb20 (`valid users =
     blake`, the user's real data) is off-limits, so the read-write test ran
-    on GuestShare, which guest can write. Script:
-    `rw-test2.sh <volume> <mount args>`, kept in the session scratchpad. It
-    works only in `netatalk_client-test-<timestamp>`. Phase 1 writes, then
+    on GuestShare, which guest can write. Script: `rw-test.sh` in this
+    folder (`rw-test.sh 192.168.234.23 guestshare -a guest`, run from
+    Terminal.app; exits non-zero on failure). It works only in
+    `netatalk_client-test-<timestamp>`. Phase 1 writes, then
     unmounts to drop caches; phase 2 remounts and verifies from the server,
     then removes the directory.
     - **Passed from the start:** 16 MB random file (sha256 after remount),
