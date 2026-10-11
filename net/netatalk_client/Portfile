@@ -67,4 +67,9 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # `afpc fs unmount` and `afpc fs exit` left volumes mounted. Unmount the
     # mount point with unmount(2) and wait for the FUSE thread.
     patchfiles-append      patch-fuse-macos-unmount.diff
+
+    # The FUSE thread wrote its result into the mount handler's stack frame
+    # after unmount, long after the handler returned; on macOS this crashes
+    # afpfsd before it can log out. Keep that state on the heap instead.
+    patchfiles-append      patch-fuse-thread-arg-lifetime.diff
 }

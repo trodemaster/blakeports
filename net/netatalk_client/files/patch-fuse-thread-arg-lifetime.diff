@@ -1,0 +1,145 @@
+--- fuse/commands.c.orig
++++ fuse/commands.c
+@@ -267,8 +267,20 @@
+     int fuse_errno;
+     int changeuid;
+     char *fuse_options;
++    int refs;
+ };
+ 
++/* The mount handler returns once the mount starts or times out, but the FUSE
++ * thread lives until unmount and then reports its result.  The arg is shared
++ * on the heap, and whichever of the two finishes last frees it. */
++static void release_fuse_thread_arg(struct start_fuse_thread_arg *arg)
++{
++    if (__atomic_sub_fetch(&arg->refs, 1, __ATOMIC_ACQ_REL) == 0) {
++        free(arg->fuse_options);
++        free(arg);
++    }
++}
++
+ /*
+  * Remove commas from fsname, as it confuses the fuse option parser.
+  */
+@@ -356,6 +368,7 @@
+         arg->fuse_errno = ENOMEM;
+         arg->wait = 0;
+         pthread_cond_signal(&volume->startup_condition_cond);
++        release_fuse_thread_arg(arg);
+         return NULL;
+     }
+ 
+@@ -417,6 +430,7 @@
+     arg->fuse_errno = errno;
+     arg->wait = 0;
+     pthread_cond_signal(&volume->startup_condition_cond);
++    release_fuse_thread_arg(arg);
+     /* Use NULL to send to stdout/syslog since this thread outlives the client connection */
+     log_for_client(NULL, AFPFSD, LOG_NOTICE,
+                    "Unmounting volume %s from %s",
+@@ -728,13 +742,21 @@
+         pthread_mutex_t mutex;
+         struct timespec ts;
+         struct timeval tv;
+-        struct start_fuse_thread_arg arg;
+-        memset(&arg, 0, sizeof(arg));
+-        arg.client = c;
+-        arg.volume = volume;
+-        arg.wait = 1;
+-        arg.changeuid = req.changeuid;
+-        arg.fuse_options = req.fuse_options;
++        struct start_fuse_thread_arg *arg;
++        int fuse_result, fuse_errno;
++
++        if ((arg = calloc(1, sizeof(*arg))) == NULL) {
++            log_for_client((void *)c, AFPFSD, LOG_ERR,
++                           "Could not allocate mount thread state");
++            goto error;
++        }
++
++        arg->client = c;
++        arg->volume = volume;
++        arg->wait = 1;
++        arg->changeuid = req.changeuid;
++        arg->fuse_options = strdup(req.fuse_options);
++        arg->refs = 2;
+         gettimeofday(&tv, NULL);
+         ts.tv_sec = tv.tv_sec;
+         ts.tv_sec += 5;
+@@ -743,9 +765,15 @@
+         pthread_cond_init(&volume->startup_condition_cond, NULL);
+         /* Kickoff a thread to see how quickly it exits.  If
+          * it exits quickly, we have an error and it failed. */
+-        pthread_create(&volume->thread, NULL, start_fuse_thread, &arg);
++        if (pthread_create(&volume->thread, NULL, start_fuse_thread, arg) != 0) {
++            log_for_client((void *)c, AFPFSD, LOG_ERR,
++                           "Could not start mount thread");
++            release_fuse_thread_arg(arg);
++            release_fuse_thread_arg(arg);
++            goto error;
++        }
+ 
+-        if (arg.wait) {
++        if (arg->wait) {
+             /* Properly lock the mutex paired with the condition before waiting */
+             pthread_mutex_lock(&mutex);
+             ret = pthread_cond_timedwait(&volume->startup_condition_cond, &mutex, &ts);
+@@ -755,28 +783,32 @@
+                 log_for_client((void *)c, AFPFSD, LOG_ERR,
+                                "Error waiting for mount thread: %s", strerror(ret));
+                 volume->mounted = AFP_VOLUME_UNMOUNTED;
++                release_fuse_thread_arg(arg);
+                 goto error;
+             }
+         }
+ 
++        fuse_result = arg->fuse_result;
++        fuse_errno = arg->fuse_errno;
++        release_fuse_thread_arg(arg);
+         report_fuse_errors(c);
+ 
+-        /* If timedout, the mount might still succeed, so don't check arg.fuse_result yet */
++        /* If timedout, the mount might still succeed, so don't check fuse_result yet */
+         if (ret == ETIMEDOUT) {
+             log_for_client((void *)c, AFPFSD, LOG_NOTICE,
+                            "Still trying to mount...");
+             return 0;
+         }
+ 
+-        switch (arg.fuse_result) {
++        switch (fuse_result) {
+         case 0:
+             if (volume->mounted == AFP_VOLUME_UNMOUNTED) {
+                 /* Try and discover why */
+-                switch (arg.fuse_errno) {
++                switch (fuse_errno) {
+                 case ENOENT:
+                     log_for_client((void *)c, AFPFSD, LOG_ERR,
+                                    "Mount failed with errno %d (%s)",
+-                                   arg.fuse_errno, mount_errno_to_string(arg.fuse_errno));
++                                   fuse_errno, mount_errno_to_string(fuse_errno));
+                     goto error;
+ 
+                 default:
+@@ -784,7 +816,7 @@
+                                    "Mounting of volume %s from server %s failed with errno %d (%s)",
+                                    volume->volume_name_printable,
+                                    volume->server->server_name_printable,
+-                                   arg.fuse_errno, mount_errno_to_string(arg.fuse_errno));
++                                   fuse_errno, mount_errno_to_string(fuse_errno));
+                     goto error;
+                 }
+             } else {
+@@ -799,9 +831,9 @@
+             volume->mounted = AFP_VOLUME_UNMOUNTED;
+             log_for_client((void *)c, AFPFSD, LOG_ERR,
+                            "%s: %s (%d, %d)",
+-                           fuse_result_to_string(arg.fuse_result),
+-                           mount_errno_to_string(arg.fuse_errno),
+-                           arg.fuse_result, arg.fuse_errno);
++                           fuse_result_to_string(fuse_result),
++                           mount_errno_to_string(fuse_errno),
++                           fuse_result, fuse_errno);
+             goto error;
+         }
+     }
