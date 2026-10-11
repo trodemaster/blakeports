@@ -33,7 +33,7 @@ if ! grep -q "blakeports" /opt/local/etc/macports/sources.conf; then
   echo "Configuring macports /opt/local/etc/macports/sources.conf"
   sudo tee /opt/local/etc/macports/sources.conf <<EOF
 file:///opt/actions-runner/_work/blakeports/blakeports [default]
-https://mirror.fcix.net/macports/release/tarballs/ports.tar
+rsync://rsync.macports.org/macports/release/tarballs/ports.tar.gz
 EOF
   NEED_SYNC=true
 else
@@ -52,12 +52,49 @@ echo "Regenerating blakeports port index..."
 (cd "$REPO_ROOT" && portindex >/dev/null 2>&1)
 echo "✓ Port index regenerated"
 
+# An interrupted sync can leave a zero-size (or truncated) official ports.tar
+# behind. Later syncs then report "No updates" and the official tree is never
+# fetched, so detect that state and force a clean sync.
+OFFICIAL_TARBALL_GLOB=(/opt/local/var/macports/sources/*/macports/release/tarballs)
+if [[ "$NEED_SYNC" != "true" ]]; then
+  for dir in "${OFFICIAL_TARBALL_GLOB[@]}"; do
+    for tarball in "$dir"/ports.tar*; do
+      if [[ -f "$tarball" && ! -s "$tarball" ]]; then
+        echo "Official $tarball is empty - forcing sync"
+        NEED_SYNC=true
+      fi
+    done
+  done
+fi
+if [[ "$NEED_SYNC" != "true" ]]; then
+  if ! port info go >/dev/null 2>&1; then
+    echo "'port info go' failed - official ports tree missing, forcing sync"
+    NEED_SYNC=true
+  fi
+fi
+
 # sync macports to update port index (only if needed)
 # Note: -v flag is required due to MacPorts bug "can't read verboseflag: no such variable"
-# Output suppressed as it produces tens of thousands of lines
+# Output is logged because it is tens of thousands of lines; the tail is shown on failure.
 if [[ "$NEED_SYNC" == "true" ]]; then
   echo "Syncing MacPorts port index..."
-  sudo port -v sync >/dev/null 2>&1
+  SYNC_LOG="$(mktemp)"
+  if ! sudo port -v sync >"$SYNC_LOG" 2>&1; then
+    echo "Error: port sync failed. Last 30 lines of output:" >&2
+    tr '\r' '\n' <"$SYNC_LOG" | tail -n 30 >&2
+    # A failed sync can leave an empty/partial tarball that blocks later syncs
+    # ("No updates"). Remove it, plus the stale ports dir whose mtime gates it.
+    OFFICIAL_TARBALL_GLOB=(/opt/local/var/macports/sources/*/macports/release/tarballs)
+    for dir in "${OFFICIAL_TARBALL_GLOB[@]}"; do
+      for tarball in "$dir"/ports.tar*; do
+        echo "Removing incomplete $tarball" >&2
+        sudo rm -rf "$tarball" "$dir/ports"
+      done
+    done
+    rm -f "$SYNC_LOG"
+    exit 1
+  fi
+  rm -f "$SYNC_LOG"
 else
   echo "✓ Skipping port sync - no changes detected"
 fi
