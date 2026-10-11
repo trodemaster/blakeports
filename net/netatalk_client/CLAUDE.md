@@ -1,7 +1,7 @@
 # macFUSE (FSKit) for netatalk_client +fuse: notes and status
 
-There's no macfuse Portfile here. `port:macfuse` comes from the official ports
-tree (`fuse/macfuse`, 5.4.0 at the time of writing). This folder holds notes on
+`port:macfuse` comes from the official ports
+tree (`fuse/macfuse`, 5.4.0 at the time of writing). These are notes on
 getting `netatalk_client +fuse` mounting through macFUSE's FSKit backend on
 far-star.
 
