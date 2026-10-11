@@ -28,7 +28,6 @@ GITHUB_REPO="${GITHUB_REPO:-blakeports}"
 # JSON format with type, name, ssh_host, and optional labels/description
 DEFAULT_RUNNER_CONFIG='[
   {"type":"lima","name":"macos-26","ssh_host":""},
-  {"type":"lima","name":"macos-26-beta","ssh_host":""},
   {"type":"lima","name":"macos-15","ssh_host":""},
   {"type":"vmware","name":"tenfive","ssh_host":""},
   {"type":"vmware","name":"tensix","ssh_host":""},
@@ -51,7 +50,6 @@ VMWARE_VM_USER="blake"  # SSH user for VMware VMs
 
 # Runner group configurations
 LEGACY_RUNNERS=("tenfive-ppc" "tenfive" "tensix" "tenseven" "teneight" "tennine" "tenten" "teneleven")
-CURRENT_RUNNERS=("macos-26" "macos-26-beta" "macos-15")
 GROUP=""
 STOP_VMS=""
 
@@ -121,14 +119,13 @@ Options:
 Examples:
     # Register Lima macOS runners (instance must be running first)
     $0 -lima macos-26
-    $0 -lima macos-26-beta
     $0 -lima macos-15
 
     # Create runner for specific owner/repo
     $0 -lima macos-26 -owner myusername -repo myproject
 
     # Manage runner groups
-    $0 -start-group current    # Start lima runners (macos-26, macos-26-beta, macos-15)
+    $0 -start-group current    # Start lima runners (macos-26, macos-15)
     $0 -start-group legacy     # Start docker runners for legacy VMs
     $0 -start-group all        # Start all runners (current + legacy)
     $0 -stop-group legacy -stop-vms  # Stop legacy runners and shut down VMs
@@ -153,7 +150,6 @@ Configuration Examples:
     # Lima runners only (current)
     export RUNNER_CONFIG='[
       {"type":"lima","name":"macos-26","ssh_host":""},
-      {"type":"lima","name":"macos-26-beta","ssh_host":""},
       {"type":"lima","name":"macos-15","ssh_host":""}
     ]'
 
@@ -608,8 +604,9 @@ get_runner_label_for_instance() {
     local instance_name=$1
     case "$instance_name" in
         "macos-26")       echo "macOS_26" ;;
-        "macos-26-beta")  echo "macOS_26_beta" ;;
         "macos-15")       echo "macOS_15" ;;
+        "macos-27")       echo "macOS_27" ;;
+        "macos-14")       echo "macOS_14" ;;
         *)                echo "$instance_name" ;;
     esac
 }
@@ -619,10 +616,9 @@ get_lima_instance_for_label() {
     local runner_label=$1
     case "$runner_label" in
         "macOS_26")      echo "macos-26" ;;
-        "macOS_26_beta") echo "macos-26-beta" ;;
         "macOS_15")      echo "macos-15" ;;
         "macOS_27")      echo "macos-27" ;;
-        "macOS_27_custo") echo "macos-27-custo" ;;
+        "macOS_14")      echo "macos-14" ;;
         *)               echo "" ;;
     esac
 }
