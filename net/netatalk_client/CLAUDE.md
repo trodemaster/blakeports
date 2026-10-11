@@ -31,7 +31,7 @@ the umac session).
 | FSKit extension "macFUSE" | Enabled in System Settings. "macFUSE (local)" stays off; AFP doesn't need it |
 | AFP connect to darkstar as guest | Works when started from a GUI session (AFP3.4, Netatalk4.6.0dev) |
 | macFUSE privileged helper | Installed 2026-10-11 via `macfuse install --components privileged-helpers` from a local Terminal; admin prompt appeared |
-| FUSE mount | **Works** via FSKit (`fskit` in mount flags). Listing came back empty; unmount from afpc is broken (see 7) |
+| FUSE mount | **Works** via FSKit (`fskit` in mount flags). Listing correct (share is empty); unmount from afpc is broken (see 7) |
 | `/Volumes/guestshare` | Gone; removed by the forced unmount. Recreate (`mkdir`) before the next mount |
 | Running processes | None. afpfsd exited, nothing mounted (checked 12:59) |
 
@@ -94,18 +94,19 @@ the umac session).
    SIGTERM was ignored), after which everything unwound. To unmount safely
    for now, run `umount /Volumes/guestshare` **while afpfsd is still
    running**, then `afpc fs exit`. Never exit afpfsd with a volume mounted.
-8. **Empty listing (unexplained).** `ls -la /Volumes/guestshare` showed
-   only `.` and `..`. Either guestshare is empty on darkstar (asked the
-   darkstar session) or readdir isn't reaching the AFP side. Next time,
-   compare with afpc's non-FUSE listing of the same share.
+8. **Empty listing: correct.** The darkstar session confirmed GuestShare
+   (`/media/blake/jonesfarm/GuestShare`) is empty. The server log shows the
+   share enumerated at 12:56:25, then `dsi_stream_read` unexpected EOF when
+   afpfsd exited (no clean logout). A file-read test needs a file in the
+   share; the darkstar session will add one only with the user's OK.
 
 ## Next steps
 
 Done 2026-10-11: helper installed (step 1 of the old plan; the manual
 helper install wasn't needed) and the first guest mount worked.
 
-1. Find out whether guestshare has files (darkstar session), and if it does,
-   debug the empty readdir.
+1. If a read test is wanted, ask the user to OK the darkstar session adding
+   a file to GuestShare.
 2. Fix the macOS unmount path in afpfsd (`fuse/commands.c`, the "FUSE
    unmount not supported" branch); `unmount(2)` on the mount point or
    libfuse3's unmount should work with FSKit. Keep it a blakeports patch;
