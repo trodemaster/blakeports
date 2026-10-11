@@ -112,9 +112,9 @@ the umac session).
      unlike the issue's report), or kill `fskitd`, which force-unmounts all
      FSKit volumes. Nothing to add upstream; it already matches our
      observation.
-   - **Safe procedure for now:** `umount /Volumes/guestshare` (or
-     `diskutil unmount`) while afpfsd is still running, then
-     `afpc fs exit`. Never exit afpfsd with a volume mounted.
+   - **Without the patch:** `umount /Volumes/guestshare` while afpfsd is
+     still running, then `afpc fs exit`. Never exit an unpatched afpfsd with
+     a volume mounted.
    - **Fixed in blakeports for (a):** `files/patch-fuse-macos-unmount.diff`
      (commit `b28dfca`) adds a `__APPLE__` branch to
      `fuse_unmount_volume()`: `unmount(2)` on the mount point, then join the
@@ -125,6 +125,18 @@ the umac session).
      away; `afpc fs exit` with a volume mounted unmounted it, and every
      afpfsd process exited. Nothing hung. `afpc` still prints "Writing:
      Broken pipe" on `fs exit`, as it did before the patch.
+   - **No clean AFP logout (open).** The darkstar session checked the
+     13:44 sessions. Both ended with `dsi_stream_read: len:0, unexpected EOF`
+     and no FPLogout, closevol or "AFP statistics" line (debug logging on).
+     The unmount EOF was at 13:44:02, the moment of `fs unmount`; the exit
+     EOF was at 13:44:34, about 5 s after `fs exit`. In the code,
+     `lib/afp.c` `afp_detach_volume()` does call
+     `afp_logout(server, DSI_DONT_WAIT)` and then `afp_server_remove()` when
+     the last volume detaches (`auto_disconnect_on_unmount` defaults to 1).
+     It never sends FPCloseVol. Likely the no-wait logout loses a race with
+     the socket close, but this is unconfirmed: run afpfsd in the foreground
+     with debug (`afpfsd -d`?) to see. It's the shared detach path, not the
+     macOS patch, so Linux probably behaves the same.
 9. **Mount point is deleted on unmount.** After an unmount,
    `/Volumes/guestshare` is gone, and `/Volumes` is root-owned, so the next
    mount needs `sudo mkdir /Volumes/guestshare && sudo chown blake:staff
@@ -145,9 +157,9 @@ helper install wasn't needed) and the first guest mount worked.
 
 1. If a read test is wanted, ask the user to OK the darkstar session adding
    a file to GuestShare.
-2. Unmount fix done (finding 7). Waiting on the darkstar session to say
-   whether the 13:44 sessions logged out cleanly. Decide what to do about
-   the deleted mount point (finding 9).
+2. Unmount fix done (finding 7). Still open: no clean AFP logout on
+   unmount or exit (finding 7, last item), and the deleted mount point
+   (finding 9).
 3. Mount test procedure (desktop Terminal, or `open -a Terminal x.command`
    from Claude, which gets Local Network permission via Terminal). Tell the
    darkstar session before and after:
