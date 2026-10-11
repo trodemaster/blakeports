@@ -175,12 +175,18 @@ the umac session).
        - **Still present:** "Writing: Broken pipe". The mount daemon writes
          its reply to the manager, which already closed the socket, and the
          manager was started from the same terminal. It's cosmetic.
-9. **Mount point is deleted on unmount.** After an unmount,
-   `/Volumes/guestshare` is gone, and `/Volumes` is root-owned, so the next
-   mount needs `sudo mkdir /Volumes/guestshare && sudo chown blake:staff
-   /Volumes/guestshare` first. FSKit requires mount points under
-   `/Volumes`. Open question whether afpfsd should handle this (it runs as
-   the user, so it can't create the directory itself).
+9. **Mount point under `/Volumes`: fixed.** `/Volumes` is root-owned
+   (755), and every unmount removed `/Volumes/guestshare`, so each mount
+   needed a `sudo mkdir` first. The removal comes from macFUSE: its root
+   privileged helper (`io.macfuse.app.launchservice.daemon`) creates a
+   missing mount point for the mounting user ("Create mount point", "Failed
+   to change owner of mount point") and deletes it on unmount. Only
+   afpfsd's own `stat()` check in `process_mount()` refused a missing
+   directory. `files/patch-fuse-macos-volumes-mountpoint.diff` (commit
+   `3a786bd`, CI green) skips that check on macOS when FSKit is in use (no
+   `/dev/macfuse0`) and the path is directly under `/Volumes/`. No
+   elevation in netatalk_client. Tested 14:15 with no mkdir: mount created
+   `/Volumes/guestshare` (blake:staff), and unmount and exit removed it.
 
 8. **Empty listing: correct.** The darkstar session confirmed GuestShare
    (`/media/blake/jonesfarm/GuestShare`) is empty. The server log shows the
@@ -203,7 +209,6 @@ helper install wasn't needed) and the first guest mount worked.
    from Claude, which gets Local Network permission via Terminal). Tell the
    darkstar session before and after:
    ```
-   sudo mkdir -p /Volumes/guestshare && sudo chown blake:staff /Volumes/guestshare
    /opt/local/bin/afpc fs mount -a guest 192.168.234.23:guestshare /Volumes/guestshare
    mount | grep guestshare; ls -la /Volumes/guestshare
    /opt/local/bin/afpc fs unmount /Volumes/guestshare   # works with the patch
