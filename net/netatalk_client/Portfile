@@ -77,4 +77,9 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # unmounting from the exit path stalls and the session ends in a reset.
     # Unmount from the `fs exit` handler first, while replies still flow.
     patchfiles-append      patch-fuse-exit-unmount.diff
+
+    # /Volumes is root-owned. With FSKit, macFUSE's privileged helper creates
+    # a missing mount point there for the user and removes it on unmount, so
+    # don't insist the directory exist beforehand.
+    patchfiles-append      patch-fuse-macos-volumes-mountpoint.diff
 }

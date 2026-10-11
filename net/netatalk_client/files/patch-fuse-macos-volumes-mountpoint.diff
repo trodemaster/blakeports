@@ -1,0 +1,30 @@
+--- fuse/commands.c.orig
++++ fuse/commands.c
+@@ -701,6 +701,19 @@
+     struct stat mountpoint_stat;
+ 
+     if (stat(req.mountpoint, &mountpoint_stat) != 0) {
++#ifdef __APPLE__
++        /* With the FSKit backend, macFUSE's privileged helper creates a
++         * missing mount point directly under /Volumes (owned by the mounting
++         * user) and removes it again on unmount.  /Volumes is root-owned, so
++         * leave that to macFUSE instead of requiring the directory here. */
++        if (errno == ENOENT && access(FUSE_DEVICE, F_OK) != 0
++                && strncmp(req.mountpoint, "/Volumes/", 9) == 0
++                && req.mountpoint[9] != '\0'
++                && strchr(req.mountpoint + 9, '/') == NULL) {
++            goto mountpoint_checked;
++        }
++
++#endif
+         log_for_client((void *)c, AFPFSD, LOG_ERR,
+                        "Mount point %s does not exist: %s",
+                        req.mountpoint, strerror(errno));
+@@ -722,6 +735,7 @@
+     }
+ 
+ #ifdef __APPLE__
++mountpoint_checked:
+     /* macFUSE's FSKit backend mounts over XPC and creates no device node;
+      * only the kernel backend needs /dev/macfuse0 (checked below if present). */
+     if (stat(FUSE_DEVICE, &lstat) == 0 &&
