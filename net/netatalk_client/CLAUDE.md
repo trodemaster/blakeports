@@ -203,7 +203,7 @@ helper install wasn't needed) and the first guest mount worked.
    a file to GuestShare.
 2. Unmount, exit and logout are fixed (finding 7). The darkstar log
    confirms both 14:07 sessions: "AFP logout by nobody", "client logged
-   out" and "AFP statistics", with no EOF or reset. Still open: the deleted mount point (finding 9) and the
+   out" and "AFP statistics", with no EOF or reset. The mount point is handled (finding 9). Still open: the
    cosmetic "Writing: Broken pipe".
 3. Mount test procedure (desktop Terminal, or `open -a Terminal x.command`
    from Claude, which gets Local Network permission via Terminal). Tell the
