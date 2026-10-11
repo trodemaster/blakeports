@@ -82,4 +82,9 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # a missing mount point there for the user and removes it on unmount, so
     # don't insist the directory exist beforehand.
     patchfiles-append      patch-fuse-macos-volumes-mountpoint.diff
+
+    # The manager sent each mount daemon two exit commands and closed the
+    # socket without reading the reply, so the daemon printed "Writing:
+    # Broken pipe". Send once per daemon and wait for its reply.
+    patchfiles-append      patch-fuse-manager-exit-reply.diff
 }

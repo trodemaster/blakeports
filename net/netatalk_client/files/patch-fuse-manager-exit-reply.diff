@@ -1,0 +1,65 @@
+--- fuse/daemon.c.orig
++++ fuse/daemon.c
+@@ -294,6 +294,9 @@
+     return 0;
+ }
+ 
++/* Seconds the manager waits for a child to answer an exit command. */
++#define MANAGER_EXIT_REPLY_TIMEOUT 15
++
+ /* Send exit command to a socket path */
+ static void send_exit_to_socket(const char *socket_path)
+ {
+@@ -322,6 +325,19 @@
+         if (afpfsd_ipc_write_all(sock, &cmd, sizeof(cmd)) < 0) {
+             log_for_client(NULL, AFPFSD, LOG_WARNING,
+                            "Could not send exit command to child daemon");
++        } else {
++            /* Wait for the child's reply, which it sends after unmounting
++             * and logging out; closing first makes its write fail with
++             * EPIPE.  The child closes the socket once it has replied. */
++            struct timeval tv = { .tv_sec = MANAGER_EXIT_REPLY_TIMEOUT };
++            char buf[256];
++            ssize_t n;
++
++            setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
++
++            do {
++                n = read(sock, buf, sizeof(buf));
++            } while (n > 0 || (n < 0 && errno == EINTR));
+         }
+     }
+ 
+@@ -546,14 +562,26 @@
+                     send_exit_to_socket(path);
+                 }
+             }
+-
+-            globfree(&g);
+         }
+-    }
+ 
+-    while (child) {
+-        send_exit_to_socket(child->socket_id);
+-        child = child->next;
++        /* Tracked children not already reached through the glob above;
++         * a second exit command to the same child is redundant. */
++        for (; child; child = child->next) {
++            int already_sent = 0;
++
++            for (size_t i = 0; i < g.gl_pathc; i++) {
++                if (strcmp(child->socket_id, g.gl_pathv[i]) == 0) {
++                    already_sent = 1;
++                    break;
++                }
++            }
++
++            if (!already_sent) {
++                send_exit_to_socket(child->socket_id);
++            }
++        }
++
++        globfree(&g);
+     }
+ 
+     /* Short grace period. */
