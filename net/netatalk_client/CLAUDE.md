@@ -125,18 +125,27 @@ the umac session).
      away; `afpc fs exit` with a volume mounted unmounted it, and every
      afpfsd process exited. Nothing hung. `afpc` still prints "Writing:
      Broken pipe" on `fs exit`, as it did before the patch.
-   - **No clean AFP logout (open).** The darkstar session checked the
-     13:44 sessions. Both ended with `dsi_stream_read: len:0, unexpected EOF`
-     and no FPLogout, closevol or "AFP statistics" line (debug logging on).
-     The unmount EOF was at 13:44:02, the moment of `fs unmount`; the exit
-     EOF was at 13:44:34, about 5 s after `fs exit`. In the code,
-     `lib/afp.c` `afp_detach_volume()` does call
-     `afp_logout(server, DSI_DONT_WAIT)` and then `afp_server_remove()` when
-     the last volume detaches (`auto_disconnect_on_unmount` defaults to 1).
-     It never sends FPCloseVol. Likely the no-wait logout loses a race with
-     the socket close, but this is unconfirmed: run afpfsd in the foreground
-     with debug (`afpfsd -d`?) to see. It's the shared detach path, not the
-     macOS patch, so Linux probably behaves the same.
+   - **No clean AFP logout (open; client bug, never sent).** The darkstar
+     session saw every unmount/exit session end with `dsi_stream_read:
+     len:0, unexpected EOF` and no logout. A packet capture on far-star
+     (2026-10-11 13:51, `tcpdump -i en0 host 192.168.234.23 and tcp port
+     548`) settles it: the client never sends FPLogout (AFP 20), FPCloseVol
+     (2) or DSICloseSession.
+     - Unmount session (port 55837): the last request was FPGetVolParms
+       (AFP 17) at 13:51:53.107, then the client sent FIN at .115.
+     - Exit session (port 55840): the last request was FPGetVolParms at
+       13:52:01.452, then the client sent RST at 13:52:06.476, with no FIN.
+
+     It's not a send race. `afpc_dsi_send()` writes synchronously, so if
+     `afp_logout()` ran with a live fd, the bytes would be on the wire.
+     Either `afp_detach_volume()` never reaches its
+     `afp_logout(server, DSI_DONT_WAIT)` (`lib/afp.c`, guarded by
+     `something_is_attached()` and `auto_disconnect_on_unmount`), or
+     `afpc_dsi_send()` returns early (`fd < 0` or the state is already
+     disconnected). Next: attach lldb (sudo) to the per-mount afpfsd and
+     break on `afp_detach_volume`, `afp_logout` and `afp_server_remove`. It's
+     shared detach code, not the macOS patch, so Linux likely behaves the
+     same.
 9. **Mount point is deleted on unmount.** After an unmount,
    `/Volumes/guestshare` is gone, and `/Volumes` is root-owned, so the next
    mount needs `sudo mkdir /Volumes/guestshare && sudo chown blake:staff
