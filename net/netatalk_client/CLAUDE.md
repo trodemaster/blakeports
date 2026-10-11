@@ -68,7 +68,7 @@ the umac session).
    `io.macfuse.mount` that libfuse's FSKit path uses. It isn't installed:
    - `macfuse.app` tries to install it with SMJobBless on demand.
    - From SSH/tmux it fails with `-60007`; the session can't show a prompt.
-   - Run via `macfuse install --components privileged-helpers` in a desktop
+   - Run via `macfuse.app/Contents/MacOS/macfuse install --components privileged-helpers` (not on PATH; full path in Next steps) in a desktop
      Terminal window (opened over SSH with `open x.command`), authd denied it
      in 8 ms (`-60005`), and SecurityAgent never ran. No password prompt
      appeared.
