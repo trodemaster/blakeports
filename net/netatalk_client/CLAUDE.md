@@ -31,7 +31,7 @@ the umac session).
 | FSKit extension "macFUSE" | Enabled in System Settings. "macFUSE (local)" stays off; AFP doesn't need it |
 | AFP connect to darkstar as guest | Works when started from a GUI session (AFP3.4, Netatalk4.6.0dev) |
 | macFUSE privileged helper | Installed 2026-10-11 via `macfuse install --components privileged-helpers` from a local Terminal; admin prompt appeared |
-| FUSE mount | **Works** via FSKit (`fskit` in mount flags). Listing correct (share is empty); unmount from afpc is broken (see 7) |
+| FUSE mount | **Works** via FSKit (`fskit` in mount flags). Listing correct (share is empty); `afpc fs unmount` and `fs exit` work with the unmount patch (see 7) |
 | `/Volumes/guestshare` | Gone; removed by the forced unmount. Recreate (`mkdir`) before the next mount |
 | Running processes | None. afpfsd exited, nothing mounted (checked 12:59) |
 
@@ -115,10 +115,22 @@ the umac session).
    - **Safe procedure for now:** `umount /Volumes/guestshare` (or
      `diskutil unmount`) while afpfsd is still running, then
      `afpc fs exit`. Never exit afpfsd with a volume mounted.
-   - **Possible blakeports fix for (a):** implement the `__APPLE__` branch
-     of `fuse_unmount_volume()` with `unmount(mountpoint, 0)` from afpfsd,
-     letting libfuse's loop end, and have `fs exit` unmount mounted volumes
-     before quitting. Not started.
+   - **Fixed in blakeports for (a):** `files/patch-fuse-macos-unmount.diff`
+     (commit `b28dfca`) adds a `__APPLE__` branch to
+     `fuse_unmount_volume()`: `unmount(2)` on the mount point, then join the
+     FUSE thread. `fs exit` already unmounts mounted volumes through
+     `fuse_forced_ending_hook()`, so it needed no separate change. CI passed
+     on 15, 26 and 27 (run 38173199182). On far-star (clean install,
+     2026-10-11 13:44), `afpc fs unmount` returned 0 and the volume went
+     away; `afpc fs exit` with a volume mounted unmounted it, and every
+     afpfsd process exited. Nothing hung. `afpc` still prints "Writing:
+     Broken pipe" on `fs exit`, as it did before the patch.
+9. **Mount point is deleted on unmount.** After an unmount,
+   `/Volumes/guestshare` is gone, and `/Volumes` is root-owned, so the next
+   mount needs `sudo mkdir /Volumes/guestshare && sudo chown blake:staff
+   /Volumes/guestshare` first. FSKit requires mount points under
+   `/Volumes`. Open question whether afpfsd should handle this (it runs as
+   the user, so it can't create the directory itself).
 
 8. **Empty listing: correct.** The darkstar session confirmed GuestShare
    (`/media/blake/jonesfarm/GuestShare`) is empty. The server log shows the
@@ -133,18 +145,17 @@ helper install wasn't needed) and the first guest mount worked.
 
 1. If a read test is wanted, ask the user to OK the darkstar session adding
    a file to GuestShare.
-2. Fix (a) from finding 7: add a macOS branch to `fuse_unmount_volume()`
-   in `fuse/daemon.c`, and unmount before `fs exit`. Keep it a blakeports
-   patch; no upstream activity until tested and the user approves. (b) is
-   macFUSE#1201; just avoid it.
+2. Unmount fix done (finding 7). Waiting on the darkstar session to say
+   whether the 13:44 sessions logged out cleanly. Decide what to do about
+   the deleted mount point (finding 9).
 3. Mount test procedure (desktop Terminal, or `open -a Terminal x.command`
    from Claude, which gets Local Network permission via Terminal). Tell the
    darkstar session before and after:
    ```
-   mkdir -p /Volumes/guestshare
+   sudo mkdir -p /Volumes/guestshare && sudo chown blake:staff /Volumes/guestshare
    /opt/local/bin/afpc fs mount -a guest 192.168.234.23:guestshare /Volumes/guestshare
    mount | grep guestshare; ls -la /Volumes/guestshare
-   umount /Volumes/guestshare          # while afpfsd is still running
+   /opt/local/bin/afpc fs unmount /Volumes/guestshare   # works with the patch
    /opt/local/bin/afpc fs exit
    ```
 4. Then decide what belongs in a port: the netatalk_client FSKit and
