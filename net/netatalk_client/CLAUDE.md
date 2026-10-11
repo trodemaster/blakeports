@@ -238,8 +238,10 @@ helper install wasn't needed) and the first guest mount worked.
 4. Then decide what belongs in a port: the netatalk_client FSKit and
    unmount patches, and a `port:macfuse` note that FSKit mounts need the
    privileged helper (`macfuse.app/Contents/MacOS/macfuse install
-   --components privileged-helpers`, run locally). Bump `netatalk_client`
-   revision then (not bumped while testing).
+   --components privileged-helpers`, run locally). Don't bump the
+   `netatalk_client` revision; to pick up changes locally, run
+   `sudo port uninstall netatalk_client && sudo port clean --all
+   netatalk_client && sudo port install netatalk_client +fuse`.
 
 ## Debugging tips
 
