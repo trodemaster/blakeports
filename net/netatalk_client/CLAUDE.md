@@ -85,15 +85,41 @@ the umac session).
    afpfsd loads them, and the validly signed helper (team `3T5GSNBU6W`)
    accepted the ad-hoc `MFMount` client over `io.macfuse.mount`. The mount
    came up as `macfuse://<uuid> on /Volumes/guestshare (macfuse, ..., fskit)`.
-7. **Unmount is broken on macOS (netatalk_client bug).** On
-   `afpc fs unmount`, afpfsd logs `FUSE unmount not supported - volume
-   remains mounted` and returns failure. `afpc fs exit` then made afpfsd
-   exit with the volume still mounted. That left the FSKit volume orphaned:
-   `mount`, `ls` and `umount -f` all hung in uninterruptible wait. Recovery
-   was `kill -9` of the `io.macfuse.app.fsmodule.macfuse` appex (user-owned;
-   SIGTERM was ignored), after which everything unwound. To unmount safely
-   for now, run `umount /Volumes/guestshare` **while afpfsd is still
-   running**, then `afpc fs exit`. Never exit afpfsd with a volume mounted.
+7. **Unmount: two separate problems.** Seen on 2026-10-11:
+   `afpc fs unmount /Volumes/guestshare` failed with "Unmount failed ... try
+   using 'umount'", and afpfsd logged `FUSE unmount not supported - volume
+   remains mounted on /Volumes/guestshare`. `afpc fs exit` then made afpfsd
+   exit with the volume still mounted (darkstar logged `dsi_stream_read`
+   EOF, no clean logout). The orphaned volume froze `mount`, `ls` and
+   `umount -f` in uninterruptible wait (state `U`).
+   - **(a) netatalk_client has no programmatic unmount on macOS, by
+     design.** `fuse/daemon.c` `fuse_unmount_volume()` only implements
+     `fuse_exit()` plus a SIGPIPE wake of the FUSE thread under
+     `#if !defined(__APPLE__) && FUSE_USE_VERSION >= 30`. On macOS it logs
+     "Programmatic unmount not supported on this platform" and returns -1,
+     and `lib/afp.c` `afp_unmount_volume()` turns that into the warning
+     above. `afpc fs exit` doesn't unmount first. This is netatalk_client's
+     gap, not macFUSE's, and it applies to the kernel backend too.
+   - **(b) The hang after the daemon dies is a known macFUSE FSKit bug.**
+     It's [macfuse/macfuse#1201](https://github.com/macfuse/macfuse/issues/1201),
+     open, filed 2026-09-18 against 5.4.0 on macOS 26.6.2. When the file
+     system process dies, the FSKit module never notices, so the volume
+     stays mounted and `umount` and in-flight requests block. The
+     maintainer (bfleischer) confirmed it: the FSKit backend doesn't yet
+     honor `daemon_timeout` and some channel errors aren't handled.
+     Workarounds: kill that volume's `io.macfuse.app.fsmodule.macfuse`
+     process (what we did; it ignored SIGTERM here and needed `kill -9`,
+     unlike the issue's report), or kill `fskitd`, which force-unmounts all
+     FSKit volumes. Nothing to add upstream; it already matches our
+     observation.
+   - **Safe procedure for now:** `umount /Volumes/guestshare` (or
+     `diskutil unmount`) while afpfsd is still running, then
+     `afpc fs exit`. Never exit afpfsd with a volume mounted.
+   - **Possible blakeports fix for (a):** implement the `__APPLE__` branch
+     of `fuse_unmount_volume()` with `unmount(mountpoint, 0)` from afpfsd,
+     letting libfuse's loop end, and have `fs exit` unmount mounted volumes
+     before quitting. Not started.
+
 8. **Empty listing: correct.** The darkstar session confirmed GuestShare
    (`/media/blake/jonesfarm/GuestShare`) is empty. The server log shows the
    share enumerated at 12:56:25, then `dsi_stream_read` unexpected EOF when
@@ -107,10 +133,10 @@ helper install wasn't needed) and the first guest mount worked.
 
 1. If a read test is wanted, ask the user to OK the darkstar session adding
    a file to GuestShare.
-2. Fix the macOS unmount path in afpfsd (`fuse/commands.c`, the "FUSE
-   unmount not supported" branch); `unmount(2)` on the mount point or
-   libfuse3's unmount should work with FSKit. Keep it a blakeports patch;
-   no upstream activity until tested and the user approves.
+2. Fix (a) from finding 7: add a macOS branch to `fuse_unmount_volume()`
+   in `fuse/daemon.c`, and unmount before `fs exit`. Keep it a blakeports
+   patch; no upstream activity until tested and the user approves. (b) is
+   macFUSE#1201; just avoid it.
 3. Mount test procedure (desktop Terminal, or `open -a Terminal x.command`
    from Claude, which gets Local Network permission via Terminal). Tell the
    darkstar session before and after:
