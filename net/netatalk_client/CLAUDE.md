@@ -188,6 +188,32 @@ the umac session).
    afpfsd exited (no clean logout). A file-read test needs a file in the
    share; the darkstar session will add one only with the user's OK.
 
+10. **Read-write test (GuestShare, guest, 2026-10-11 14:22–14:26).**
+    "jonesfarm" isn't an AFP volume; it's the ext4 disk on darkstar
+    (`/media/blake/jonesfarm`) holding both shares. Bomb20 (`valid users =
+    blake`, the user's real data) is off-limits, so the read-write test ran
+    on GuestShare, which guest can write. Script:
+    `rw-test2.sh <volume> <mount args>`, kept in the session scratchpad. It
+    works only in `netatalk_client-test-<timestamp>`. Phase 1 writes, then
+    unmounts to drop caches; phase 2 remounts and verifies from the server,
+    then removes the directory.
+    - **Passed from the start:** 16 MB random file (sha256 after remount),
+      write plus append plus rename, mkdir/rmdir, xattr. The 0.14 s `cp` of
+      16 MB is only the write cache; the data does reach the server.
+    - **Truncation through an open fork was broken (data-corrupting).**
+      `: > f`, `truncate -s 0 f` and overwriting with shorter content left
+      the server file at its old length, with the old tail after the new
+      bytes. lldb showed `fuse_setattr` getting `FUSE_SET_ATTR_SIZE` with a
+      file handle and skipping FPSetForkParms, because the size equalled
+      `fp->size`. `ml_open()` zeroes `fp`, so `fp->size` is 0, not the
+      file's length, and truncation to 0 was always skipped. Path-only
+      `truncate(2)` (no handle) went through `ml_truncate` and worked. This
+      is shared code, so Linux is likely affected too.
+    - **Fix:** `files/patch-fuse-truncate-open-fork.diff` (commit
+      `f08c581`, CI green). It always sends SetForkParms in `fuse_setattr`
+      and `fuse_truncate`. Retest at 14:26: all checks pass (FAILS=0),
+      including O_TRUNC, ftruncate and the shorter overwrite.
+
 ## Next steps
 
 Done 2026-10-11: helper installed (step 1 of the old plan; the manual
