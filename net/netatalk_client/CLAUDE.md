@@ -30,9 +30,10 @@ the umac session).
 | `/Library/Filesystems/macfuse.fs` | Symlink to `/opt/local/Library/Filesystems/macfuse.fs` (manual, approved) |
 | FSKit extension "macFUSE" | Enabled in System Settings. "macFUSE (local)" stays off; AFP doesn't need it |
 | AFP connect to darkstar as guest | Works when started from a GUI session (AFP3.4, Netatalk4.6.0dev) |
-| FUSE mount | **Blocked.** macFUSE privileged helper not installed |
-| `/Volumes/guestshare` | Empty mount-point directory, owned by blake. Left in place |
-| Running processes | None. afpfsd stopped, nothing mounted |
+| macFUSE privileged helper | Installed 2026-10-11 via `macfuse install --components privileged-helpers` from a local Terminal; admin prompt appeared |
+| FUSE mount | **Works** via FSKit (`fskit` in mount flags). Listing came back empty; unmount from afpc is broken (see 7) |
+| `/Volumes/guestshare` | Gone; removed by the forced unmount. Recreate (`mkdir`) before the next mount |
+| Running processes | None. afpfsd exited, nothing mounted (checked 12:59) |
 
 ## What we found, in order
 
@@ -78,49 +79,52 @@ the umac session).
    - The official macFUSE `.pkg` presumably installs the helper itself. The
      MacPorts port doesn't, so FSKit mounts can't work out of the box with
      `port:macfuse`. This is inference, not confirmed.
-6. **Signing (still unknown).** The port runs `install_name_tool` on
-   `MFMount`, `libfuse*.dylib` and `macFUSE.framework`, then re-signs them
-   ad hoc (`codesign -fs -`). AMFI logs them as "adhoc signed ... not valid",
-   but afpfsd loads them. The helper is unmodified and validly signed (team
-   `3T5GSNBU6W`, hardened runtime). Whether the helper accepts XPC from an
-   ad-hoc `MFMount` client is only testable once the helper is installed.
+6. **Signing: fine.** The port runs `install_name_tool` on `MFMount`,
+   `libfuse*.dylib` and `macFUSE.framework`, then re-signs them ad hoc
+   (`codesign -fs -`). AMFI logs them as "adhoc signed ... not valid", but
+   afpfsd loads them, and the validly signed helper (team `3T5GSNBU6W`)
+   accepted the ad-hoc `MFMount` client over `io.macfuse.mount`. The mount
+   came up as `macfuse://<uuid> on /Volumes/guestshare (macfuse, ..., fskit)`.
+7. **Unmount is broken on macOS (netatalk_client bug).** On
+   `afpc fs unmount`, afpfsd logs `FUSE unmount not supported - volume
+   remains mounted` and returns failure. `afpc fs exit` then made afpfsd
+   exit with the volume still mounted. That left the FSKit volume orphaned:
+   `mount`, `ls` and `umount -f` all hung in uninterruptible wait. Recovery
+   was `kill -9` of the `io.macfuse.app.fsmodule.macfuse` appex (user-owned;
+   SIGTERM was ignored), after which everything unwound. To unmount safely
+   for now, run `umount /Volumes/guestshare` **while afpfsd is still
+   running**, then `afpc fs exit`. Never exit afpfsd with a volume mounted.
+8. **Empty listing (unexplained).** `ls -la /Volumes/guestshare` showed
+   only `.` and `..`. Either guestshare is empty on darkstar (asked the
+   darkstar session) or readdir isn't reaching the AFP side. Next time,
+   compare with afpc's non-FUSE listing of the same share.
 
-## Next steps (at the console)
+## Next steps
 
-1. Retry the official installer from a Terminal.app window opened locally,
-   not via SSH:
+Done 2026-10-11: helper installed (step 1 of the old plan; the manual
+helper install wasn't needed) and the first guest mount worked.
+
+1. Find out whether guestshare has files (darkstar session), and if it does,
+   debug the empty readdir.
+2. Fix the macOS unmount path in afpfsd (`fuse/commands.c`, the "FUSE
+   unmount not supported" branch); `unmount(2)` on the mount point or
+   libfuse3's unmount should work with FSKit. Keep it a blakeports patch;
+   no upstream activity until tested and the user approves.
+3. Mount test procedure (desktop Terminal, or `open -a Terminal x.command`
+   from Claude, which gets Local Network permission via Terminal). Tell the
+   darkstar session before and after:
    ```
-   /opt/local/Library/Filesystems/macfuse.fs/Contents/Resources/macfuse.app/Contents/MacOS/macfuse install --components privileged-helpers
-   ```
-   Watch for an admin prompt. Check with
-   `ls /Library/PrivilegedHelperTools | grep macfuse`.
-2. If it still never prompts, install the helper by hand (needs the user's
-   OK; it's outside `/opt/local`):
-   - Copy the signed helper from
-     `macfuse.app/Contents/XPCServices/io.macfuse.app.xpcservice.installer.xpc/Contents/Library/LaunchServices/io.macfuse.app.launchservice.daemon`
-     to `/Library/PrivilegedHelperTools/` (root:wheel, 544).
-   - Write `/Library/LaunchDaemons/io.macfuse.app.launchservice.daemon.plist`
-     from its embedded launchd plist (`launchctl plist __TEXT,__launchd_plist
-     <helper>`). That plist has:
-     - `Label` io.macfuse.app.launchservice.daemon
-     - `MachServices` `io.macfuse.mount` and
-       `3T5GSNBU6W.io.macfuse.app.launchservice.daemon.xpc`
-     - `AssociatedBundleIdentifiers` io.macfuse.app
-     - `EnableTransactions`
-     - plus `Program` pointing at the copied helper
-   - Load it with `sudo launchctl bootstrap system <plist>`.
-   - Undo with `sudo launchctl bootout system/io.macfuse.app.launchservice.daemon`,
-     then delete both files.
-3. Tell the darkstar session, then mount from a desktop Terminal window:
-   ```
+   mkdir -p /Volumes/guestshare
    /opt/local/bin/afpc fs mount -a guest 192.168.234.23:guestshare /Volumes/guestshare
+   mount | grep guestshare; ls -la /Volumes/guestshare
+   umount /Volumes/guestshare          # while afpfsd is still running
+   /opt/local/bin/afpc fs exit
    ```
-   Verify with `mount | grep guestshare`, list and read a file (no writes),
-   then `afpc fs unmount /Volumes/guestshare` and `afpc fs exit`. Tell the
-   darkstar session when it's done.
-4. If the mount works, decide what belongs in a port. Candidates are a
-   `port:macfuse` notes/helper story and the netatalk_client FSKit patch.
-   Then bump `netatalk_client` revision (not bumped while testing).
+4. Then decide what belongs in a port: the netatalk_client FSKit and
+   unmount patches, and a `port:macfuse` note that FSKit mounts need the
+   privileged helper (`macfuse.app/Contents/MacOS/macfuse install
+   --components privileged-helpers`, run locally). Bump `netatalk_client`
+   revision then (not bumped while testing).
 
 ## Debugging tips
 
