@@ -1,0 +1,142 @@
+# macFUSE (FSKit) for netatalk_client +fuse: notes and status
+
+There's no macfuse Portfile here. `port:macfuse` comes from the official ports
+tree (`fuse/macfuse`, 5.4.0 at the time of writing). This folder holds notes on
+getting `netatalk_client +fuse` mounting through macFUSE's FSKit backend on
+far-star.
+
+Last updated: 2026-10-11 (far-star session blakeports-87, which took over from
+the umac session).
+
+## Ground rules (from the user)
+
+- FSKit only. No macFUSE kernel extension, so no reduced boot security.
+- No upstream activity on FUSE: no issues, PRs or questions to macFUSE or
+  netatalk-client.
+- MacPorts must only touch `/opt/local`. Anything outside it is a manual step
+  the user approves.
+- Live mount tests are guest-only against the darkstar Netatalk server
+  (`192.168.234.23`, volume `guestshare`). Bomb20 is off-limits. Tell the
+  darkstar server session ("Netatalk server startup via systems") before a
+  test starts and after it ends.
+- Revisit at the console, not over SSH (see "Helper install" below).
+
+## Status
+
+| Piece | State |
+|---|---|
+| netatalk_client 1.0.0 +fuse, FSKit patch | Committed `3213dfd`. CI passes on macOS 15, 26, 27 |
+| Local install on far-star | `netatalk_client @1.0.0_0+fuse` and `macfuse @5.4.0_0`, clean install |
+| `/Library/Filesystems/macfuse.fs` | Symlink to `/opt/local/Library/Filesystems/macfuse.fs` (manual, approved) |
+| FSKit extension "macFUSE" | Enabled in System Settings. "macFUSE (local)" stays off; AFP doesn't need it |
+| AFP connect to darkstar as guest | Works when started from a GUI session (AFP3.4, Netatalk4.6.0dev) |
+| FUSE mount | **Blocked.** macFUSE privileged helper not installed |
+| `/Volumes/guestshare` | Empty mount-point directory, owned by blake. Left in place |
+| Running processes | None. afpfsd stopped, nothing mounted |
+
+## What we found, in order
+
+1. **`/dev/macfuse0` check.** afpfsd (`fuse/commands.c`) refused every mount
+   on macOS unless `/dev/macfuse0` existed. Only the kernel extension creates
+   it. It also reported the failure with `printf` to its own stdout, so
+   `afpc` exited 1 with no message. Fixed locally by
+   `net/netatalk_client/files/patch-fuse-macos-fskit.diff` (+fuse only).
+   On macOS it requires the device only if present, and passes
+   `-obackend=fskit` when absent. Other platforms keep the `/dev/fuse` check,
+   now logged to the client.
+2. **FSKit limits** (macFUSE wiki, "FUSE Backends"):
+   - mount points must be under `/Volumes`
+   - backend selected with `-o backend=fskit`; libfuse3 only
+   - the kernel extension is still macFUSE's default
+   - slower I/O than the kernel backend
+   - no `fuse_context`, no notifications, most mount options unimplemented
+   - since macFUSE 5.2, libfuse mounts over XPC through `MFMount.framework`
+3. **Extension registration.** The FSKit modules live in
+   `macfuse.fs/Contents/Resources/macfuse.app/Contents/Extensions/`. They
+   register only after `macfuse.app` is opened once, then must be enabled
+   under System Settings → General → Login Items & Extensions → File System
+   Extensions.
+4. **Local Network privacy.** Non-Apple binaries started from the Claude
+   session got `EHOSTUNREACH` ("No route to host") to darkstar. The session
+   runs inside a tmux server with no GUI, so macOS can't show a prompt.
+   Apple binaries (`nc`, `ping`) are exempt and connected fine. Start the
+   mount from a Terminal.app window on the desktop (or a `.command` file
+   opened with `open`). Reading an existing mount from the Claude shell
+   works.
+5. **Privileged helper.** With the AFP session up, macFUSE needs its launch
+   daemon `io.macfuse.app.launchservice.daemon`. It provides the XPC service
+   `io.macfuse.mount` that libfuse's FSKit path uses. It isn't installed:
+   - `macfuse.app` tries to install it with SMJobBless on demand.
+   - From SSH/tmux it fails with `-60007`; the session can't show a prompt.
+   - Run via `macfuse install --components privileged-helpers` in a desktop
+     Terminal window (opened over SSH with `open x.command`), authd denied it
+     in 8 ms (`-60005`), and SecurityAgent never ran. No password prompt
+     appeared.
+   - The account is admin, the Mac isn't MDM-enrolled, and the
+     `com.apple.ServiceManagement.blesshelper` rule is stock (authenticate
+     admin).
+   - The official macFUSE `.pkg` presumably installs the helper itself. The
+     MacPorts port doesn't, so FSKit mounts can't work out of the box with
+     `port:macfuse`. This is inference, not confirmed.
+6. **Signing (still unknown).** The port runs `install_name_tool` on
+   `MFMount`, `libfuse*.dylib` and `macFUSE.framework`, then re-signs them
+   ad hoc (`codesign -fs -`). AMFI logs them as "adhoc signed ... not valid",
+   but afpfsd loads them. The helper is unmodified and validly signed (team
+   `3T5GSNBU6W`, hardened runtime). Whether the helper accepts XPC from an
+   ad-hoc `MFMount` client is only testable once the helper is installed.
+
+## Next steps (at the console)
+
+1. Retry the official installer from a Terminal.app window opened locally,
+   not via SSH:
+   ```
+   /opt/local/Library/Filesystems/macfuse.fs/Contents/Resources/macfuse.app/Contents/MacOS/macfuse install --components privileged-helpers
+   ```
+   Watch for an admin prompt. Check with
+   `ls /Library/PrivilegedHelperTools | grep macfuse`.
+2. If it still never prompts, install the helper by hand (needs the user's
+   OK; it's outside `/opt/local`):
+   - Copy the signed helper from
+     `macfuse.app/Contents/XPCServices/io.macfuse.app.xpcservice.installer.xpc/Contents/Library/LaunchServices/io.macfuse.app.launchservice.daemon`
+     to `/Library/PrivilegedHelperTools/` (root:wheel, 544).
+   - Write `/Library/LaunchDaemons/io.macfuse.app.launchservice.daemon.plist`
+     from its embedded launchd plist (`launchctl plist __TEXT,__launchd_plist
+     <helper>`). That plist has:
+     - `Label` io.macfuse.app.launchservice.daemon
+     - `MachServices` `io.macfuse.mount` and
+       `3T5GSNBU6W.io.macfuse.app.launchservice.daemon.xpc`
+     - `AssociatedBundleIdentifiers` io.macfuse.app
+     - `EnableTransactions`
+     - plus `Program` pointing at the copied helper
+   - Load it with `sudo launchctl bootstrap system <plist>`.
+   - Undo with `sudo launchctl bootout system/io.macfuse.app.launchservice.daemon`,
+     then delete both files.
+3. Tell the darkstar session, then mount from a desktop Terminal window:
+   ```
+   /opt/local/bin/afpc fs mount -a guest 192.168.234.23:guestshare /Volumes/guestshare
+   ```
+   Verify with `mount | grep guestshare`, list and read a file (no writes),
+   then `afpc fs unmount /Volumes/guestshare` and `afpc fs exit`. Tell the
+   darkstar session when it's done.
+4. If the mount works, decide what belongs in a port. Candidates are a
+   `port:macfuse` notes/helper story and the netatalk_client FSKit patch.
+   Then bump `netatalk_client` revision (not bumped while testing).
+
+## Debugging tips
+
+- Run the manager in the foreground with debug logs:
+  `afpfsd --manager -d > /tmp/afpfsd.log 2>&1 &`. Per-mount daemons then log
+  to stdout too.
+- Useful log predicate:
+  `process == "afpfsd" OR process CONTAINS "io.macfuse" OR process == "fskitd" OR process == "authd" OR process == "smd"`.
+- `pluginkit -m -v -A | grep fuse` shows extension registration. A leading
+  `+` means enabled, though enabling via System Settings didn't show `+` here.
+
+## Related: CI runner clock drift
+
+On 2026-10-11 both far-star runner VMs (macos-26, macos-27) went offline
+because their clocks had fallen 19-24 minutes behind, so GitHub rejected
+their OAuth tokens as expired. Network time was already on. Fixed with
+`sudo sntp -sS time.apple.com` in each guest; the runners reconnected without
+re-registration. The `runner-<vm>` targets in `lima_mac` could sync the clock
+first if this recurs.
