@@ -72,4 +72,9 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # after unmount, long after the handler returned; on macOS this crashes
     # afpfsd before it can log out. Keep that state on the heap instead.
     patchfiles-append      patch-fuse-thread-arg-lifetime.diff
+
+    # Once exit is triggered the main loop stops reading server replies, so
+    # unmounting from the exit path stalls and the session ends in a reset.
+    # Unmount from the `fs exit` handler first, while replies still flow.
+    patchfiles-append      patch-fuse-exit-unmount.diff
 }
