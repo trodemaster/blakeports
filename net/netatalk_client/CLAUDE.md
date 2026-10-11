@@ -172,21 +172,15 @@ the umac session).
          `fs exit` sessions end with FPFlush, then FPLogout (OK), then FIN.
          The exit session closed 26 ms after the command. No crashes,
          nothing hung, afpfsd gone.
-       - **Still present:** "Writing: Broken pipe". The mount daemon writes
-         its reply to the manager, which already closed the socket, and the
-         manager was started from the same terminal. It's cosmetic.
-9. **Mount point under `/Volumes`: fixed.** `/Volumes` is root-owned
-   (755), and every unmount removed `/Volumes/guestshare`, so each mount
-   needed a `sudo mkdir` first. The removal comes from macFUSE: its root
-   privileged helper (`io.macfuse.app.launchservice.daemon`) creates a
-   missing mount point for the mounting user ("Create mount point", "Failed
-   to change owner of mount point") and deletes it on unmount. Only
-   afpfsd's own `stat()` check in `process_mount()` refused a missing
-   directory. `files/patch-fuse-macos-volumes-mountpoint.diff` (commit
-   `3a786bd`, CI green) skips that check on macOS when FSKit is in use (no
-   `/dev/macfuse0`) and the path is directly under `/Volumes/`. No
-   elevation in netatalk_client. Tested 14:15 with no mkdir: mount created
-   `/Volumes/guestshare` (blake:staff), and unmount and exit removed it.
+       - **"Writing: Broken pipe": fixed.** The mount daemon's
+         `perror("Writing")` fired when it replied to the manager's exit
+         command after the manager had already closed the socket, once per
+         duplicate exit. `files/patch-fuse-manager-exit-reply.diff` (commit
+         `9d893b9`, CI green) makes `cleanup_all_children()` skip tracked
+         children already reached through its socket glob, and makes
+         `send_exit_to_socket()` read until the child closes (15 s
+         `SO_RCVTIMEO`). Tested 14:19: no message, and both sessions still
+         end with FPLogout (OK), then FIN.
 
 8. **Empty listing: correct.** The darkstar session confirmed GuestShare
    (`/media/blake/jonesfarm/GuestShare`) is empty. The server log shows the
@@ -203,8 +197,8 @@ helper install wasn't needed) and the first guest mount worked.
    a file to GuestShare.
 2. Unmount, exit and logout are fixed (finding 7). The darkstar log
    confirms both 14:07 sessions: "AFP logout by nobody", "client logged
-   out" and "AFP statistics", with no EOF or reset. The mount point is handled (finding 9). Still open: the
-   cosmetic "Writing: Broken pipe".
+   out" and "AFP statistics", with no EOF or reset. The mount point is handled (finding 9), and "Writing: Broken pipe" is
+   gone.
 3. Mount test procedure (desktop Terminal, or `open -a Terminal x.command`
    from Claude, which gets Local Network permission via Terminal). Tell the
    darkstar session before and after:
