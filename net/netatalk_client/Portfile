@@ -62,4 +62,9 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # Without the macFUSE kernel extension there is no /dev/macfuse0; don't
     # require it, and mount via macFUSE's FSKit backend instead.
     patchfiles-append      patch-fuse-macos-fskit.diff
+
+    # Upstream implements programmatic unmount only off macOS, so
+    # `afpc fs unmount` and `afpc fs exit` left volumes mounted. Unmount the
+    # mount point with unmount(2) and wait for the FUSE thread.
+    patchfiles-append      patch-fuse-macos-unmount.diff
 }

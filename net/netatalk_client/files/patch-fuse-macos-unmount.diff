@@ -1,0 +1,49 @@
+--- fuse/daemon.c.orig
++++ fuse/daemon.c
+@@ -11,6 +11,9 @@
+ #endif
+ 
+ #include <sys/param.h>
++#ifdef __APPLE__
++#include <sys/mount.h>
++#endif
+ #include <sys/socket.h>
+ #include <sys/types.h>
+ #include <sys/un.h>
+@@ -153,6 +156,36 @@
+     }
+ 
+     return 0;
++#elif defined(__APPLE__)
++    /* macFUSE (kernel or FSKit backend): unmount the mount point.  The
++     * kernel then ends the FUSE session, fuse_main() returns in the volume
++     * thread, and that thread owns the libfuse cleanup. */
++    pthread_t self = pthread_self();
++    pthread_t vol_thread = volume->thread;
++    int is_same_thread = pthread_equal(self, vol_thread);
++    char safe_mountpoint[PATH_MAX * 4];
++    sanitize_text(volume->mountpoint, safe_mountpoint,
++                  sizeof(safe_mountpoint));
++    log_for_client(NULL, AFPFSD, LOG_DEBUG,
++                   "Unmounting FUSE filesystem at %s", safe_mountpoint);
++
++    if (unmount(volume->mountpoint, 0) != 0) {
++        log_for_client(NULL, AFPFSD, LOG_WARNING,
++                       "Could not unmount %s: %s",
++                       safe_mountpoint, strerror(errno));
++        return -1;
++    }
++
++    if (!is_same_thread && volume->thread) {
++        log_for_client(NULL, AFPFSD, LOG_DEBUG,
++                       "Waiting for FUSE thread to complete");
++        pthread_join(volume->thread, NULL);
++        log_for_client(NULL, AFPFSD, LOG_DEBUG,
++                       "FUSE thread completed for %s", safe_mountpoint);
++    }
++
++    volume->priv = NULL;
++    return 0;
+ #else
+     log_for_client(NULL, AFPFSD, LOG_DEBUG,
+                    "Programmatic unmount not supported on this platform");
