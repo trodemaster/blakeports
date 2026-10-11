@@ -4,6 +4,7 @@ PortSystem          1.0
 PortGroup           github 1.0
 
 github.setup        jundot omlx 0.7.0 v
+github.tarball_from archive
 name                omlx-app
 revision            0
 
@@ -45,6 +46,8 @@ build.dir           ${worksrcpath}/apps/omlx-mac
 build.target        build
 
 # SwiftPM fetches swift-markdown-ui from GitHub, so this build needs network.
+# SwiftPM manifests and Swift macro plugins run under sandbox-exec, which
+# cannot nest inside the MacPorts build sandbox.
 set app_build_dir   ${workpath}/xcbuild
 build.args          -project oMLX.xcodeproj \
                     -scheme oMLX \
@@ -52,6 +55,8 @@ build.args          -project oMLX.xcodeproj \
                     -destination "platform=macOS" \
                     -derivedDataPath ${app_build_dir} \
                     -clonedSourcePackagesDirPath ${workpath}/spm \
+                    -IDEPackageSupportDisableManifestSandbox=YES \
+                    OTHER_SWIFT_FLAGS=-disable-sandbox \
                     ARCHS=${build_arch} \
                     ONLY_ACTIVE_ARCH=NO \
                     CODE_SIGN_IDENTITY=- \
