@@ -125,27 +125,37 @@ the umac session).
      away; `afpc fs exit` with a volume mounted unmounted it, and every
      afpfsd process exited. Nothing hung. `afpc` still prints "Writing:
      Broken pipe" on `fs exit`, as it did before the patch.
-   - **No clean AFP logout (open; client bug, never sent).** The darkstar
-     session saw every unmount/exit session end with `dsi_stream_read:
-     len:0, unexpected EOF` and no logout. A packet capture on far-star
-     (2026-10-11 13:51, `tcpdump -i en0 host 192.168.234.23 and tcp port
-     548`) settles it: the client never sends FPLogout (AFP 20), FPCloseVol
-     (2) or DSICloseSession.
-     - Unmount session (port 55837): the last request was FPGetVolParms
-       (AFP 17) at 13:51:53.107, then the client sent FIN at .115.
-     - Exit session (port 55840): the last request was FPGetVolParms at
-       13:52:01.452, then the client sent RST at 13:52:06.476, with no FIN.
-
-     It's not a send race. `afpc_dsi_send()` writes synchronously, so if
-     `afp_logout()` ran with a live fd, the bytes would be on the wire.
-     Either `afp_detach_volume()` never reaches its
-     `afp_logout(server, DSI_DONT_WAIT)` (`lib/afp.c`, guarded by
-     `something_is_attached()` and `auto_disconnect_on_unmount`), or
-     `afpc_dsi_send()` returns early (`fd < 0` or the state is already
-     disconnected). Next: attach lldb (sudo) to the per-mount afpfsd and
-     break on `afp_detach_volume`, `afp_logout` and `afp_server_remove`. It's
-     shared detach code, not the macOS patch, so Linux likely behaves the
-     same.
+   - **No clean AFP logout: the cause was a crash (fixed for unmount).**
+     A capture at 13:51 showed the client never sent FPLogout. lldb at 13:55
+     then caught afpfsd dying with `EXC_BAD_ACCESS` in `start_fuse_thread`
+     right after the unmount. Five crash reports from 13:44 to 13:55 in
+     `~/Library/Logs/DiagnosticReports/afpfsd-*.ips` are identical.
+     - **Cause:** `process_mount()` in `fuse/commands.c` passes
+       `start_fuse_thread()` a pointer to a struct on its own stack, then
+       returns once the mount is up. When unmount ends `fuse_main()`, the
+       thread writes `fuse_result`/`fuse_errno`/`wait` into that long-dead
+       frame. The command thread is gone and its stack unmapped, so SIGSEGV.
+       This is an upstream bug on every platform. Before our unmount patch
+       `fuse_main()` never returned on macOS, so it never showed; on Linux
+       the write probably lands in cached stack memory and goes unnoticed.
+     - **Fix:** `files/patch-fuse-thread-arg-lifetime.diff` (commit
+       `b311744`, CI run 38174315826 green on 15/26/27). The arg goes on the
+       heap with two references; the handler and the thread each drop one,
+       and the last one frees it. `fuse_options` is `strdup`ed, since it
+       pointed into the handler's `req` too.
+     - **Result (13:58, clean install):** no new crash reports.
+       `afpc fs unmount` now prints "Volume unmounted", and the wire shows
+       FPFlush, then FPLogout (AFP 20) with an OK reply, then FIN. That's a
+       clean logout.
+     - **`afpc fs exit` is still not clean (open).** FPFlush goes out about
+       5 s after the exit command, and no FPLogout showed up before the
+       capture stopped (about 5 s later). Likely cause, from reading
+       `lib/loop.c`: once `trigger_exit()` sets `exit_program = 1`, the main
+       loop does `start_ending_thread(); continue;` without calling
+       `pselect()`, so it stops reading server replies while the ending
+       thread's unmount waits on DSI replies. The ending thread then sets
+       `exit_program = 2` and the process exits. Unconfirmed; waiting on the
+       darkstar log for how session 56740 ended.
 9. **Mount point is deleted on unmount.** After an unmount,
    `/Volumes/guestshare` is gone, and `/Volumes` is root-owned, so the next
    mount needs `sudo mkdir /Volumes/guestshare && sudo chown blake:staff
