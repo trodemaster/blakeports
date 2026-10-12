@@ -215,6 +215,32 @@ the umac session).
       and `fuse_truncate`. Retest at 14:26: all checks pass (FAILS=0),
       including O_TRUNC, ftruncate and the shorter overwrite.
 
+11. **Bomb20 with a login (randnum, 2026-10-11 19:00–19:12).** The user
+    mounted Bomb20 for their own use. The user later asked for a write
+    test. Use the lowercase name: the server lists `bomb20`, and client
+    matching is case-sensitive.
+    - **Login methods.** The client picks the highest method both sides
+      offer, so with darkstar that's DHX2 (Linux password via PAM).
+      `-a randnum` uses darkstar's separate afppasswd password. Randnum
+      first failed with -5000 at the first FPLogin step, before any
+      password exchange. That was a server-side afppasswd entry problem,
+      fixed by resetting it there (`afppasswd -r -n -a blake`).
+    - **Write and read.** A 100 MB random file, checked against the
+      server's sha256. It was read back after a remount; the darkstar
+      session confirmed afpd sent the whole file. Logout was clean.
+    - **Speed (10 GbE on both ends; `sudo purge` before each run).**
+      Uncached reads ran at 250–300 MiB/s and `cp` at about 115 MiB/s.
+      Reads are fixed 128 KB FPReadExt requests (`rx_quantum` hardcoded in
+      `lib/afp.c`). `cp` also sends about 214 FPGetFileDirParms during a
+      100 MB copy. The user called this good enough: AFP is mostly for
+      vintage systems that top out at gigabit.
+    - **Minor issues not fixed:** `df` shows 3.5 GiB / 0 used, but the
+      ext4 disk is 5.5 TB with 2.3 TB used; darkstar logs "user quota
+      did not work". `afpc fs unmount` prints "Volume  unmounted" with an
+      empty name. afpd logs a harmless `dsi_stream_write: Broken pipe`
+      after the logout reply. The mount appears in `mount` a moment after
+      `afpc fs mount` returns, so scripts should poll before checking.
+
 ## Next steps
 
 Done 2026-10-11: helper installed (step 1 of the old plan; the manual
