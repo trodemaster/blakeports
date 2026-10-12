@@ -4,7 +4,9 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           meson 1.0
 
-github.setup        Netatalk netatalk-client 1.0.0
+github.setup        Netatalk netatalk-client eb7751d15895ef13b67a1fd1a29739a348b0f5d8
+# Snapshot of main after 1.0.0; includes the DNS-SD link fix (PR #372)
+version             1.0.0.20261011
 name                netatalk_client
 revision            0
 categories-append   net fuse
@@ -27,12 +29,9 @@ long_description    Netatalk Client is a file sharing client written \
 
 homepage            https://netatalk.io/
 
-checksums           rmd160  3f088b7e103f4a391fcc58afcf5fea30e00aedd8 \
-                    sha256  7320202ba8bd962bbc23f9c6851cf7e257e00671d361a92eac2df55529d8d730 \
-                    size    336293
-
-# DNS-SD lives in libSystem on macOS; don't link Avahi's libdns_sd shim
-patchfiles          patch-dnssd-libsystem.diff
+checksums           rmd160  d91a0a22e650494072304b2cfd2d3b19cf4303b1 \
+                    sha256  5cc36a41b97c2471a94b7271bb2dc35d5d9a736a89c6909570d9b08175556790 \
+                    size    340623
 
 meson.wrap_mode     nodownload
 
