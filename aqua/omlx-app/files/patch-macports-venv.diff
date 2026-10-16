@@ -1,0 +1,61 @@
+diff --git apps/omlx-mac/Sources/Server/PythonRuntime.swift apps/omlx-mac/Sources/Server/PythonRuntime.swift
+index f8bbb43..09667cc 100644
+--- apps/omlx-mac/Sources/Server/PythonRuntime.swift
++++ apps/omlx-mac/Sources/Server/PythonRuntime.swift
+@@ -3,6 +3,9 @@
+ //
+ // Resolution order (first match wins):
+ //   1. OMLX_PYTHON_OVERRIDE env var — dev escape hatch.
++//   1a. MacPorts: the user venv at ~/.local/share/omlx/venv. Finder, Dock
++//      and login-item launches don't see OMLX_PYTHON_OVERRIDE, and the
++//      MacPorts build ships no bundled Python.
+ //   2. Bundle.main/Contents/Resources/Python/cpython-3.11/bin/python3 — production.
+ //      Layout matches the venvstacks export tree, which
+ //      apps/omlx-mac/Scripts/build.sh copies verbatim into the Swift .app.
+@@ -67,6 +70,19 @@ struct PythonRuntime {
+             }
+         }
+ 
++        let venvPython = FileManager.default.homeDirectoryForCurrentUser
++            .appendingPathComponent(".local/share/omlx/venv/bin/python3")
++        tried.append(venvPython.path)
++        if FileManager.default.isExecutableFile(atPath: venvPython.path) {
++            return PythonRuntime(
++                executable: venvPython,
++                homebrewPaths: defaultHomebrewPaths,
++                pythonPath: [],
++                pythonHome: nil,
++                isBundled: false
++            )
++        }
++
+         let bundleRoot = Bundle.main.bundleURL
+         let resources = bundleRoot.appendingPathComponent("Contents/Resources")
+         let pythonRoots = [
+@@ -133,6 +149,8 @@ struct PythonRuntime {
+     }
+ 
+     private static let defaultHomebrewPaths = [
++        "/opt/local/bin",
++        "/opt/local/sbin",
+         "/opt/homebrew/bin",
+         "/opt/homebrew/sbin",
+         "/usr/local/bin",
+diff --git apps/omlx-mac/Sources/Updater/UpdateController.swift apps/omlx-mac/Sources/Updater/UpdateController.swift
+index 4952d91..d76a86d 100644
+--- apps/omlx-mac/Sources/Updater/UpdateController.swift
++++ apps/omlx-mac/Sources/Updater/UpdateController.swift
+@@ -270,6 +270,13 @@ final class UpdateController {
+     }
+ 
+     private func runCheck(userInitiated: Bool) async {
++        // MacPorts: the release DMG would replace this build with one that
++        // bundles its own Python, so leave updates to the port.
++        state = .idle(lastChecked: Date())
++        if userInitiated {
++            lastError = "This oMLX build is managed by MacPorts. Update with: sudo port upgrade omlx-app"
++        }
++        return
+         do {
+             let result = try await ReleasesChecker.check(
+                 currentVersion: currentVersion,

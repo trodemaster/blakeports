@@ -37,6 +37,10 @@ if {${os.platform} ne "darwin" || ${os.major} < 24} {
 depends_run         port:python313 \
                     port:py313-pip
 
+# Find the user venv on Finder/login launches, add MacPorts to the server
+# PATH, and disable the in-app updater (it would install the release DMG).
+patchfiles          patch-macports-venv.diff
+
 use_xcode           yes
 use_configure       no
 universal_variant   no
@@ -81,16 +85,16 @@ post-destroot {
 }
 
 notes "
-oMLX.app is installed without Python. Create the server environment, then\
-start the app with the launcher (it sets OMLX_PYTHON_OVERRIDE):
+oMLX.app is installed without Python. It runs the server from the venv at\
+~/.local/share/omlx/venv, so create that first:
 
     ${prefix}/bin/python3.13 -m venv ~/.local/share/omlx/venv
     ~/.local/share/omlx/venv/bin/pip install 'omlx\[mcp\] @ git+https://github.com/jundot/omlx@v${version}'
-    ${prefix}/bin/omlx-app
 
-Set OMLX_PYTHON_OVERRIDE to use a different interpreter. The app starts its\
-own server, so stop any other oMLX server on the same port first.
+Then open ${applications_dir}/oMLX.app (Finder, Dock or a login item). The app\
+starts, stops and restarts the server itself, so stop any other oMLX server\
+on the same port first. To use a different interpreter, set\
+OMLX_PYTHON_OVERRIDE and start the app with ${prefix}/bin/omlx-app.
 "
 
 github.livecheck.regex  {([0-9.]+)}
-livecheck.url       ${github.homepage}/releases/latest
