@@ -59,9 +59,33 @@ blakeports/
 ## CI/CD Architecture
 
 ### Self-Hosted Runners
-- Runners are managed by [jibb-runners](https://github.com/trodemaster/jibb-runners) tool
-- Each runner runs in an isolated tart VM
-- Base VMs: `macOS_26` (Tahoe) and `macOS_27`
+- Modern macOS runners run in Lima VMs (`vz`), started from the
+  [lima_mac](../lima_mac) Makefile and registered with `scripts/ghrunner -lima`
+- Legacy runners (10.5–10.11, PPC) are Linux docker runners that SSH into
+  VMware VMs on darkstar, managed with `scripts/ghrunner -start-group legacy`
+
+| Runner | Lima instance | Host | Start with |
+|---|---|---|---|
+| `macOS_26` | `macos-26` | this machine | `make runner-26` in `~/Developer/lima_mac` |
+| `macOS_27` | `macos-27` | this machine | `make runner-27` in `~/Developer/lima_mac` |
+| `macOS_15` | `macos-15` | umac | started manually by the user — don't start it here |
+
+`make runner-NN` boots the VM if it isn't running, then (re)registers the
+runner via `scripts/ghrunner` unless GitHub already reports it online.
+Virtualization.framework allows only **2 macOS VMs per host**, so this machine
+can run 26 and 27 together but not a third.
+
+In a sandboxed Claude session, `limactl start`/`stop` (and so `make runner-NN`)
+must run with the sandbox disabled; `limactl list` and `limactl shell` work
+sandboxed. If jobs sit queued, check runner status first:
+
+```bash
+gh api repos/trodemaster/blakeports/actions/runners \
+  --jq '.runners[] | "\(.name)\t\(.status)"'
+```
+
+Queued jobs fail after 24h waiting for a runner. If `macOS_15` is offline,
+dispatch without it: `gh workflow run "Build <Portname>" -f run_macos15=false`.
 
 ### Matrix Build Strategy
 **Modern builds** (automatic on push/PR):
@@ -246,11 +270,12 @@ sudo port clean --dist <portname>  # Clear downloads
 # Checksum workflow
 sudo port checksum <portname>      # Verify/get checksums
 
-# Runner management (requires jibb-runners)
-cd ../jibb-runners
-./ghrunner.sh -list                # Check runner status
-./ghrunner.sh -tart macOS_15       # Start runner
-./ghrunner.sh -remove macOS_15     # Remove runner
+# Runner management
+cd ~/Developer/lima_mac && make runner-26   # Boot VM + register runner
+cd ~/Developer/lima_mac && make status      # limactl list
+scripts/ghrunner -list                      # Registered runners
+scripts/ghrunner -remove macOS_26           # De-register a runner
+scripts/ghrunner -lima macos-26             # Register (VM must be running)
 ```
 
 ## Important Notes for AI Assistants
@@ -259,7 +284,7 @@ cd ../jibb-runners
 2. **Never remove checksums** when updating versions - MacPorts needs them to show correct values
 3. **Use `port lint --nitpick`** for strict compliance checking
 4. **Source `setupenv.bash`** before running port commands in CI workflows only — Claude's interactive shell already has MacPorts on `PATH`, so don't source it there
-5. **Matrix builds run on both macOS 15 and 26** - ensure compatibility
+5. **Matrix builds run on macOS 27, 26 and 15** - ensure compatibility
 6. **The `_resources` directory is synced from upstream** - don't modify directly
 7. **Check `.cursorrules`** for comprehensive MacPorts development standards
 8. **URLs must be formatted as clickable links** in all documentation and PR descriptions
@@ -281,9 +306,9 @@ sudo port sync              # Sync MacPorts index
 
 ### Runner Issues
 ```bash
-cd ../jibb-runners
-./ghrunner.sh -remove <runner>
-./ghrunner.sh -tart <runner>
+scripts/ghrunner -remove macOS_26
+cd ~/Developer/lima_mac && make runner-26
+# VZErrorDomain Code=6 on start = 2-VM limit reached; stop another macOS VM
 ```
 
 ### Build Failures
