@@ -5,7 +5,8 @@
 // watches the cache directory for new archives added via file share.
 //
 // MacPorts URL pattern: {base_url}/{subport}/{archive}.tbz2
-//                   and {base_url}/{subport}/{archive}.tbz2.rmd160
+//
+//	and {base_url}/{subport}/{archive}.tbz2.rmd160
 //
 // Quick start:
 //
@@ -50,16 +51,22 @@ var rmd160DigestInfo = []byte{
 const defaultPort = 8030
 
 func main() {
-	port := flag.Int("port", defaultPort, "HTTP listen port")
+	port := flag.Int("port", defaultPort, "HTTP listen port (0 = sign only, for use behind a static file server)")
 	dir := flag.String("dir", defaultCacheDir(), "cache directory (also the file-share root)")
+	keyDir := flag.String("key-dir", "", "directory for the private key (default: -dir); pubkey.pem always goes in -dir")
 	interval := flag.Duration("sign-interval", 15*time.Second, "how often to scan for unsigned archives")
 	flag.Parse()
 
-	if err := os.MkdirAll(*dir, 0755); err != nil {
-		log.Fatalf("create cache dir: %v", err)
+	if *keyDir == "" {
+		*keyDir = *dir
+	}
+	for _, d := range []string{*dir, *keyDir} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			log.Fatalf("create %s: %v", d, err)
+		}
 	}
 
-	key, isNew, err := ensureKey(*dir)
+	key, isNew, err := ensureKey(*keyDir, *dir)
 	if err != nil {
 		log.Fatalf("key setup: %v", err)
 	}
@@ -67,7 +74,15 @@ func main() {
 		printSetupInstructions(*dir, *port)
 	}
 
-	c := &cache{dir: *dir, key: key}
+	c := &cache{dir: *dir, key: key, settle: *interval}
+
+	// Sign-only mode: another server (e.g. Caddy file_server) serves the dir.
+	if *port == 0 {
+		log.Printf("macports-cache: signing archives in %s every %s (no HTTP)", *dir, *interval)
+		c.signAll()
+		c.signLoop(*interval)
+		return
+	}
 	go c.signLoop(*interval)
 
 	mux := http.NewServeMux()
@@ -82,9 +97,10 @@ func main() {
 
 // cache holds server state.
 type cache struct {
-	dir string
-	key *rsa.PrivateKey
-	mu  sync.Mutex // guards signing operations
+	dir    string
+	key    *rsa.PrivateKey
+	settle time.Duration // skip archives modified more recently than this (still being copied)
+	mu     sync.Mutex    // guards signing operations
 }
 
 // serveFile serves archives and their .rmd160 signatures.
@@ -146,9 +162,18 @@ func (c *cache) signAll() {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".tbz2") {
 			return err
 		}
+		// AppleDouble files an AFP client may leave behind are not archives.
+		if strings.HasPrefix(info.Name(), "._") {
+			return nil
+		}
+		// An archive still arriving over the file share keeps getting a newer
+		// mtime; wait until it has been quiet for a full interval.
+		if time.Since(info.ModTime()) < c.settle {
+			return nil
+		}
 		sigPath := path + ".rmd160"
-		if _, err := os.Stat(sigPath); err == nil {
-			return nil // already signed
+		if sig, err := os.Stat(sigPath); err == nil && !sig.ModTime().Before(info.ModTime()) {
+			return nil // signed, and the archive hasn't been replaced since
 		}
 		if err := c.sign(path, sigPath); err != nil {
 			log.Printf("sign %s: %v", filepath.Base(path), err)
@@ -182,7 +207,12 @@ func (c *cache) sign(archivePath, sigPath string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(sigPath, sig, 0644)
+	// Write then rename so a client never fetches a half-written signature.
+	tmp := sigPath + ".tmp"
+	if err := os.WriteFile(tmp, sig, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, sigPath)
 }
 
 func (c *cache) archiveStats() (int, int64) {
@@ -198,31 +228,32 @@ func (c *cache) archiveStats() (int, int64) {
 	return n, totalSize
 }
 
-// ensureKey loads the RSA private key from dir, generating a new 2048-bit
-// keypair if one doesn't exist yet. Returns (key, wasCreated, error).
-func ensureKey(dir string) (*rsa.PrivateKey, bool, error) {
-	privPath := filepath.Join(dir, ".privkey.pem")
-	pubPath := filepath.Join(dir, "pubkey.pem")
+// ensureKey loads the RSA private key from keyDir, generating a new 2048-bit
+// keypair if one doesn't exist yet, and (re)writes pubkey.pem into pubDir so
+// clients can fetch it. Returns (key, wasCreated, error).
+func ensureKey(keyDir, pubDir string) (*rsa.PrivateKey, bool, error) {
+	privPath := filepath.Join(keyDir, ".privkey.pem")
 
+	var key *rsa.PrivateKey
+	isNew := false
 	if data, err := os.ReadFile(privPath); err == nil {
 		if block, _ := pem.Decode(data); block != nil {
-			if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
-				return key, false, nil
-			}
+			key, _ = x509.ParsePKCS1PrivateKey(block.Bytes)
 		}
 	}
-
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, false, fmt.Errorf("generate key: %w", err)
-	}
-
-	privPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(key),
-	})
-	if err := os.WriteFile(privPath, privPEM, 0600); err != nil {
-		return nil, false, fmt.Errorf("write private key: %w", err)
+	if key == nil {
+		var err error
+		if key, err = rsa.GenerateKey(rand.Reader, 2048); err != nil {
+			return nil, false, fmt.Errorf("generate key: %w", err)
+		}
+		privPEM := pem.EncodeToMemory(&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: x509.MarshalPKCS1PrivateKey(key),
+		})
+		if err := os.WriteFile(privPath, privPEM, 0600); err != nil {
+			return nil, false, fmt.Errorf("write private key: %w", err)
+		}
+		isNew = true
 	}
 
 	pubDER, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
@@ -230,11 +261,11 @@ func ensureKey(dir string) (*rsa.PrivateKey, bool, error) {
 		return nil, false, fmt.Errorf("marshal public key: %w", err)
 	}
 	pubPEM := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER})
-	if err := os.WriteFile(pubPath, pubPEM, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pubDir, "pubkey.pem"), pubPEM, 0644); err != nil {
 		return nil, false, fmt.Errorf("write public key: %w", err)
 	}
 
-	return key, true, nil
+	return key, isNew, nil
 }
 
 func defaultCacheDir() string {
@@ -243,6 +274,11 @@ func defaultCacheDir() string {
 }
 
 func printSetupInstructions(dir string, port int) {
+	if port == 0 {
+		log.Printf("Generated new RSA signing key pair; public key at %s", filepath.Join(dir, "pubkey.pem"))
+		log.Printf("Configure clients with: sudo scripts/setup-client.sh http://<server>/")
+		return
+	}
 	log.Printf("Generated new RSA signing key pair in %s", dir)
 	log.Printf("")
 	log.Printf("=== CLIENT SETUP (run on each MacPorts machine) ===")

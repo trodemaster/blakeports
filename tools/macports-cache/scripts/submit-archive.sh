@@ -1,89 +1,72 @@
 #!/bin/bash
-# submit-archive.sh — copy a locally built MacPorts port to the cache server.
+# submit-archive.sh — copy locally built MacPorts archives to the cache share.
 #
-# The cache server auto-signs archives every 15 seconds, so no crypto tools
-# are needed on the build machine.
-#
-# Prerequisites:
-#   1. Mount the cache server's share (AFP/SMB/NFS) to a local path.
-#   2. The port must already be installed (sudo port install <portname>).
+# MacPorts 2.x keeps every installed port as a ready-made binary archive in
+# ${SOFTWARE_DIR}/<port>/<port>-<version>_<rev>+<variants>.darwin_<N>.<arch>.tbz2,
+# which is exactly the file archive_sites clients fetch. This script copies
+# those files onto the mounted share; the cache's signer adds the .rmd160 once
+# each copy has been idle for a scan interval, so no crypto is needed here.
 #
 # Usage:
-#   ./submit-archive.sh <portname> [mount_path]
+#   ./submit-archive.sh [portname ...] [-m mount_path]
+#   (no port names: submit every installed port)
 #
 # Examples:
-#   ./submit-archive.sh netatalk /Volumes/macports-cache
-#   MOUNT=/Volumes/macports-cache ./submit-archive.sh libcbor
+#   ./submit-archive.sh                       # seed the cache with everything
+#   ./submit-archive.sh netatalk libgcrypt
+#   ./submit-archive.sh -m /Volumes/packages netatalk
 #
-# On very old MacPorts (pre-2.0, where images are .tbz2 files):
-#   The script also looks for .tbz2 files in the software directory.
+# Archives already on the share with identical contents are skipped, so it's
+# cheap to run after every build.
 #
-# Dependencies: cp, tar, basename — all standard UNIX, no extras needed.
+# Dependencies: bash 3.2, cp, cmp — runs on Mac OS X 10.5.
 set -e
 
-PORTNAME="${1:?Usage: $0 <portname> [mount_path]}"
-MOUNT_PATH="${2:-${MOUNT:-/Volumes/macports-cache}}"
+MOUNT_PATH="${MOUNT:-/Volumes/packages}"
 SOFTWARE_DIR="${SOFTWARE_DIR:-/opt/local/var/macports/software}"
 
-# ── validate mount ──────────────────────────────────────────────────────────
+PORTS=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -m) MOUNT_PATH="${2:?-m needs a path}"; shift 2 ;;
+        -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+        *) PORTS="$PORTS $1"; shift ;;
+    esac
+done
+
 if [ ! -d "$MOUNT_PATH" ]; then
-    echo "error: cache mount not found at $MOUNT_PATH" >&2
-    echo "       mount the cache server share first, or set MOUNT=/your/path" >&2
+    echo "error: cache share not mounted at $MOUNT_PATH" >&2
+    echo "       mount afp://darkstar.jibb.tv/packages, or pass -m /your/path" >&2
     exit 1
 fi
 
-PORT_IMG_DIR="${SOFTWARE_DIR}/${PORTNAME}"
-if [ ! -d "$PORT_IMG_DIR" ]; then
-    echo "error: no installed image for '${PORTNAME}' at ${PORT_IMG_DIR}" >&2
-    echo "       run: sudo port install ${PORTNAME}" >&2
-    exit 1
+if [ -z "$PORTS" ]; then
+    PORTS=$(cd "$SOFTWARE_DIR" && ls)
 fi
 
-# ── destination directory ───────────────────────────────────────────────────
-DST_DIR="${MOUNT_PATH}/${PORTNAME}"
-mkdir -p "$DST_DIR"
-
-count=0
-
-# ── case 1: pre-built .tbz2 files in the software dir (old MacPorts) ────────
-for tbz in "${PORT_IMG_DIR}"/*.tbz2; do
-    [ -f "$tbz" ] || continue
-    filename=$(basename "$tbz")
-    echo "Copying pre-built archive: ${filename}"
-    cp "$tbz" "${DST_DIR}/${filename}"
-    count=$((count + 1))
+copied=0
+skipped=0
+for port in $PORTS; do
+    found=0
+    for tbz in "${SOFTWARE_DIR}/${port}"/*.tbz2; do
+        [ -f "$tbz" ] || continue
+        found=1
+        name=$(basename "$tbz")
+        dst="${MOUNT_PATH}/${port}/${name}"
+        if [ -f "$dst" ] && cmp -s "$tbz" "$dst"; then
+            skipped=$((skipped + 1))
+            continue
+        fi
+        mkdir -p "${MOUNT_PATH}/${port}"
+        echo "submit: ${port}/${name}"
+        # Copy to a temp name and rename, so a client never sees a partial file.
+        cp "$tbz" "${dst}.part"
+        mv -f "${dst}.part" "$dst"
+        copied=$((copied + 1))
+    done
+    [ "$found" -eq 1 ] || echo "warning: no archive for '${port}' in ${SOFTWARE_DIR}" >&2
 done
-
-# ── case 2: directory images (modern MacPorts 2.x) ──────────────────────────
-# Each subdirectory is a port image; pack it into a .tbz2 on the fly.
-for img_dir in "${PORT_IMG_DIR}"/*/; do
-    [ -d "$img_dir" ] || continue
-    imagename=$(basename "$img_dir")
-
-    # Skip if we already handled a matching .tbz2 above
-    if ls "${DST_DIR}/${imagename}.tbz2" 2>/dev/null | grep -q .; then
-        continue
-    fi
-
-    archive="${imagename}.tbz2"
-    tmp_archive="${TMPDIR:-/tmp}/${archive}"
-
-    echo "Archiving image: ${imagename}"
-    # Pack exactly as MacPorts expects: top-level dir = imagename
-    tar -cjf "$tmp_archive" -C "$PORT_IMG_DIR" "$imagename"
-
-    echo "Copying: ${archive}"
-    cp "$tmp_archive" "${DST_DIR}/${archive}"
-    rm -f "$tmp_archive"
-    count=$((count + 1))
-done
-
-# ── summary ─────────────────────────────────────────────────────────────────
-if [ "$count" -eq 0 ]; then
-    echo "No archives found for '${PORTNAME}' in ${PORT_IMG_DIR}" >&2
-    exit 1
-fi
 
 echo ""
-echo "Done. Submitted ${count} archive(s) for ${PORTNAME}."
-echo "The cache server will sign them within 15 seconds."
+echo "Done: ${copied} submitted, ${skipped} already present."
+[ "$copied" -eq 0 ] || echo "The signer adds the .rmd160 signatures within about 30 seconds."
