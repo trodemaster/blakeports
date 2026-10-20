@@ -62,9 +62,20 @@ configure.args      --with-ssl-dir=${prefix} \
                     --with-libedit \
                     --with-pie \
                     --without-xauth \
-                    --without-ldns
+                    --without-ldns \
+                    --disable-pkcs11 \
+                    --disable-security-key
+
+# The macOS 27 SDK drops kSBXProfilePureComputation, used by the darwin
+# privsep sandbox.  That sandbox only confines sshd, which is not installed.
+if {${os.platform} eq "darwin" && ${os.major} >= 27} {
+    configure.args-append   --with-sandbox=no
+}
 
 use_parallel_build  yes
+
+# The binaries get a 9 suffix in post-destroot; scp9 and sftp9 must exec ssh9
+build.args-append   SSH_PROGRAM=${prefix}/bin/ssh9
 
 destroot.target     install-nokeys
 
@@ -140,12 +151,6 @@ variant ldns description "Use ldns for DNSSEC support" {
     configure.args-replace  --without-ldns \
                             --with-ldns
     depends_lib-append      port:ldns
-}
-
-variant fido2 description "Enable fido2 support" {
-    configure.args-delete  --without-security-key-builtin
-    configure.args-append  --with-security-key-builtin
-    depends_lib-append      port:libfido2
 }
 
 variant legacy_dsa description "Enable legacy DSA support (until 2025)" {
