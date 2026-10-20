@@ -119,9 +119,21 @@ The launchd/Makefile flow below is for running a standalone server on a Mac.
 MacPorts 2.x keeps every installed port as a finished archive at
 `software/{portname}/{imagename}.tbz2`, the same file archive_sites clients fetch, so the
 script only copies those (verified on leopard-ppc: `curl-8.23.0_0+ssl.darwin_9.ppc.tbz2`).
-It skips files already on the share with identical contents (`cmp`), copies to `*.part`
-then renames, and with no port names submits every installed port. There is no repacking:
-the old "tar up a directory image" path was for pre-2.0 layouts and has been removed.
+It skips files already on the share with the same name and size, copies to `*.part`
+then renames, and with no port names submits every installed port. `-a N` skips archives
+modified in the last N seconds: MacPorts writes a freshly built archive in place
+(`portinstall.tcl` `create_archive`), so a running build can expose a partial one. `-q`
+stays silent when there's nothing to submit. There is no repacking: the old "tar up a
+directory image" path was for pre-2.0 layouts and has been removed.
+
+## cache-ports.sh behavior
+
+Driven by the `Cache ports` workflow over ssh. It configures the VM as a client (so cached
+dependencies install as binaries), mounts the share once for the whole run, then for each
+spec runs `port install` in the background and calls `submit-archive.sh -a 120 -q` every
+`PUBLISH_INTERVAL` (60s) until it exits, then flushes. Each dependency reaches the cache
+about a minute after it finishes, so failed, timed-out or cancelled runs keep their work.
+`mount` reports the share under `/private/tmp`, so `MNT` is built from the physical path.
 
 ## setup-client.sh behavior
 
