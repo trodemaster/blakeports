@@ -29,7 +29,9 @@ PACKAGES_AFP_URL="${PACKAGES_AFP_URL:-afp://macports:macports@darkstar.jibb.tv/p
 PACKAGES_URL="${PACKAGES_URL:-http://packages.jibb.tv}"
 PORTS_TREE="${PORTS_TREE:-$(cd "$HERE/../../.." && pwd)}"
 PATH="/opt/local/bin:/opt/local/sbin:$PATH"
-MNT="/tmp/packages-cache.$$"
+# Physical path: /tmp is a symlink to /private/tmp, and `mount` lists the
+# resolved path, so unmount()'s check would never match "/tmp/...".
+MNT="$(cd /tmp && pwd -P)/packages-cache.$$"
 
 die() { echo "error: $*" >&2; exit 1; }
 
