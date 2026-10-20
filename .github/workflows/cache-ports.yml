@@ -1,0 +1,101 @@
+name: Cache ports
+
+# Build a list of ports on one legacy VM and publish the resulting binary
+# archives (dependencies included) to the packages.jibb.tv cache, so later
+# installs on that OS/arch skip the compile. See tools/macports-cache/.
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Legacy VM to build on'
+        required: true
+        type: choice
+        default: leopard-ppc
+        options:
+          - leopard-ppc
+          - leopard
+          - snowleopard
+          - lion
+          - mountainlion
+          - mavericks
+          - yosemite
+          - elcapitan
+      ports:
+        description: 'Comma-separated ports, variants allowed (e.g. "netatalk, curl +ssl -http2")'
+        required: true
+        type: string
+      branch:
+        description: 'blakeports branch for the ports tree and scripts'
+        required: false
+        default: 'main'
+        type: string
+      timeout_minutes:
+        description: 'Job timeout in minutes (emulated PPC builds are slow)'
+        required: false
+        default: '1440'
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+# One job per VM at a time: two builds would fight over the MacPorts registry
+# lock and the ports tree in ~/code/blakeports.
+concurrency:
+  group: legacy-vm-${{ inputs.runner }}
+  cancel-in-progress: false
+
+jobs:
+  cache-ports:
+    name: cache-ports (${{ inputs.runner }})
+    runs-on: [self-hosted, "${{ inputs.runner }}"]
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch }}
+
+      # The runner container's entrypoint defines the `legacyvm` ssh alias for
+      # its VM, with the old kex/cipher/hostkey algorithms 10.5+ need.
+      - name: Check VM
+        run: |
+          ssh legacyvm 'sw_vers; uname -m; /opt/local/bin/port version'
+
+      # The VMs' sources.conf points at this path, so blakeports' own ports
+      # resolve from whatever branch was checked out.
+      - name: Copy ports tree to VM
+        run: |
+          tar cf - --exclude=.git . | ssh legacyvm '
+            set -e
+            rm -rf ~/code/blakeports.new
+            mkdir -p ~/code/blakeports.new
+            tar xf - -C ~/code/blakeports.new
+            rm -rf ~/code/blakeports
+            mv ~/code/blakeports.new ~/code/blakeports
+          '
+
+      - name: Build and cache
+        env:
+          PORTS: ${{ inputs.ports }}
+        run: |
+          set -o pipefail
+          printf -v Q '%q' "$PORTS"
+          ssh legacyvm "~/code/blakeports/tools/macports-cache/scripts/cache-ports.sh $Q" 2>&1 | tee cache-ports.log
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Cache ports on ${{ inputs.runner }}"
+            echo ""
+            echo "| Result | Time | Port |"
+            echo "|---|---|---|"
+            grep '^CACHE-RESULT ' cache-ports.log 2>/dev/null | while read -r _ status mins spec; do
+              echo "| ${status} | ${mins} | \`${spec}\` |"
+            done
+            echo ""
+            echo "Cache: http://packages.jibb.tv"
+          } >> "$GITHUB_STEP_SUMMARY"

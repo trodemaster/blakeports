@@ -16,10 +16,10 @@
 #   ./submit-archive.sh netatalk libgcrypt
 #   ./submit-archive.sh -m /Volumes/packages netatalk
 #
-# Archives already on the share with identical contents are skipped, so it's
+# Archives already on the share (same name and size) are skipped, so it's
 # cheap to run after every build.
 #
-# Dependencies: bash 3.2, cp, cmp — runs on Mac OS X 10.5.
+# Dependencies: bash 3.2, cp, stat — runs on Mac OS X 10.5.
 set -e
 
 MOUNT_PATH="${MOUNT:-/Volumes/packages}"
@@ -53,7 +53,10 @@ for port in $PORTS; do
         found=1
         name=$(basename "$tbz")
         dst="${MOUNT_PATH}/${port}/${name}"
-        if [ -f "$dst" ] && cmp -s "$tbz" "$dst"; then
+        # Same name + same size is treated as already cached: the name pins
+        # port, version, revision, variants and platform, and comparing
+        # contents would re-read the whole cache over the share every run.
+        if [ -f "$dst" ] && [ "$(stat -f %z "$tbz")" = "$(stat -f %z "$dst")" ]; then
             skipped=$((skipped + 1))
             continue
         fi
