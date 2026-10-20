@@ -44,13 +44,13 @@ print_error() {
 check_requirements() {
     if ! command -v ssh9 &> /dev/null; then
         print_error "ssh9 command not found. Please install MacPorts OpenSSH:"
-        print_error "sudo port install openssh9"
+        print_error "sudo port install openssh9-client"
         exit 1
     fi
     
     if ! command -v scp9 &> /dev/null; then
         print_error "scp9 command not found. Please install MacPorts OpenSSH:"
-        print_error "sudo port install openssh9"
+        print_error "sudo port install openssh9-client"
         exit 1
     fi
     
@@ -294,7 +294,11 @@ disable_screensaver() {
         # Additional power management settings for development
         sudo pmset -a disksleep 0
         sudo pmset -a womp 0
-        
+
+        # Spotlight indexing of Xcode and /opt/local costs ~2 CPUs during builds
+        echo 'Disabling Spotlight indexing...'
+        sudo mdutil -a -i off
+
         echo 'Screensaver and sleep disabled'
         echo 'Verifying user screensaver settings:'
         defaults -currentHost read com.apple.screensaver idleTime
@@ -331,10 +335,11 @@ setup_git_curl() {
 
         echo 'MacPorts found:' \$(port version)
 
-        # Install curl +ssl if not already present
+        # Install curl +ssl if not already present, with the same variants as
+        # updatemacports (the default variants pull in many more deps)
         if [ ! -f /opt/local/bin/curl ]; then
             echo 'Installing MacPorts curl +ssl...'
-            sudo port install curl +ssl || echo 'WARNING: curl install failed'
+            sudo port install curl -brotli -http2 -idn -psl -zstd +ssl || echo 'WARNING: curl install failed'
         else
             echo 'MacPorts curl already installed:' \$(/opt/local/bin/curl --version | head -1)
         fi
@@ -431,6 +436,7 @@ show_system_info() {
     print_status "System information for $username@$hostname:"
     
     $OLDSSH_CMD "$username@$hostname" "
+        source ~/.profile 2>/dev/null
         echo '=== System Information ==='
         sw_vers
         echo ''
