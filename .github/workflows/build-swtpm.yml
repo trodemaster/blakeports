@@ -119,56 +119,56 @@ jobs:
             # Mac OS X 10.5 PPC
             if [[ "${{ inputs.run_leopard_ppc }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"leopard-ppc","runner":["self-hosted","leopard-ppc"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"192.168.0.141","vm_username":"blake","vm_name":"Leopard-PPC","os_version":"10.5","arch":"ppc","timeout":"60"}'
+              MATRIX+='{"platform":"leopard-ppc","runner":["self-hosted","leopard-ppc"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"192.168.0.141","vm_username":"blake","vm_name":"Leopard-PPC","os_version":"10.5","arch":"ppc","timeout":"1440"}'
               FIRST=false
             fi
 
             # Mac OS X 10.5
             if [[ "${{ inputs.run_leopard }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"leopard","runner":["self-hosted","leopard"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Leopard","os_version":"10.5","timeout":"60"}'
+              MATRIX+='{"platform":"leopard","runner":["self-hosted","leopard"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Leopard","os_version":"10.5","timeout":"1440"}'
               FIRST=false
             fi
 
             # Mac OS X 10.6
             if [[ "${{ inputs.run_snowleopard }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"snowleopard","runner":["self-hosted","snowleopard"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENSIX_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"SnowLeopard","os_version":"10.6","timeout":"60"}'
+              MATRIX+='{"platform":"snowleopard","runner":["self-hosted","snowleopard"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENSIX_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"SnowLeopard","os_version":"10.6","timeout":"1440"}'
               FIRST=false
             fi
 
             # Mac OS X 10.7
             if [[ "${{ inputs.run_lion }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"lion","runner":["self-hosted","lion"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Lion","os_version":"10.7","timeout":"60"}'
+              MATRIX+='{"platform":"lion","runner":["self-hosted","lion"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENSEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Lion","os_version":"10.7","timeout":"1440"}'
               FIRST=false
             fi
 
             # Mac OS X 10.8
             if [[ "${{ inputs.run_mountainlion }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"mountainlion","runner":["self-hosted","mountainlion"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENEIGHT_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"MountainLion","os_version":"10.8","timeout":"60"}'
+              MATRIX+='{"platform":"mountainlion","runner":["self-hosted","mountainlion"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENEIGHT_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"MountainLion","os_version":"10.8","timeout":"1440"}'
               FIRST=false
             fi
 
             # Mac OS X 10.9
             if [[ "${{ inputs.run_mavericks }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"mavericks","runner":["self-hosted","mavericks"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENNINE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Mavericks","os_version":"10.9","timeout":"60"}'
+              MATRIX+='{"platform":"mavericks","runner":["self-hosted","mavericks"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENNINE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Mavericks","os_version":"10.9","timeout":"1440"}'
               FIRST=false
             fi
 
             # Mac OS X 10.10
             if [[ "${{ inputs.run_yosemite }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"yosemite","runner":["self-hosted","yosemite"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENTEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Yosemite","os_version":"10.10","timeout":"60"}'
+              MATRIX+='{"platform":"yosemite","runner":["self-hosted","yosemite"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENTEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Yosemite","os_version":"10.10","timeout":"1440"}'
               FIRST=false
             fi
 
             # Mac OS X 10.11
             if [[ "${{ inputs.run_elcapitan }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"elcapitan","runner":["self-hosted","elcapitan"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENELEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"ElCapitan","os_version":"10.11","timeout":"60"}'
+              MATRIX+='{"platform":"elcapitan","runner":["self-hosted","elcapitan"],"type":"legacy","port":"sysutils/swtpm","vm_ip":"${{ vars.LEGACY_TENELEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"ElCapitan","os_version":"10.11","timeout":"1440"}'
               FIRST=false
             fi
 
@@ -190,6 +190,9 @@ jobs:
     needs: setup-matrix
     name: build-swtpm (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
+    # legacy matrix entries set "timeout" in minutes: cold dependency builds
+    # (leopard-ppc under emulation) outrun the 6h default; modern ones keep it
+    timeout-minutes: ${{ fromJSON(matrix.timeout || '360') }}
     strategy:
       matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
       fail-fast: false
