@@ -223,15 +223,17 @@ leftovers.
 
 ## 7. Operational notes (darkstar)
 
-- **Runners:** 8 containers (`leopard-runner` … `leopard-ppc-runner`) via
-  `~/Developer/actions_runners`; register on `trodemaster/blakeports` with
+- **Runners:** 7 containers (`leopard-runner` … `elcapitan-runner`) via
+  `~/Developer/actions_runners/darkstar` (`leopard-ppc-runner` moved to
+  far-star's QEMU G5, `actions_runners/far-star`); register on `trodemaster/blakeports` with
   codename labels. Container SSHes to the paired VM over OpenSSH 9.x with
   legacy crypto; `Host <codename>` alias written by the container entrypoint.
 - **Distfile cache:** `darkstar` is Linux and has no `port`, so
   `scripts/cache-distfiles` can't run there.
-  `actions_runners/host/cache-distfiles-from-vm.sh` mirrors the distfiles tree
-  from `leopard-ppc` (the one VM with a working mpcurl) into
-  `docker/config/distfiles-cache/` (mounted at `/config/distfiles-cache`).
+  `actions_runners/darkstar/host/cache-distfiles-from-vm.sh <vm>` mirrors the
+  distfiles tree from a VM with a working mpcurl (e.g. `lion`; the VMware
+  `leopard-ppc` that used to be the only one is retired) into
+  `darkstar/config/distfiles-cache/` (mounted at `/config/distfiles-cache`).
   Distfiles are arch‑independent source tarballs; over‑inclusion is harmless.
 - **Snapshots:** all 8 VMs have `pre-update-macports-2026-09-06` (live‑VM
   snapshots dump ~17 GB of RAM each — slow, ~30–50 min). Off‑disk VM backups

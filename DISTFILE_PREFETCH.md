@@ -35,8 +35,8 @@ Host System (local MacPorts)      Container (GitHub Actions)      Legacy VM
         │   (port fetch curl ...)            │                      │
         │                                    │                      │
         ├─ Copy to cache dir ───────────────>│ /config/distfiles-cache/
-        │   ~/jibb-runners/                  │   (mounted volume)
-        │   docker/config/                   │
+        │   actions_runners/                 │   (mounted volume)
+        │   darkstar/config/                 │
         │   distfiles-cache/                 │
         │                                    │
         │                          Run prefetch-distfiles
@@ -73,7 +73,8 @@ Host System (local MacPorts)      Container (GitHub Actions)      Legacy VM
 - Uses `port deps` to get dependency tree
 - Uses `port distfiles` to get actual filenames (current versions)
 - Uses `port fetch` to download with MacPorts' proven mechanism
-- Copies to `~/Developer/jibb-runners/docker/config/distfiles-cache/`
+- Copies to `~/Developer/actions_runners/<runner-host>/config/distfiles-cache/`
+  (runner host defaults to `darkstar`; prints the rsync when that isn't this machine)
 - Creates manifest file listing all cached distfiles
 - Automatic .gitignore to prevent committing large binary files
 

@@ -1,10 +1,17 @@
 #!/bin/bash
 # Script to pre-cache distfiles for curl bootstrap using local MacPorts
-# This runs on the HOST system (not in containers) and uses local MacPorts
-# to download all required distfiles, then copies them to the docker config
-# cache directory which is mounted into GitHub Actions containers.
+# This runs on a macOS host with MacPorts (not in containers) to download all
+# required distfiles, then copies them into a runner host's config dir in an
+# actions_runners checkout (https://github.com/trodemaster/actions_runners),
+# which that host's compose.yaml mounts into the runner containers at /config.
 #
-# Usage: ./scripts/cache-distfiles
+# Usage: ./scripts/cache-distfiles [runner-host]     (default: darkstar)
+#
+# The runner host defaults to darkstar, whose VMware runners need the offline
+# curl bootstrap seed. ACTIONS_RUNNERS_DIR overrides the checkout location
+# (default ~/Developer/actions_runners). The compose bind mount has to be on
+# the runner host's own disk, so when that isn't this machine, copy the cache
+# over afterwards (the script prints the rsync).
 #
 # The cached files will be available in containers at:
 # /config/distfiles-cache/<portname>/<distfile>
@@ -46,15 +53,15 @@ fi
 info "MacPorts found: $(which port)"
 info "MacPorts version: $(port version)"
 
-# Determine cache directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BLAKEPORTS_ROOT="$(dirname "$SCRIPT_DIR")"
-DOCKER_CONFIG_DIR="$BLAKEPORTS_ROOT/docker/config"
+# Determine cache directory: <actions_runners>/<runner-host>/config/distfiles-cache
+RUNNERS_HOST="${1:-darkstar}"
+RUNNERS_DIR="${ACTIONS_RUNNERS_DIR:-$HOME/Developer/actions_runners}"
+DOCKER_CONFIG_DIR="$RUNNERS_DIR/$RUNNERS_HOST/config"
 CACHE_DIR="$DOCKER_CONFIG_DIR/distfiles-cache"
 
 if [ ! -d "$DOCKER_CONFIG_DIR" ]; then
-    error "Docker config directory not found: $DOCKER_CONFIG_DIR"
-    error "Expected docker/config at: $DOCKER_CONFIG_DIR"
+    error "Runner config directory not found: $DOCKER_CONFIG_DIR"
+    error "Clone actions_runners to $RUNNERS_DIR (or set ACTIONS_RUNNERS_DIR) and check the host name"
     exit 1
 fi
 
@@ -222,6 +229,11 @@ info ""
 info "Manifest created at:"
 info "  /config/distfiles-cache/manifest.txt"
 info ""
+if [ "$(hostname -s | tr 'A-Z' 'a-z')" != "$RUNNERS_HOST" ]; then
+    info "Copy it to the runner host's own disk:"
+    info "  rsync -a --delete \"$CACHE_DIR/\" $RUNNERS_HOST:Developer/actions_runners/$RUNNERS_HOST/config/distfiles-cache/"
+    info ""
+fi
 info "You can now run the update-macports-legacy workflow."
 
 exit 0
