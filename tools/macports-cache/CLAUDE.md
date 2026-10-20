@@ -66,9 +66,9 @@ CACHE_DIR/
 
 ## Key design decisions
 
-**Publishing via file share, not HTTP PUT.** Build machines mount the cache directory (AFP/SMB) and copy archives directly. This means:
+**Publishing via file share, not HTTP PUT.** Build machines mount the cache directory (AFP/SMB) and copy archives directly. Modern macOS can't serve a share Leopard can mount (no AFP server, Leopard is SMB1-only), which is why production uses netatalk on darkstar. This means:
 - No authentication logic in the server
-- `submit-archive.sh` needs only `sh`, `cp`, `tar` — runs on Mac OS X 10.5
+- `submit-archive.sh` needs only `bash`, `cp`, `cmp` — runs on Mac OS X 10.5
 - Server auto-signs newly-arrived archives every 15 seconds (configurable via `-sign-interval`)
 - Additionally signs on-demand if a `.rmd160` GET arrives before the scan fires
 
@@ -81,10 +81,28 @@ CACHE_DIR/
 ## macports-cache server flags
 
 ```
--port int           HTTP listen port (default 8030)
+-port int           HTTP listen port (default 8030); 0 = sign only, no HTTP
 -dir string         Cache directory, also the file-share root
+-key-dir string     Where .privkey.pem lives (default: -dir); pubkey.pem is always written to -dir
 -sign-interval dur  How often to scan for unsigned archives (default 15s)
 ```
+
+The signer skips archives modified within the last interval (still arriving over the
+share) and re-signs any archive newer than its `.rmd160` (replaced on resubmit).
+
+## Production deployment: packages.jibb.tv on darkstar
+
+The live cache is **`http://packages.jibb.tv`** (named after `packages.macports.org`):
+Caddy `file_server` serves `/media/blake/jonesfarm/macports-packages` over plain HTTP,
+LAN-only; this tool runs beside it with `-port 0` as the `macports-signer` systemd unit;
+build machines submit through the `[packages]` netatalk volume as `macports`/`macports`
+(`mount_afp afp://macports:macports@darkstar.jibb.tv/packages /Volumes/packages`).
+Clients' `archive_sites.conf` entry is named `jibb_archives`. All of the darkstar side
+(unit, Caddy site, afp.conf, account script) is in machine-cfg `darkstar/macports-packages/`.
+Go isn't installed on darkstar: cross-compile with
+`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build` and copy the binary over.
+
+The launchd/Makefile flow below is for running a standalone server on a Mac.
 
 ## Makefile targets
 
@@ -98,16 +116,17 @@ CACHE_DIR/
 
 ## submit-archive.sh behavior
 
-The script handles two MacPorts image formats:
-1. **Old MacPorts (pre-2.0):** `.tbz2` files directly in `software/{portname}/` — just copied
-2. **Modern MacPorts (2.x):** Directory images in `software/{portname}/{imagename}/` — re-archived with `tar -cjf` on the fly before copying
-
-The re-archived format (`+CONTENTS`, `+PORTFILE`, `+STATE`, etc. + `opt/` tree with the installed files) matches what MacPorts' `archive` phase produces. **This has a caveat: test one real `sudo port -b install` after first use to confirm MacPorts accepts the archive structure before relying on it broadly.**
+MacPorts 2.x keeps every installed port as a finished archive at
+`software/{portname}/{imagename}.tbz2`, the same file archive_sites clients fetch, so the
+script only copies those (verified on leopard-ppc: `curl-8.23.0_0+ssl.darwin_9.ppc.tbz2`).
+It skips files already on the share with identical contents (`cmp`), copies to `*.part`
+then renames, and with no port names submits every installed port. There is no repacking:
+the old "tar up a directory image" path was for pre-2.0 layouts and has been removed.
 
 ## setup-client.sh behavior
 
 Runs on each MacPorts machine that should consume from the cache:
-1. Downloads `pubkey.pem` from the server and saves it to `/opt/local/share/macports/macports-cache-pubkey.pem`
+1. Downloads `pubkey.pem` from the server (default `http://packages.jibb.tv`) and saves it to `/opt/local/share/macports/jibb_archives-pubkey.pem`
 2. Appends that path to `/opt/local/etc/macports/pubkeys.conf`
 3. Appends an entry to `/opt/local/etc/macports/archive_sites.conf` with:
    - The server URL

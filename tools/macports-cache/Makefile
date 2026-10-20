@@ -81,7 +81,7 @@ submit: ## Submit a built port to the cache via mount  [PORTNAME=xxx] [MOUNT=pat
 		echo "Usage: make submit PORTNAME=<portname> [MOUNT=<path>]"; \
 		echo "       MOUNT defaults to $(MOUNT)"; \
 		exit 1; }
-	./scripts/submit-archive.sh "$(PORTNAME)" "$(MOUNT)"
+	./scripts/submit-archive.sh -m "$(MOUNT)" "$(PORTNAME)"
 
 setup-client: ## Configure a MacPorts machine to use this cache  [HOST=xxx] [PORT=8030]
 	@test -n "$(HOST)" || { \

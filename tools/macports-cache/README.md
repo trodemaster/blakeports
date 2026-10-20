@@ -86,7 +86,7 @@ sudo port install netatalk
 # e.g. Finder → Go → Connect to Server → afp://mymac.local
 
 # Submit
-./scripts/submit-archive.sh netatalk /Volumes/macports-cache
+./scripts/submit-archive.sh -m /Volumes/macports-cache netatalk
 ```
 
 The script has zero dependencies beyond the standard shell, `cp`, and `tar` — it runs on Mac OS X 10.5 and up.
