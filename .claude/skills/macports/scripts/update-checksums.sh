@@ -1,6 +1,11 @@
 #!/bin/bash
-# Update checksums in a Portfile after version change
+# Update checksums in a Portfile after a version change, using `port bump`
 # Usage: update-checksums.sh <portname>
+#
+# Update the version in the Portfile first (keep the old checksums), then run
+# this. `port bump` fetches the new distfile, rewrites the checksums line in
+# place and resets the revision. It does not touch `version` lines in
+# subports/stubs (e.g. netatalk4) - update those by hand.
 
 set -e
 
@@ -14,25 +19,20 @@ PORTNAME=$1
 echo "========================================="
 echo "Updating checksums for: $PORTNAME"
 echo "========================================="
-
-echo ""
-echo "Running port checksum to get new values..."
 echo ""
 
-# Run port checksum and capture output
-# This will fail if checksums don't match, but that's expected
-if sudo port checksum "$PORTNAME" 2>&1 | tee /tmp/checksum_output.txt; then
+if sudo port checksum "$PORTNAME" >/dev/null 2>&1; then
     echo "Checksums already match! No update needed."
     exit 0
 fi
 
+sudo port bump "$PORTNAME"
+
+echo ""
+echo "Verifying..."
+sudo port checksum "$PORTNAME"
+
 echo ""
 echo "========================================="
-echo "Extract the checksums line from output above."
-echo "It should look like:"
-echo "  checksums           rmd160  HASH \\"
-echo "                      sha256  HASH \\"
-echo "                      size    SIZE"
-echo ""
-echo "Update your Portfile with these values."
+echo "Next: portindex && port lint --nitpick $PORTNAME"
 echo "========================================="

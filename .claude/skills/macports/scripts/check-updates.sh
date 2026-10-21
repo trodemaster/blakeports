@@ -16,10 +16,21 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Function to check if @trodemaster is a maintainer of this port
+# Ports where @trodemaster is a maintainer, per ports.macports.org (the same
+# list as the web search with maintainers_exact=trodemaster). The local Portfile
+# is not authoritative: blakeports copies of ports we only test locally (qemu,
+# lima, ...) may list @trodemaster, but the role that matters is upstream's.
+# Subports (netatalk4) live in their parent's directory, so match on dir name.
+MAINTAINER_API="https://ports.macports.org/api/v1/maintainer/trodemaster/"
+MAINTAINED_LIST=$(curl -sf "$MAINTAINER_API" | jq -r '.[].ports[]' 2>/dev/null)
+if [ -z "$MAINTAINED_LIST" ]; then
+    echo "Could not fetch maintained ports from $MAINTAINER_API" >&2
+    exit 1
+fi
+
 is_maintained_by_trodemaster() {
     local portfile="$1"
-    grep -q "@trodemaster" "$portfile"
+    grep -qxF "$(basename "$(dirname "$portfile")")" <<< "$MAINTAINED_LIST"
 }
 
 # Function to extract github.setup from a Portfile
@@ -180,7 +191,7 @@ version_compare() {
 }
 
 echo "==========================================="
-echo "Checking for port updates (@trodemaster ports only)"
+echo "Checking for port updates (ports.macports.org maintainer: trodemaster)"
 echo "==========================================="
 echo ""
 
@@ -189,6 +200,7 @@ total=0
 updates_available=0
 up_to_date=0
 errors=0
+maintained_ports=()
 
 while IFS= read -r portfile; do
     # Get port name from path
@@ -207,6 +219,7 @@ while IFS= read -r portfile; do
     fi
 
     total=$((total + 1))
+    maintained_ports+=("$portname")
 
     # Try GitHub first
     github_info=$(get_github_info "$portfile")
@@ -271,8 +284,63 @@ while IFS= read -r portfile; do
         fi
         continue
     fi
-    
+
+    # Fallback: MacPorts' own livecheck (ports with plain master_sites, etc.)
+    if command -v port >/dev/null 2>&1; then
+        lc=$(port -v livecheck "$portname" 2>&1 | tail -1)
+        current_version=$(grep -m1 "^version" "$portfile" | awk '{print $2}')
+        if [[ "$lc" == *"seems to be up to date"* ]]; then
+            echo -e "${GREEN}✓${NC}  ${category}/${portname}: ${current_version} (up to date, livecheck)"
+            up_to_date=$((up_to_date + 1))
+            continue
+        elif [[ "$lc" =~ "new version: "([^\)]+)\) ]]; then
+            echo -e "${RED}✗${NC}  ${category}/${portname}: ${current_version} → ${BASH_REMATCH[1]} ${BLUE}(update available, livecheck)${NC}"
+            updates_available=$((updates_available + 1))
+            continue
+        fi
+    fi
+    echo -e "${YELLOW}⚠${NC}  ${category}/${portname}: No GitHub/SVN source and livecheck gave no answer"
+    errors=$((errors + 1))
+
 done < <(find "$REPO_ROOT" -name "Portfile" -type f)
+
+# Check macports-ports for PRs by others against our ports: all open PRs,
+# plus PRs merged/closed in the last PR_DAYS days (the local Portfile may be
+# stale after someone else's update lands upstream).
+PR_REPO="macports/macports-ports"
+PR_DAYS="${PR_DAYS:-45}"
+pr_hits=0
+if command -v gh >/dev/null 2>&1 && [ ${#maintained_ports[@]} -gt 0 ]; then
+    echo ""
+    echo "==========================================="
+    echo "PRs against our ports (${PR_REPO})"
+    echo "==========================================="
+    me=$(gh api user --jq .login 2>/dev/null)
+    while IFS= read -r name; do
+        prs=$(gh pr list --repo "$PR_REPO" --state all --limit 30 \
+            --search "${name} in:title" \
+            --json number,title,author,state,url,updatedAt 2>/dev/null |
+            jq -r --arg me "$me" --argjson days "$PR_DAYS" --arg name "$name" '
+                .[]
+                | select(.author.login != $me)
+                | select(.title | ascii_downcase | test("(^|[^a-z0-9_-])" + $name + "([^a-z0-9_-]|$)"))
+                | select(.state == "OPEN" or ((.updatedAt | fromdateiso8601) > (now - $days * 86400)))
+                | "\(.state)\t#\(.number)\t\(.author.login)\t\(.title)\t\(.url)"')
+        [ -z "$prs" ] && continue
+        while IFS=$'\t' read -r state num author title url; do
+            case "$state" in
+                OPEN)   color="$RED" ;;
+                MERGED) color="$YELLOW" ;;
+                *)      color="$NC" ;;
+            esac
+            echo -e "${color}${state}${NC}  ${name} ${num} by ${author}: ${title}"
+            echo "   ${url}"
+            pr_hits=$((pr_hits + 1))
+        done <<< "$prs"
+    done < <(printf '%s\n' "${maintained_ports[@]}" | sort -u)
+    [ $pr_hits -eq 0 ] && echo -e "${GREEN}✓${NC}  No open or recent PRs by others"
+    echo "(MERGED = upstream changed; sync blakeports with macports-ports before the next bump)"
+fi
 
 echo ""
 echo "==========================================="
@@ -282,6 +350,7 @@ echo "Total ports checked: $total"
 echo -e "${GREEN}Up to date:${NC} $up_to_date"
 echo -e "${RED}Updates available:${NC} $updates_available"
 echo -e "${YELLOW}Errors/Unable to check:${NC} $errors"
+echo -e "${YELLOW}PRs by others:${NC} $pr_hits"
 echo ""
 
 if [ $updates_available -gt 0 ]; then
