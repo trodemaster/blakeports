@@ -5,14 +5,21 @@ tree (`fuse/macfuse`, 5.4.0 at the time of writing). These are notes on
 getting `netatalk_client +fuse` mounting through macFUSE's FSKit backend on
 far-star.
 
-Last updated: 2026-10-11 (far-star session blakeports-87, which took over from
-the umac session).
+Last updated: 2026-10-20 (filed netatalk-client#386).
 
 ## Ground rules (from the user)
 
 - FSKit only. No macFUSE kernel extension, so no reduced boot security.
-- No upstream activity on FUSE: no issues, PRs or questions to macFUSE or
-  netatalk-client.
+- No upstream activity with macFUSE: no issues, PRs or questions there.
+  netatalk-client issues are OK: facts only (observed behaviour, code
+  links, documented sources), no patches or PR offers, and the user
+  reviews the text before it is posted. Goal: works on macOS 27 with
+  macFUSE FSKit (no kernel extension), kernel backend still supported.
+- Filed: [Netatalk/netatalk-client#386](https://github.com/Netatalk/netatalk-client/issues/386)
+  (FSKit support: `/dev/macfuse0` check, macOS unmount, `/Volumes`
+  mount point), 2026-10-20. Candidates not yet filed: truncate through
+  an open fork (finding 10), FUSE thread arg on the stack, `fs exit`
+  logout, and duplicate manager exits (finding 7).
 - MacPorts must only touch `/opt/local`. Anything outside it is a manual step
   the user approves.
 - Live mount tests are guest-only against the darkstar Netatalk server
