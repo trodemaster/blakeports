@@ -43,12 +43,11 @@ configure.args  --enable-bsdtar=shared --enable-bsdcpio=shared \
 
 configure.checks.implicit_function_declaration.whitelist-append strchr
 
-platform darwin powerpc {
-    # gcc-4.2 ICEs (Bus error) in archive_write_pax_header at -O1 and up
-    # https://trac.macports.org/ticket/74268
-    # https://github.com/libarchive/libarchive/issues/3189
-    compiler.blacklist-append *gcc-4.2
-}
+# gcc-4.2 ICEs (Bus error) in archive_write_pax_header at -O1 and up,
+# on both ppc and i386
+# https://trac.macports.org/ticket/74268
+# https://github.com/libarchive/libarchive/issues/3189
+compiler.blacklist-append *gcc-4.2
 
 post-destroot {
     xinstall -d ${destroot}${prefix}/libexec/${subport}
