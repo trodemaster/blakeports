@@ -162,7 +162,36 @@ for dep in $DEPS; do
     OUTPUT=$(cat "$TEMP_OUTPUT")
     rm -f "$TEMP_OUTPUT"
     set -e  # Re-enable exit on error
-    
+
+    # gcc ports refuse to build while a conflicts_build port is active
+    # (e.g. libunwind-headers, pulled in by cctools on legacy systems).
+    # Deactivate it for the retry, as the MacPorts error suggests, and
+    # reactivate it once the install finishes.
+    REACTIVATE=""
+    CONFLICT_TRIES=0
+    while [ $INSTALL_EXIT_CODE -ne 0 ] && [ $CONFLICT_TRIES -lt 3 ]; do
+        CONFLICT=$(echo "$OUTPUT" | sed -n 's/.*cannot be built while \([^ ]*\) is active.*/\1/p' | head -1)
+        [ -n "$CONFLICT" ] || break
+        CONFLICT_TRIES=$((CONFLICT_TRIES + 1))
+        echo "  ⚠️  $CONFLICT blocks building a dependency of $dep, deactivating it and retrying..."
+        sudo port -f deactivate "$CONFLICT"
+        REACTIVATE="$REACTIVATE $CONFLICT"
+
+        TEMP_OUTPUT="/tmp/install-deps-conflict-$$.txt"
+        set +e
+        sudo port install "$dep" > "$TEMP_OUTPUT" 2>&1
+        INSTALL_EXIT_CODE=$?
+        OUTPUT=$(cat "$TEMP_OUTPUT")
+        rm -f "$TEMP_OUTPUT"
+        set -e
+    done
+    for conflict in $REACTIVATE; do
+        if ! port -q installed "$conflict" | grep -q '(active)'; then
+            echo "  Reactivating $conflict..."
+            sudo port activate "$conflict" || true
+        fi
+    done
+
     if [ $INSTALL_EXIT_CODE -eq 0 ]; then
         echo "  ✅ $dep installed"
     else
