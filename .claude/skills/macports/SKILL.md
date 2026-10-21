@@ -21,11 +21,20 @@ bash scripts/check-updates.sh           # Check all ports in current directory
 
 The script will:
 - Find all Portfiles using GitHub PortGroup or SVN fetch
-- **Skip ports where @trodemaster is not listed as a maintainer**
+- **Skip ports where @trodemaster is not an upstream maintainer** — the role is read from
+  `macports/macports-ports` master, not the local Portfile, so ports we only test
+  locally (qemu, lima) or that aren't upstream are ignored even if the blakeports copy
+  lists us
 - Query GitHub API for latest releases
 - Query SourceForge RSS feeds for SVN release commits
 - Compare current version/revision with latest
 - Display color-coded results (✓ up to date, ✗ update available)
+- **List PRs by others against our ports** in `macports/macports-ports`: every open
+  PR plus any merged/closed in the last 45 days (`PR_DAYS=N` to change). A `MERGED`
+  hit means upstream moved without us (e.g. bstring #35282, a 1.1.1 bump by
+  commitmaniac) — diff the port against `macports-ports` and sync blakeports before the
+  next bump. An `OPEN` hit needs a look: review, test, or coordinate so we don't
+  submit a duplicate bump.
 
 **Supported sources:**
 - GitHub-hosted ports (via GitHub API)
@@ -627,7 +636,7 @@ All scripts live in the `scripts/` directory in the repository root.
 
 **scripts/test-port.sh** - Automate standard port testing workflow  
 **scripts/update-checksums.sh** - Guide checksum update process  
-**scripts/check-updates.sh** - Check ports for available updates; only reports ports where @trodemaster is a maintainer
+**scripts/check-updates.sh** - Check ports for available updates; only reports ports where @trodemaster is an upstream maintainer
 
 Execute without reading into context for efficiency.
 
