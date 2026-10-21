@@ -114,6 +114,16 @@ sudo port fetch <portname>               # Download distfiles
 sudo port fetch --check-vulnerabilities  # Security check
 ```
 
+### port bump / port distfiles
+Regenerate or display distfile hashes.
+
+```bash
+sudo port bump <portname>                # Rewrite checksums in the Portfile, reset revision,
+                                         # print a suggested commit message
+sudo port distfiles <portname>           # Show each distfile's rmd160/sha256/size and URLs
+sudo port checksum <portname>            # Verify Portfile checksums against the distfile
+```
+
 ## Build Phase Commands
 
 Run individual build phases for debugging:

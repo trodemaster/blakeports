@@ -99,14 +99,25 @@ When bumping version number:
 
 1. Update `version` field in Portfile
 2. **Keep existing checksums** (do NOT delete)
-3. Run `sudo port checksum <portname>`
-4. MacPorts will fail and output correct checksums
-5. Copy checksum line from error output
-6. Update Portfile with new checksums
-7. Run `sudo port checksum <portname>` again to verify
-8. Test the build
+3. Run `sudo port bump <portname>` — fetches the new distfile, rewrites the
+   `checksums` line in place (rmd160, sha256, size) and resets `revision`, then prints
+   a suggested commit message. Run it from the Portfile's repo (blakeports) so it picks
+   up the local Portfile.
+4. Verify with `sudo port checksum <portname>`, then `portindex` and
+   `port lint --nitpick <portname>`
+5. Test the build (via CI)
 
-**Why keep old checksums:** MacPorts needs them present to fetch the new file and calculate correct checksums.
+`port bump` replaces the old copy-the-hashes-from-the-error-output step. Only fall back
+to that manual flow if `bump` can't rewrite the Portfile (unusual `checksums` layout):
+`sudo port checksum` fails and logs `Distfile checksum:` lines in the port's `main.log`;
+`port distfiles <portname>` also prints rmd160/sha256/size for fetched distfiles.
+
+**Why keep old checksums:** `bump` (and the manual flow) need an existing `checksums`
+entry to rewrite and to fetch the new file.
+
+**Version bump touches every `version`:** ports with subports/stubs (netatalk's
+`netatalk4`) carry their own `version` line — bump those by hand; `port bump` only
+handles checksums.
 
 **Script available:** `scripts/update-checksums.sh <portname>` (in repo root `scripts/`) guides this workflow.
 
@@ -619,8 +630,7 @@ sudo port -n upgrade --force <portname>
 ### Checksum Update Workflow
 ```bash
 # 1. Update version in Portfile (keep old checksums)
-sudo port checksum <portname>            # Shows correct checksums
-# 2. Copy checksum line from error output to Portfile
+sudo port bump <portname>                # Rewrites checksums + resets revision
 sudo port checksum <portname>            # Verify
 ```
 
@@ -662,7 +672,7 @@ Execute without reading into context for efficiency.
 1. **Always run `portindex`** after modifying Portfiles
 2. **Use `port lint --nitpick`** before submitting - must pass with 0 errors and 0 warnings
 3. **Clean distribution files** (`--dist`) when updating versions
-4. **Keep old checksums** during version updates (MacPorts needs them)
+4. **Keep old checksums** during version updates and run `sudo port bump <portname>` to regenerate them
 5. **Test with verbose output** (`-sv` flag) for debugging
 6. **Inspect build logs** (`port logfile`) when builds fail
 7. **Check work directory** for build artifacts and logs
