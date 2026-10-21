@@ -17,9 +17,8 @@ Last updated: 2026-10-20 (filed netatalk-client#386).
   macFUSE FSKit (no kernel extension), kernel backend still supported.
 - Filed: [Netatalk/netatalk-client#386](https://github.com/Netatalk/netatalk-client/issues/386)
   (FSKit support: `/dev/macfuse0` check, macOS unmount, `/Volumes`
-  mount point), 2026-10-20. Candidates not yet filed: truncate through
-  an open fork (finding 10), FUSE thread arg on the stack, `fs exit`
-  logout, and duplicate manager exits (finding 7).
+  mount point), 2026-10-20. Unfiled candidates, one at a time:
+  `UPSTREAM-ISSUES.md`.
 - MacPorts must only touch `/opt/local`. Anything outside it is a manual step
   the user approves.
 - Live mount tests are guest-only against the darkstar Netatalk server
