@@ -16,18 +16,21 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Function to check if @trodemaster is a maintainer of this port *upstream*.
-# The local Portfile is not authoritative: blakeports copies of ports we only
-# test locally (qemu, lima, ...) may list @trodemaster, but the role that matters
-# is the one in macports/macports-ports master. Local-only ports are skipped.
-UPSTREAM_REPO="macports/macports-ports"
+# Ports where @trodemaster is a maintainer, per ports.macports.org (the same
+# list as the web search with maintainers_exact=trodemaster). The local Portfile
+# is not authoritative: blakeports copies of ports we only test locally (qemu,
+# lima, ...) may list @trodemaster, but the role that matters is upstream's.
+# Subports (netatalk4) live in their parent's directory, so match on dir name.
+MAINTAINER_API="https://ports.macports.org/api/v1/maintainer/trodemaster/"
+MAINTAINED_LIST=$(curl -sf "$MAINTAINER_API" | jq -r '.[].ports[]' 2>/dev/null)
+if [ -z "$MAINTAINED_LIST" ]; then
+    echo "Could not fetch maintained ports from $MAINTAINER_API" >&2
+    exit 1
+fi
+
 is_maintained_by_trodemaster() {
     local portfile="$1"
-    local portdir=$(dirname "$portfile")
-    local rel="$(basename "$(dirname "$portdir")")/$(basename "$portdir")/Portfile"
-    gh api -H "Accept: application/vnd.github.raw" \
-        "repos/${UPSTREAM_REPO}/contents/${rel}?ref=master" 2>/dev/null |
-        grep -q "^maintainers.*@trodemaster\|^[[:space:]]*{.*@trodemaster"
+    grep -qxF "$(basename "$(dirname "$portfile")")" <<< "$MAINTAINED_LIST"
 }
 
 # Function to extract github.setup from a Portfile
@@ -188,7 +191,7 @@ version_compare() {
 }
 
 echo "==========================================="
-echo "Checking for port updates (ports where @trodemaster is an upstream maintainer)"
+echo "Checking for port updates (ports.macports.org maintainer: trodemaster)"
 echo "==========================================="
 echo ""
 
@@ -281,7 +284,24 @@ while IFS= read -r portfile; do
         fi
         continue
     fi
-    
+
+    # Fallback: MacPorts' own livecheck (ports with plain master_sites, etc.)
+    if command -v port >/dev/null 2>&1; then
+        lc=$(port -v livecheck "$portname" 2>&1 | tail -1)
+        current_version=$(grep -m1 "^version" "$portfile" | awk '{print $2}')
+        if [[ "$lc" == *"seems to be up to date"* ]]; then
+            echo -e "${GREEN}✓${NC}  ${category}/${portname}: ${current_version} (up to date, livecheck)"
+            up_to_date=$((up_to_date + 1))
+            continue
+        elif [[ "$lc" =~ "new version: "([^\)]+)\) ]]; then
+            echo -e "${RED}✗${NC}  ${category}/${portname}: ${current_version} → ${BASH_REMATCH[1]} ${BLUE}(update available, livecheck)${NC}"
+            updates_available=$((updates_available + 1))
+            continue
+        fi
+    fi
+    echo -e "${YELLOW}⚠${NC}  ${category}/${portname}: No GitHub/SVN source and livecheck gave no answer"
+    errors=$((errors + 1))
+
 done < <(find "$REPO_ROOT" -name "Portfile" -type f)
 
 # Check macports-ports for PRs by others against our ports: all open PRs,

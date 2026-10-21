@@ -21,10 +21,13 @@ bash scripts/check-updates.sh           # Check all ports in current directory
 
 The script will:
 - Find all Portfiles using GitHub PortGroup or SVN fetch
-- **Skip ports where @trodemaster is not an upstream maintainer** — the role is read from
-  `macports/macports-ports` master, not the local Portfile, so ports we only test
+- **Skip ports where @trodemaster is not an upstream maintainer** — the list comes from
+  the ports.macports.org API (`/api/v1/maintainer/trodemaster/`, same as the web search
+  with `maintainers_exact=trodemaster`), not the local Portfile, so ports we only test
   locally (qemu, lima) or that aren't upstream are ignored even if the blakeports copy
   lists us
+- **Fall back to `port -v livecheck`** for maintained ports with neither a GitHub nor SVN
+  source (e.g. libfido2, plain `master_sites`); warns if livecheck can't answer either
 - Query GitHub API for latest releases
 - Query SourceForge RSS feeds for SVN release commits
 - Compare current version/revision with latest
