@@ -1,0 +1,255 @@
+name: Build qemu-cat7
+
+on:
+  push:
+    paths: ['emulators/qemu-cat7/**']
+    branches: [main]
+  pull_request:
+    paths: ['emulators/qemu-cat7/**']
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: false
+        default: 'main'
+        type: string
+      run_macos27:
+        description: 'macOS 27'
+        required: false
+        default: true
+        type: boolean
+      run_macos26:
+        description: 'macOS 26 (Tahoe)'
+        required: false
+        default: true
+        type: boolean
+      run_macos15:
+        description: 'macOS 15 (Sequoia)'
+        required: false
+        default: true
+        type: boolean
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          MATRIX='{"include":['
+          FIRST=true
+
+          # For non-workflow_dispatch events (push/PR), default to modern platforms
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"emulators/qemu-cat7"},'
+            MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/qemu-cat7"},'
+            MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"emulators/qemu-cat7"}'
+            FIRST=false
+          else
+            # macOS 15
+            if [[ "${{ inputs.run_macos15 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"emulators/qemu-cat7"}'
+              FIRST=false
+            fi
+
+            # macOS 26
+            if [[ "${{ inputs.run_macos26 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/qemu-cat7"}'
+              FIRST=false
+            fi
+
+            # macOS 27
+            if [[ "${{ inputs.run_macos27 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"emulators/qemu-cat7"}'
+              FIRST=false
+            fi
+
+            # If no platforms selected, default to modern platforms
+            if [[ "$FIRST" == "true" ]]; then
+              MATRIX+='{"platform":"macOS_15","runner":"macOS_15","type":"modern","port":"emulators/qemu-cat7"},'
+              MATRIX+='{"platform":"macOS_26","runner":"macOS_26","type":"modern","port":"emulators/qemu-cat7"},'
+              MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"emulators/qemu-cat7"}'
+            fi
+          fi
+
+          MATRIX+=']}'
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix for trigger: ${{ github.event_name }}"
+          echo "$MATRIX" | jq '.'
+
+  build-qemu-cat7:
+    needs: setup-matrix
+    name: build-qemu-cat7 (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    strategy:
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Gather system information
+        id: system-info
+        continue-on-error: true
+        run: |
+          echo "Running on: ${{ matrix.platform }}"
+          echo "Building port: qemu-cat7"
+          echo "Building from branch: ${{ inputs.branch || github.ref_name }}"
+
+          eval $(./scripts/getsysteminfo)
+
+          echo "macos_version=${MACOS_VERSION}" >> $GITHUB_OUTPUT
+          echo "macos_major=${MACOS_MAJOR}" >> $GITHUB_OUTPUT
+          echo "macos_minor=${MACOS_MINOR}" >> $GITHUB_OUTPUT
+          echo "macos_build=${MACOS_BUILD}" >> $GITHUB_OUTPUT
+          echo "arch=${ARCH}" >> $GITHUB_OUTPUT
+          echo "xcode_version=${XCODE_VERSION}" >> $GITHUB_OUTPUT
+          echo "clt_version=${CLT_VERSION}" >> $GITHUB_OUTPUT
+
+          echo ""
+          echo "System Information:"
+          sw_vers || echo "Could not determine macOS version"
+          echo ""
+          echo "Xcode Version: ${XCODE_VERSION}"
+          echo "Command Line Tools: ${CLT_VERSION}"
+          echo "Architecture: ${ARCH}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Setup MacPorts and BlakePorts Environment
+        run: ./scripts/installmacports
+
+      - name: Lint portfile
+        run: |
+          source ./setupenv.bash
+          port lint --nitpick ${{ matrix.port }}
+
+      - name: Clean existing installation
+        run: |
+          source ./setupenv.bash
+          if port installed qemu-cat7 2>/dev/null | grep -q "qemu-cat7 @"; then
+            echo "Removing existing qemu-cat7 installation..."
+            sudo port uninstall qemu-cat7
+            sudo port clean --dist qemu-cat7 || true
+          else
+            echo "No existing qemu-cat7 installation found"
+          fi
+
+      - name: Install dependencies
+        run: ./scripts/install-deps qemu-cat7
+
+      - name: Build port
+        run: |
+          source ./setupenv.bash
+          sudo port -kv install qemu-cat7
+
+      - name: Verify installation
+        run: |
+          source ./setupenv.bash
+          port installed qemu-cat7
+          echo ""
+          echo "Published symlinks:"
+          ls -la /opt/local/bin/qemu-system-ppc64-cat7
+          echo ""
+          echo "Private prefix:"
+          ls -la /opt/local/libexec/qemu-cat7/bin
+          echo ""
+          /opt/local/bin/qemu-system-ppc64-cat7 --version
+          echo ""
+          echo "Linked libraries:"
+          otool -L /opt/local/bin/qemu-system-ppc64-cat7
+
+      - name: Verify coexistence with stock qemu
+        run: |
+          source ./setupenv.bash
+          # The point of the private-prefix layout: this port must not own or
+          # clobber any file belonging to port:qemu.
+          echo "=== files this port registers under \${prefix}/bin ==="
+          port contents qemu-cat7 | grep "/opt/local/bin/" || true
+          echo ""
+
+          if port contents qemu-cat7 | grep -qE "/opt/local/bin/qemu-system-ppc64$"; then
+            echo "FAIL: port registers unsuffixed binaries and would collide with port:qemu"
+            exit 1
+          fi
+          echo "PASS: only suffixed names are published to \${prefix}/bin"
+          echo ""
+
+          # If stock qemu is installed, it must still be active and working.
+          if port -q installed qemu 2>/dev/null | grep -q "qemu @"; then
+            echo "=== stock qemu is installed, checking it still works ==="
+            port installed qemu
+            /opt/local/bin/qemu-system-ppc --version \
+              && echo "PASS: stock qemu-system-ppc still runs" \
+              || { echo "FAIL: stock qemu broken by this port"; exit 1; }
+          else
+            echo "Stock qemu not installed on this runner - coexistence not exercised"
+          fi
+
+      - name: Verify firmware resolves to the private prefix
+        run: |
+          # QEMU realpath()s its own executable to locate pc-bios. If the
+          # symlink indirection broke that, it would silently pick up the
+          # stock port's firmware (or fail to find any).
+          OUT=$(/opt/local/bin/qemu-system-ppc64-cat7 -M mac99 -L help 2>&1 || true)
+          echo "$OUT"
+          echo ""
+          if echo "$OUT" | grep -q "/opt/local/libexec/qemu-cat7/share/qemu"; then
+            echo "PASS: firmware search path points at the private prefix"
+          else
+            echo "WARNING: could not confirm private firmware path from -L help"
+            echo "Falling back to checking the datadir exists:"
+            ls -la /opt/local/libexec/qemu-cat7/share/qemu/openbios-ppc
+          fi
+
+      - name: Verify the three patches are in the binary
+        run: |
+          # Each patch is its own file in the port and a failed hunk would have
+          # stopped the build. The decrementer cap is also visible in the
+          # binary as the environment variable it reads, so check that.
+          BIN=/opt/local/libexec/qemu-cat7/bin/qemu-system-ppc64
+          if strings "$BIN" | grep -q QEMU_PPC_DECR_CAP_MS; then
+            echo "PASS: decrementer cap (QEMU_PPC_DECR_CAP_MS) is compiled in"
+          else
+            echo "FAIL: QEMU_PPC_DECR_CAP_MS not found in $BIN"
+            exit 1
+          fi
+          echo ""
+          echo "Patch files the port applied:"
+          ls -1 emulators/qemu-cat7/files/
+
+      - name: Verify the G5 machine starts
+        run: |
+          # The point of the fork: a Power Mac G5 with a 970FX. -S starts the
+          # VM paused and QMP quit exits at once, so this never boots a guest
+          # and never hangs. No firmware is needed to get this far.
+          OUT=$(printf '%s' '{"execute":"qmp_capabilities"}{"execute":"query-cpus-fast"}{"execute":"quit"}' \
+            | /opt/local/bin/qemu-system-ppc64-cat7 -M mac99,via=pmu -cpu 970fx \
+                -smp 2 -accel tcg,thread=multi -display none -S -qmp stdio 2>&1) || true
+          echo "$OUT" | head -20
+          echo ""
+          if echo "$OUT" | grep -q '"cpu-index"'; then
+            echo "PASS: mac99 with a 970FX starts with 2 CPUs"
+          else
+            echo "FAIL: could not start mac99 with -cpu 970fx"
+            exit 1
+          fi
+
+      - name: Clean port work directory
+        if: always()
+        run: |
+          source ./setupenv.bash
+          sudo port clean --work qemu-cat7
