@@ -70,6 +70,12 @@ blakeports/
 | `macOS_27` | `macos-27` | this machine | `make runner-27` in `~/Developer/lima_mac` |
 | `macOS_15` | `macos-15` | umac | started manually by the user — don't start it here |
 
+**Manage runners through ghrunnerd first.** Each host (darkstar, far-star, umac)
+runs a `ghrunnerd` MCP server, registered here as `ghrunnerd-darkstar`,
+`ghrunnerd-far-star` and `ghrunnerd-umac`. Use the `ghrunnerd` skill
+(`.claude/skills/ghrunnerd/`) for any status, start, stop, restart, log or
+snapshot work; the `make runner-NN` flow below is the fallback.
+
 `make runner-NN` boots the VM if it isn't running, then (re)registers the
 runner via `scripts/ghrunner` unless GitHub already reports it online.
 Virtualization.framework allows only **2 macOS VMs per host**, so this machine
