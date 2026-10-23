@@ -1,0 +1,264 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem              1.0
+PortGroup               github 1.0
+
+github.setup            cat7 qemu afdfd061b8688e67db62031ccb76b5d859837d32
+github.tarball_from     archive
+# github.setup names the port after the repo; this is a fork that must not
+# present itself as plain "qemu".
+name                    qemu-cat7
+version                 11.1.50.20261022
+revision                0
+categories              emulators
+license                 GPL-2+
+maintainers             {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+
+description             QEMU for the OpenBIOS Power Mac G5 (PowerMac7,3)
+long_description        {*}${description}. This is cat7's QEMU fork \
+                        (branch G5-openbios), which emulates a Power Mac G5 \
+                        with a 970FX CPU, an OpenBIOS firmware of its own and \
+                        no need for an Apple ROM, and runs Mac OS X 10.4 and \
+                        10.5 PowerPC guests. On top of the fork this port \
+                        carries three small patches, each in its own file: \
+                        a decrementer cap that stops the Mac OS X \
+                        pmap_unnest panic on guests with many CPUs, a cache \
+                        for the macOS JIT write-protect toggle, and a \
+                        lock-free fast path for MSR stores. Only the ppc64 \
+                        system target is built. It installs alongside the \
+                        stock qemu port under ${prefix}/libexec/${name}, \
+                        exposing the emulator as qemu-system-ppc64-cat7.
+
+homepage                https://github.com/cat7/qemu/tree/G5-openbios
+
+# A GitHub archive has none of the sources a QEMU release tarball bundles.
+# The meson wraps in subprojects/ would download them, which MacPorts builds
+# cannot do, so fetch the pinned revisions from their wraps and put them
+# where meson expects them. Keep these in step with subprojects/*.wrap.
+set keycodemapdb_rev    f5772a62ec52591ff6870b7e8ef32482371f22c6
+set softfloat_rev       b64af41c3276f97f0e181920400ee056b9c88037
+set testfloat_rev       e7af9751d9f9fd3b47911f51a5cfd08af256a9ab
+
+set keycodemapdb_file   keycodemapdb-${keycodemapdb_rev}.tar.gz
+set softfloat_file      berkeley-softfloat-3-${softfloat_rev}.tar.gz
+set testfloat_file      berkeley-testfloat-3-${testfloat_rev}.tar.gz
+
+master_sites-append     https://gitlab.com/qemu-project/keycodemapdb/-/archive/${keycodemapdb_rev}/:keycodemapdb \
+                        https://gitlab.com/qemu-project/berkeley-softfloat-3/-/archive/${softfloat_rev}/:softfloat \
+                        https://gitlab.com/qemu-project/berkeley-testfloat-3/-/archive/${testfloat_rev}/:testfloat
+distfiles-append        ${keycodemapdb_file}:keycodemapdb \
+                        ${softfloat_file}:softfloat \
+                        ${testfloat_file}:testfloat
+
+checksums               ${distname}${extract.suffix} \
+                        rmd160  408b77b303e75ba4c633c086d2f9cca835d3b168 \
+                        sha256  5450980c767690ed39a6062da2eb440be6a96e811a85a884c41149f57c181ee6 \
+                        size    38710918 \
+                        ${keycodemapdb_file} \
+                        rmd160  d90ccabf806f74389e5412ed3fe3037cafaf7e78 \
+                        sha256  d014b53382dbb17b8196ad12f50de7f20d0ef1b9f7d54b0be51a6cbb14209195 \
+                        size    29580 \
+                        ${softfloat_file} \
+                        rmd160  52c94ac6837463763517fc944123bbe1b54e508a \
+                        sha256  faae889814ea6a292f7ca03d9b36e6c7e95bab2a64777804883cc822b8d48757 \
+                        size    148741 \
+                        ${testfloat_file} \
+                        rmd160  4d219a581a0f398d439f1cbd87a52496c1d02d91 \
+                        sha256  e7a09d51dc7e96cb8422c919c85fc3833d4f788567638c9162ef5cd7db59b1df \
+                        size    139308
+
+# This port deliberately coexists with port:qemu rather than conflicting with
+# it. Everything is installed into a private prefix so that no file (binary,
+# firmware blob under share/qemu, keymap, ...) collides with the stock port,
+# and only a suffixed symlink is published into ${prefix}/bin.
+#
+# QEMU locates its own firmware relative to the running executable
+# (util/cutils.c: qemu_init_exec_dir() -> _NSGetExecutablePath() + realpath(),
+# then get_relocated_path()), and meson's "relocatable" option defaults to
+# true. Because the lookup realpath()s through the symlink, the wrapper below
+# resolves to the private prefix and QEMU finds its matching pc-bios.
+set qemu_prefix         ${prefix}/libexec/${name}
+
+set py_branch           3.14
+set py_version          [string replace ${py_branch} 1 1]
+
+depends_build-append    port:ninja \
+                        path:bin/pkg-config:pkgconfig \
+                        port:py${py_version}-distlib \
+                        port:py${py_version}-meson
+
+depends_lib-append      path:lib/pkgconfig/glib-2.0.pc:glib2 \
+                        path:lib/pkgconfig/pixman-1.pc:libpixman \
+                        port:bzip2 \
+                        port:libslirp \
+                        port:lzo2 \
+                        port:snappy \
+                        port:zlib \
+                        port:zstd \
+                        port:dtc \
+                        port:libusb \
+                        port:libpng \
+                        port:libjpeg-turbo \
+                        port:gnutls
+
+# Put the extra sources where the meson wraps would have put them. Both
+# berkeley wraps carry a patch_directory (subprojects/packagefiles/<name>),
+# an overlay of meson.build files meson only applies when it downloads the
+# wrap itself, so apply it here as a release tarball would have it.
+post-extract {
+    foreach {sub dirname} [list \
+            keycodemapdb    keycodemapdb-${keycodemapdb_rev} \
+            berkeley-softfloat-3 berkeley-softfloat-3-${softfloat_rev} \
+            berkeley-testfloat-3 berkeley-testfloat-3-${testfloat_rev}] {
+        move ${workpath}/${dirname} ${worksrcpath}/subprojects/${sub}
+        set overlay ${worksrcpath}/subprojects/packagefiles/${sub}
+        if {[file isdirectory ${overlay}]} {
+            foreach f [glob -directory ${overlay} *] {
+                copy ${f} ${worksrcpath}/subprojects/${sub}
+            }
+        }
+    }
+}
+
+# Three small patches on top of cat7's G5-openbios, one concern each. Each
+# file starts with the commit message explaining it, and applies with -p1.
+patch.pre_args          -p1
+patchfiles-append       patch-qemu-ppc-decr-cap.diff \
+                        patch-qemu-osdep-jit-state-cache.diff \
+                        patch-qemu-ppc-msr-store-no-bql.diff
+
+# ERROR: You either need GCC v7.4 or Clang v10.0 (or XCode Clang v15.0)
+compiler.blacklist      {clang < 1500} {macports-clang-[3-9].*} {macports-gcc-[56]} {*gcc-[34].*}
+
+if {"${configure.build_arch}" eq "arm64"} {
+    set host_cpu "aarch64"
+} else {
+    set host_cpu "${configure.build_arch}"
+}
+
+# Install into the private prefix instead of ${prefix}
+configure.pre_args-replace  --prefix=${prefix} --prefix=${qemu_prefix}
+
+configure.args          --cpu=${host_cpu} \
+                        --cc=${configure.cc} \
+                        --objcc=${configure.objc} \
+                        --host-cc=${configure.cc}
+
+# VNC (a machine can show its screen over VNC), USB passthrough from the host
+# and virtio-9p shared folders are all described in cat7's G5 readme, so they
+# are enabled below, with the libraries they need in depends_lib. VNC password
+# authentication needs DES, which only a crypto backend provides (gnutls here);
+# without one QEMU refuses "-vnc ...,password-secret=" outright.
+# Only the G5 is of interest here
+configure.args-append   --target-list=ppc64-softmmu
+
+# Do not use iasl, even if it is installed, #43911
+configure.args-append   --iasl=/usr/bin/false
+
+# Use MacPorts Python
+configure.args-append   --python=${prefix}/bin/python${py_branch}
+
+configure.args-append   --enable-cocoa \
+                        --enable-bzip2 \
+                        --enable-hvf \
+                        --enable-slirp \
+                        --enable-lzo \
+                        --enable-snappy \
+                        --enable-zstd \
+                        --enable-tools \
+                        --enable-fdt=system \
+                        --enable-dmg \
+                        --enable-qcow1 \
+                        --enable-qed \
+                        --enable-vvfat \
+                        --enable-vnc \
+                        --enable-vnc-jpeg \
+                        --disable-vnc-sasl \
+                        --enable-png \
+                        --enable-libusb \
+                        --enable-gnutls \
+                        --enable-virtfs \
+                        --disable-curses \
+                        --disable-capstone \
+                        --disable-sdl \
+                        --disable-gtk \
+                        --disable-opengl \
+                        --disable-virglrenderer \
+                        --disable-curl \
+                        --disable-attr \
+                        --disable-vde \
+                        --disable-jack \
+                        --disable-brlapi \
+                        --disable-cap-ng \
+                        --disable-spice-protocol \
+                        --disable-spice \
+                        --disable-libiscsi \
+                        --disable-rbd \
+                        --disable-smartcard \
+                        --disable-usb-redir \
+                        --disable-seccomp \
+                        --disable-linux-aio \
+                        --disable-rdma \
+                        --disable-libssh \
+                        --disable-gcrypt \
+                        --disable-nettle \
+                        --disable-numa \
+                        --disable-xen \
+                        --disable-dbus-display \
+                        --disable-fuse \
+                        --disable-docs \
+                        --disable-guest-agent
+
+# The qemu build system bugs out when using in-source-tree builds, so build
+# out of source. See the comment in emulators/qemu for the full explanation.
+configure.dir           "${workpath}/build"
+configure.cmd           "${worksrcpath}/configure"
+build.dir               "${workpath}/build"
+
+pre-configure {
+    file mkdir ${configure.dir}
+}
+
+# cat7's audio/coreaudio.m calls CoreFoundation and tests/audio/test-audio,
+# which "make all" builds, does not link it, so that link fails with
+# undefined _CF* and Objective-C runtime symbols.
+configure.ldflags-append    -framework CoreFoundation -framework Foundation
+
+pre-configure {
+    configure.args-append --extra-ldflags="${configure.ldflags}"
+}
+
+# disable silent rules
+build.args-append       V=1
+
+# Publish a suffixed symlink so both this port and port:qemu can be active.
+# The tools built alongside the emulator (qemu-img and friends) stay in the
+# private prefix, since port:qemu already provides those under ${prefix}/bin.
+post-destroot {
+    xinstall -d ${destroot}${prefix}/bin
+    ln -s ${qemu_prefix}/bin/qemu-system-ppc64 \
+          ${destroot}${prefix}/bin/qemu-system-ppc64-cat7
+}
+
+notes "
+This port installs alongside the stock qemu port. Its emulator is:
+
+    ${prefix}/bin/qemu-system-ppc64-cat7
+
+The Power Mac G5 (PowerMac7,3) needs cat7's OpenBIOS firmware, which this
+port does not provide: QEMU's own pc-bios/openbios-ppc is not the G5 build.
+Use openbios-qemu.elf from cat7's G5 OpenBIOS download (source:
+https://github.com/cat7/openbios, branch G5-openbios) and point -bios at it.
+No Apple ROM is needed.
+
+Environment knobs from the patches carried here:
+
+    QEMU_PPC_DECR_CAP_MS=100   fire a 970's decrementer at least every 100 ms.
+                               Set it for guests with 8 or more CPUs, or Mac
+                               OS X can panic in pmap_unnest. Off by default.
+"
+
+# Default universal variant does not work
+universal_variant       no
+
+livecheck.type          none

@@ -1,0 +1,59 @@
+osdep: skip redundant pthread_jit_write_protect_np() calls on macOS
+
+Every TB entry calls qemu_thread_jit_execute(), and the toggle is not
+free on Apple Silicon: 5.9% of vCPU thread time in a profile of a
+16-vCPU PPC guest. Remember the thread's last setting and only call
+pthread_jit_write_protect_np() when it changes. The state is a single
+thread-local in util/osdep.c, as every toggle goes through the two
+wrappers.
+
+
+diff --git a/include/qemu/osdep.h b/include/qemu/osdep.h
+index 1ec5b42230..319eb556e4 100644
+--- a/include/qemu/osdep.h
++++ b/include/qemu/osdep.h
+@@ -845,14 +845,27 @@ size_t qemu_get_host_physmem(void);
+  * for the current thread.
+  */
+ #ifdef __APPLE__
++/*
++ * The thread's last setting: 1 execute, -1 write, 0 not set yet. Every TB
++ * entry asks for execute, and the toggle itself is costly on Apple Silicon,
++ * so skip it when nothing changed.
++ */
++extern __thread int qemu_jit_state;
++
+ static inline void qemu_thread_jit_execute(void)
+ {
+-    pthread_jit_write_protect_np(true);
++    if (qemu_jit_state != 1) {
++        pthread_jit_write_protect_np(true);
++        qemu_jit_state = 1;
++    }
+ }
+ 
+ static inline void qemu_thread_jit_write(void)
+ {
+-    pthread_jit_write_protect_np(false);
++    if (qemu_jit_state != -1) {
++        pthread_jit_write_protect_np(false);
++        qemu_jit_state = -1;
++    }
+ }
+ #else
+ static inline void qemu_thread_jit_write(void) {}
+diff --git a/util/osdep.c b/util/osdep.c
+index 4a8b8b5a90..7ff6b0c0a5 100644
+--- a/util/osdep.c
++++ b/util/osdep.c
+@@ -31,6 +31,10 @@
+ #include "qemu/hw-version.h"
+ #include "monitor/monitor.h"
+ 
++#ifdef __APPLE__
++__thread int qemu_jit_state;
++#endif
++
+ int socket_set_cork(int fd, int v)
+ {
+ #if defined(SOL_TCP) && defined(TCP_CORK)
