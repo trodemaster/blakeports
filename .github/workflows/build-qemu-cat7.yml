@@ -221,7 +221,9 @@ jobs:
           # stopped the build. The decrementer cap is also visible in the
           # binary as the environment variable it reads, so check that.
           BIN=/opt/local/libexec/qemu-cat7/bin/qemu-system-ppc64
-          if strings "$BIN" | grep -q QEMU_PPC_DECR_CAP_MS; then
+          # no grep -q: it exits at the first match, strings then dies of SIGPIPE
+          # and the step fails under pipefail
+          if strings "$BIN" | grep QEMU_PPC_DECR_CAP_MS > /dev/null; then
             echo "PASS: decrementer cap (QEMU_PPC_DECR_CAP_MS) is compiled in"
           else
             echo "FAIL: QEMU_PPC_DECR_CAP_MS not found in $BIN"
