@@ -165,7 +165,7 @@ configure.args-append   --enable-cocoa \
                         --enable-lzo \
                         --enable-snappy \
                         --enable-zstd \
-                        --enable-tools \
+                        --disable-tools \
                         --enable-fdt=system \
                         --enable-dmg \
                         --enable-qcow1 \
@@ -228,12 +228,20 @@ pre-configure {
     configure.args-append --extra-ldflags="${configure.ldflags}"
 }
 
+# QEMU builds with -O2, but MacPorts' default -Os comes later on the command
+# line and wins. The emulator's TCG hot paths are measurably slower at -Os
+# (about 3% on a 16-vCPU guest build), so use QEMU's own level. LTO is worth
+# another 4-7% on the same build; -O3, with or without LTO, gains nothing.
+configure.optflags      -O2
+configure.args-append   --enable-lto
+
 # disable silent rules
 build.args-append       V=1
 
 # Publish a suffixed symlink so both this port and port:qemu can be active.
-# The tools built alongside the emulator (qemu-img and friends) stay in the
-# private prefix, since port:qemu already provides those under ${prefix}/bin.
+# Only the emulator is built (--disable-tools): qemu-img and the other tools
+# are not specific to the G5 fork, so use the ones from port:qemu or any
+# other QEMU build.
 post-destroot {
     xinstall -d ${destroot}${prefix}/bin
     ln -s ${qemu_prefix}/bin/qemu-system-ppc64 \
