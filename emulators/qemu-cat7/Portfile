@@ -256,6 +256,12 @@ Environment knobs from the patches carried here:
     QEMU_PPC_DECR_CAP_MS=100   fire a 970's decrementer at least every 100 ms.
                                Set it for guests with 8 or more CPUs, or Mac
                                OS X can panic in pmap_unnest. Off by default.
+
+App Nap: this build has no workaround for it. With -display cocoa, macOS
+throttles QEMU whenever its window is not frontmost (threads drop to
+background priority on efficiency cores), and a many-CPU guest can crawl or
+appear hung. Run it headless (-display none with -vnc), or keep the window
+frontmost, when timing or running anything unattended.
 "
 
 # Default universal variant does not work
