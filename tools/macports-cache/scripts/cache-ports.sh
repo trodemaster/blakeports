@@ -62,17 +62,66 @@ unmount() {
 }
 
 INSTALL_PID=""
+TAIL_PID=""
+LOG="$(cd /tmp && pwd -P)/cache-ports.$$.log"
+REACTIVATE=""
 cleanup() {
     [ -n "$INSTALL_PID" ] && sudo kill "$INSTALL_PID" 2>/dev/null
+    [ -n "$TAIL_PID" ] && kill "$TAIL_PID" 2>/dev/null
+    reactivate
+    rm -f "$LOG"
     unmount
 }
 trap cleanup EXIT
+
+# Reactivate whatever install_spec deactivated to get past a conflict.
+reactivate() {
+    for p in $REACTIVATE; do
+        if ! port -q installed "$p" | grep -q '(active)'; then
+            echo "reactivating $p"
+            sudo port activate "$p" </dev/null || true
+        fi
+    done
+    REACTIVATE=""
+}
 
 # publish [submit-archive.sh args]: submit every installed archive not yet on
 # the share (dependencies included).
 publish() {
     ensure_mounted || return 1
     "$HERE/submit-archive.sh" -m "$MNT" "$@"
+}
+
+# install_spec spec: run `port install` in the background, publishing as the
+# build goes; returns its exit status. The output goes to $LOG (and is followed
+# on stdout) so a failure can be inspected.
+install_spec() {
+    : > "$LOG"
+    tail -f "$LOG" &
+    TAIL_PID=$!
+    # $1 is unquoted on purpose: "curl +ssl -http2" is a port plus variants.
+    sudo port -N install $1 </dev/null >"$LOG" 2>&1 &
+    INSTALL_PID=$!
+    # Publish as the build goes. ps rather than kill -0: the job runs as root.
+    # -a: MacPorts writes a new archive in place (portinstall.tcl create_archive),
+    # so skip one modified in the last 2 minutes; it may still be compressing.
+    local last rc
+    last=$(date +%s)
+    while ps -p "$INSTALL_PID" >/dev/null 2>&1; do
+        sleep 5
+        if [ $(( $(date +%s) - last )) -ge "$PUBLISH_INTERVAL" ]; then
+            publish -a 120 -q
+            last=$(date +%s)
+        fi
+    done
+    wait "$INSTALL_PID"
+    rc=$?
+    INSTALL_PID=""
+    sleep 1
+    kill "$TAIL_PID" 2>/dev/null
+    wait "$TAIL_PID" 2>/dev/null
+    TAIL_PID=""
+    return $rc
 }
 
 echo "::group::Configure cache client ($PACKAGES_URL)"
@@ -101,27 +150,30 @@ for spec in $SPECS; do
 
     echo "::group::port install $spec"
     start=$(date +%s)
-    # $spec is unquoted on purpose: "curl +ssl -http2" is a port plus variants.
-    sudo port -N install $spec </dev/null &
-    INSTALL_PID=$!
-    # Publish as the build goes. ps rather than kill -0: the job runs as root.
-    # -a: MacPorts writes a new archive in place (portinstall.tcl create_archive),
-    # so skip one modified in the last 2 minutes; it may still be compressing.
-    last=$(date +%s)
-    while ps -p "$INSTALL_PID" >/dev/null 2>&1; do
-        sleep 5
-        if [ $(( $(date +%s) - last )) -ge "$PUBLISH_INTERVAL" ]; then
-            publish -a 120 -q
-            last=$(date +%s)
-        fi
+    install_spec "$spec"
+    rc=$?
+    # gcc ports refuse to build while a conflicts_build port is active
+    # (e.g. libunwind-headers, pulled in by cctools on legacy systems).
+    # Deactivate it for the retry, as the MacPorts error suggests, and
+    # reactivate it once the install finishes (as scripts/install-deps does).
+    tries=0
+    while [ $rc -ne 0 ] && [ $tries -lt 3 ]; do
+        conflict=$(sed -n 's/.*cannot be built while \([^ ]*\) is active.*/\1/p' "$LOG" | head -1)
+        [ -n "$conflict" ] || break
+        tries=$((tries + 1))
+        echo "$conflict blocks a dependency of $spec; deactivating it and retrying"
+        sudo port -f deactivate "$conflict" </dev/null
+        REACTIVATE="$REACTIVATE $conflict"
+        install_spec "$spec"
+        rc=$?
     done
-    if wait "$INSTALL_PID"; then
+    reactivate
+    if [ $rc -eq 0 ]; then
         status="built"
     else
         status="FAILED"
         FAILED=$((FAILED + 1))
     fi
-    INSTALL_PID=""
     mins=$(( ($(date +%s) - start) / 60 ))
     echo "::endgroup::"
 
