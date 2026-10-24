@@ -3,10 +3,6 @@
 PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           cmake 1.1
-PortGroup           legacysupport 1.1
-
-# _strnlen
-legacysupport.newest_darwin_requires_legacy 10
 
 github.setup        theori-io nrsc5 3.2.0 v
 github.tarball_from archive
@@ -15,6 +11,10 @@ categories          audio
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
 
 license             GPL-3+
+
+# Lion and later only. On Leopard and Snow Leopard its dependencies (libusb,
+# doxygen) need fixes that aren't worth carrying for systems that old.
+platforms           {darwin >= 11}
 
 description         This program receives NRSC-5 digital radio stations using an RTL-SDR dongle
 long_description    {*}${description}. It offers a command-line interface \

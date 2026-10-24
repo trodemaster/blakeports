@@ -29,21 +29,6 @@ on:
         required: false
         default: true
         type: boolean
-      run_leopard_ppc:
-        description: 'Mac OS X 10.5 PPC (Leopard)'
-        required: false
-        default: false
-        type: boolean
-      run_leopard:
-        description: 'Mac OS X 10.5 (Leopard)'
-        required: false
-        default: false
-        type: boolean
-      run_snowleopard:
-        description: 'Mac OS X 10.6 (Snow Leopard)'
-        required: false
-        default: false
-        type: boolean
       run_lion:
         description: 'Mac OS X 10.7 (Lion)'
         required: false
@@ -113,27 +98,6 @@ jobs:
             if [[ "${{ inputs.run_macos27 }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
               MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"audio/nrsc5"}'
-              FIRST=false
-            fi
-
-            # Mac OS X 10.5 PPC
-            if [[ "${{ inputs.run_leopard_ppc }}" == "true" ]]; then
-              [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"leopard-ppc","runner":["self-hosted","leopard-ppc"],"type":"legacy","port":"audio/nrsc5","vm_ip":"192.168.0.141","vm_username":"blake","vm_name":"Leopard-PPC","os_version":"10.5","arch":"ppc","timeout":"1440"}'
-              FIRST=false
-            fi
-
-            # Mac OS X 10.5
-            if [[ "${{ inputs.run_leopard }}" == "true" ]]; then
-              [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"leopard","runner":["self-hosted","leopard"],"type":"legacy","port":"audio/nrsc5","vm_ip":"${{ vars.LEGACY_TENFIVE_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"Leopard","os_version":"10.5","timeout":"1440"}'
-              FIRST=false
-            fi
-
-            # Mac OS X 10.6
-            if [[ "${{ inputs.run_snowleopard }}" == "true" ]]; then
-              [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"snowleopard","runner":["self-hosted","snowleopard"],"type":"legacy","port":"audio/nrsc5","vm_ip":"${{ vars.LEGACY_TENSIX_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"SnowLeopard","os_version":"10.6","timeout":"1440"}'
               FIRST=false
             fi
 

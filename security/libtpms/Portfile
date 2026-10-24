@@ -16,6 +16,10 @@ categories          security
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
 license             BSD
 
+# Lion and later only. Leopard needs fixes (libtpms's -Werror on PPC, libusb
+# for swtpm) that aren't worth carrying for systems that old.
+platforms           {darwin >= 11}
+
 description         Library for software emulation of a Trusted Platform Module
 
 long_description    {*}${description}. libtpms provides the core TPM 1.2 and \
