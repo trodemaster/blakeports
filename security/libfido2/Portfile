@@ -20,6 +20,10 @@ categories          security crypto
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
 
 license             bsd
+
+# Snow Leopard and later only. Leopard's hid_osx.c needs a compat rewrite
+# that isn't worth carrying for a system that old.
+platforms           {darwin >= 10}
 description         library to communicate with a FIDO device over USB
 long_description    provides library functionality and command-line tools to communicate with a FIDO device over USB, and to verify attestation and assertion signatures.
 
@@ -57,18 +61,9 @@ platform darwin {
         patchfiles-append \
                     patch-cmake-no-fallthrough.diff
     }
-    if {${os.major} < 10} {
-        # 10.5 only: IOHIDDeviceGetService/IORegistryEntryGetRegistryEntryID unavailable
-        patchfiles-append \
-                    patch-hid_osx.diff
-    }
     if {[string match *gcc* ${configure.compiler}]} {
         patchfiles-append \
                     patch-apple-gcc.diff
-    }
-    if {${build_arch} in [list ppc ppc64]} {
-        patchfiles-append \
-                    patch-werror.diff
     }
 }
 
