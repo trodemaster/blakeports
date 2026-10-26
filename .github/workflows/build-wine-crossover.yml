@@ -114,6 +114,10 @@ jobs:
             echo "FAIL: bcrypt.so does not reference the private gnutls"; exit 1
           fi
           echo ""
+          # wined3d's GL backend on macOS is winemac.drv's CGL code
+          otool -L /opt/local/lib/wine/x86_64-unix/winemac.so | grep OpenGL.framework \
+            || { echo "FAIL: winemac.so does not link OpenGL.framework"; exit 1; }
+          echo ""
           echo "DXVK:"
           for arch in x86_64 i386; do
             for dll in dxgi d3d11 d3d10core; do

@@ -153,6 +153,8 @@ configure.args.x86_64 \
     --enable-archs=i386,x86_64 \
     --enable-win64
 
+# --without-opengl only skips the EGL check (X11/Wayland); winemac.drv always
+# builds its CGL OpenGL, and --with-opengl would make configure require EGL.
 configure.args \
     --without-alsa \
     --without-capi \
@@ -173,7 +175,7 @@ configure.args \
     --with-mingw \
     --without-netapi \
     --with-opencl \
-    --with-opengl \
+    --without-opengl \
     --without-oss \
     --with-pcap \
     --with-pcsclite \
