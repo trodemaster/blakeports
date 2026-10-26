@@ -76,6 +76,11 @@ depends_build \
     port:ninja \
     path:bin/pkg-config:pkgconfig
 
+# Build tools run natively; without this, base upgrades them (and their whole
+# trees, e.g. glslang -> python314 -> libffi) +universal for the x86_64 build.
+depends_skip_archcheck-append \
+    bison flex gettext glslang m4 meson mingw-w64 ninja pkgconfig
+
 depends_lib \
     port:freetype \
     port:gettext-runtime \
