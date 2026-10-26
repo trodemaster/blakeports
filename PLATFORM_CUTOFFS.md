@@ -23,6 +23,7 @@ grep -rn --include=Portfile -E '^platforms .*>=' . | grep -v _resources
 | [netatalk_client](net/netatalk_client/Portfile) | macOS 12 Monterey | `>= 21` | `7f979a5` | Matches macFUSE 5.x's own minimum |
 | [SwiftKHD](sysutils/SwiftKHD/Portfile) | macOS 13 Ventura | `>= 22` | `7400e96` | Upstream requires macOS 13 or later |
 | [omlx-app](aqua/omlx-app/Portfile) | macOS 15 Sequoia | `>= 24` | `78b72ad` | Requires macOS 15; a `pre-fetch` check also enforces it |
+| [wine-crossover](emulators/wine-crossover/Portfile) | macOS 27 | `>= 27` | new port | Personal port, only built and tested on macOS 27 Apple silicon (x86_64 under Rosetta 2) |
 
 ## Legacy cutoffs in detail
 
