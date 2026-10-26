@@ -5,10 +5,10 @@ name: Build wine-crossover
 
 on:
   push:
-    paths: ['emulators/wine-crossover/**', '.github/workflows/build-wine-crossover.yml']
+    paths: ['emulators/wine-crossover/**', '.github/workflows/build-wine-crossover.yml', '.github/wine-crossover/**']
     branches: [main]
   pull_request:
-    paths: ['emulators/wine-crossover/**', '.github/workflows/build-wine-crossover.yml']
+    paths: ['emulators/wine-crossover/**', '.github/workflows/build-wine-crossover.yml', '.github/wine-crossover/**']
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -113,6 +113,17 @@ jobs:
           else
             echo "FAIL: bcrypt.so does not reference the private gnutls"; exit 1
           fi
+          echo ""
+          echo "DXVK:"
+          for arch in x86_64 i386; do
+            for dll in dxgi d3d11 d3d10core; do
+              f=/opt/local/lib/dxvk/$arch-windows/$dll.dll
+              file $f
+              want=$([ $arch = x86_64 ] && echo x86-64 || echo 80386)
+              file $f | grep -q "$want" || { echo "FAIL: $f is not a $want PE DLL"; exit 1; }
+            done
+          done
+          test -x /opt/local/bin/wine-dxvk || { echo "FAIL: wine-dxvk not installed"; exit 1; }
 
       - name: Smoke test
         run: |
@@ -145,9 +156,44 @@ jobs:
           echo "$TLS32" | grep -q https-status=200 || { echo "FAIL: 32-bit HTTPS request failed"; exit 1; }
           echo "PASS: 64-bit and 32-bit cmd.exe run, HTTPS works from both"
 
+      - name: Direct3D 11 test
+        run: |
+          source ./setupenv.bash
+          export WINEPREFIX="$RUNNER_TEMP/wineprefix"
+          export WINEDEBUG=-all
+          export WINEDLLOVERRIDES="mscoree,mshtml="
+          export DXVK_LOG_PATH=none DXVK_STATE_CACHE=0
+          T="$RUNNER_TEMP/d3d11test"
+          mkdir -p "$T"
+          # Creates a device, clears a render target on the GPU, reads the pixel back.
+          x86_64-w64-mingw32-gcc -O2 -o "$T/t64.exe" .github/wine-crossover/d3d11test.c -ld3d11 -ldxguid
+          i686-w64-mingw32-gcc -O2 -o "$T/t32.exe" .github/wine-crossover/d3d11test.c -ld3d11 -ldxguid
+          run() { perl -e 'alarm 300; exec @ARGV' /opt/local/bin/wine "$@" 2>&1 | grep -v mvk || true; }
+
+          # wined3d over OpenGL. The runner has no window server session, so
+          # this is reported but not required.
+          for b in 64 32; do
+            OUT=$(run "$T/t$b.exe")
+            echo "wined3d $b-bit: $(echo "$OUT" | grep -E 'd3d11-(ok|fail)')"
+          done
+
+          # DXVK over MoltenVK, installed into the prefix by wine-dxvk.
+          /opt/local/bin/wine-dxvk install
+          /opt/local/bin/wine-dxvk status
+          for b in 64 32; do
+            OUT=$(run "$T/t$b.exe")
+            echo "$OUT" | grep -E 'DXVK: v|d3d11-(ok|fail)|err:'
+            echo "$OUT" | grep -q 'DXVK: v' || { echo "FAIL: DXVK was not loaded ($b-bit)"; exit 1; }
+            echo "$OUT" | grep -q d3d11-ok || { echo "FAIL: DXVK D3D11 test failed ($b-bit)"; exit 1; }
+          done
+          /opt/local/bin/wine-dxvk uninstall
+          /opt/local/bin/wine-dxvk status | grep -q 'd3d11: wine' || { echo "FAIL: wine-dxvk uninstall"; exit 1; }
+          /opt/local/bin/wineserver -k || true
+          echo "PASS: DXVK renders through MoltenVK in 64-bit and 32-bit"
+
       - name: Clean port work directory
         if: always()
         run: |
           source ./setupenv.bash
           sudo port clean --work wine-crossover
-          rm -rf "$RUNNER_TEMP/wineprefix"
+          rm -rf "$RUNNER_TEMP/wineprefix" "$RUNNER_TEMP/d3d11test"

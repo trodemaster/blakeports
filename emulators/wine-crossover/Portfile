@@ -55,9 +55,9 @@ checksums                   ${distname}${extract.suffix} \
                             sha256  b4c518adb174e484cb4acea54118f02380c7133771e7e9beb98a0787194ee47c \
                             size    2640485
 
-# The tarball also carries dxvk, moltenvk, gstreamer, etc.; only wine and gnutls are built.
+# The tarball also carries moltenvk, gstreamer, etc.; only wine, gnutls and dxvk are built.
 extract.only                ${distname}${extract.suffix}
-extract.post_args-append    ${worksrcdir} sources/gnutls
+extract.post_args-append    ${worksrcdir} sources/gnutls sources/dxvk
 
 # gnutls, nettle and gmp are built x86_64 into a private libdir, as CrossOver
 # does. Universal MacPorts gmp and libffi (via p11-kit) are broken on Xcode 27:
@@ -69,8 +69,11 @@ depends_build \
     bin:flex:flex \
     port:bison \
     port:gettext \
+    port:glslang \
     port:m4 \
+    port:meson \
     port:mingw-w64 \
+    port:ninja \
     path:bin/pkg-config:pkgconfig
 
 depends_lib \
@@ -91,6 +94,14 @@ post-extract {
     reinplace -q "/PKG_CONFIG_LIBDIR/d"  ${worksrcpath}/configure
     reinplace -q "/PKG_CONFIG_LIBDIR/d"  ${worksrcpath}/configure.ac
 }
+
+# cstdint, stateblock-uuid: dxvk 1.10.3 vs mingw-w64 gcc 15 and its headers.
+# macos-features: CrossOver's dxvk relies on CodeWeavers' MoltenVK faking
+# geometryShader etc.; request them only if supported, as Gcenx/DXVK-macOS does.
+patch.dir                   ${workpath}/sources
+patchfiles                  patch-dxvk-cstdint.diff \
+                            patch-dxvk-d3d10-stateblock-uuid.diff \
+                            patch-dxvk-macos-features.diff
 
 proc cx_build_dep {dir cx_env args} {
     global build.jobs
@@ -157,7 +168,7 @@ configure.args \
     --with-mingw \
     --without-netapi \
     --with-opencl \
-    --without-opengl \
+    --with-opengl \
     --without-oss \
     --with-pcap \
     --with-pcsclite \
@@ -233,6 +244,22 @@ configure.env-append        "CROSSCFLAGS=${configure.optflags}"
 # Were only installing wine not the development files
 destroot.target             install-lib
 
+# DXVK (D3D10/11 over Vulkan/MoltenVK). No d3d9: wined3d over OpenGL does it better on macOS.
+set dxvk_dlls               {dxgi d3d11 d3d10core}
+
+post-build {
+    set dxvk_src ${workpath}/sources/dxvk
+    foreach {bits arch} {64 x86_64 32 i386} {
+        system -W ${workpath} "env -u CFLAGS -u CXXFLAGS -u CPPFLAGS -u LDFLAGS -u CPATH -u LIBRARY_PATH \
+            ${prefix}/bin/meson setup --cross-file ${dxvk_src}/build-win${bits}.txt \
+            --buildtype release --strip --prefix ${workpath}/dxvk \
+            --bindir ${arch}-windows --libdir ${arch}-windows \
+            -Denable_tests=false -Denable_d3d9=false \
+            ${workpath}/dxvk-build${bits} ${dxvk_src}"
+        system "${prefix}/bin/ninja -j${build.jobs} -C ${workpath}/dxvk-build${bits} install"
+    }
+}
+
 post-destroot {
     set docdir ${prefix}/share/doc/${subport}
     xinstall -d ${destroot}${docdir}
@@ -259,11 +286,25 @@ post-destroot {
     xinstall -m 0644 ${workpath}/sources/gnutls/gmp/COPYING.LESSERv3 ${destroot}${docdir}/gmp-COPYING.LESSERv3
     xinstall -m 0644 ${workpath}/nettle-${nettle_version}/COPYING.LESSERv3 ${destroot}${docdir}/nettle-COPYING.LESSERv3
     xinstall -m 0644 ${workpath}/sources/gnutls/gnutls/LICENSE ${destroot}${docdir}/gnutls-LICENSE
+
+    foreach arch {x86_64 i386} {
+        set dir ${destroot}${prefix}/lib/dxvk/${arch}-windows
+        xinstall -d ${dir}
+        foreach dll ${dxvk_dlls} {
+            xinstall -m 0644 ${workpath}/dxvk/${arch}-windows/${dll}.dll ${dir}
+        }
+    }
+    xinstall -m 0644 ${workpath}/sources/dxvk/LICENSE ${destroot}${docdir}/dxvk-LICENSE
+    xinstall -m 0755 ${filespath}/wine-dxvk ${destroot}${prefix}/bin
+    reinplace "s|@PREFIX@|${prefix}|g" ${destroot}${prefix}/bin/wine-dxvk
 }
 
 notes "
     ${subport} is x86_64 only and runs under Rosetta 2. If it is not\
     installed yet: softwareupdate --install-rosetta --agree-to-license
+
+    DXVK (Direct3D 10/11 over MoltenVK) is installed but off by default.\
+    Turn it on or off per prefix with: wine-dxvk install | uninstall
 "
 
 livecheck.type              regex
