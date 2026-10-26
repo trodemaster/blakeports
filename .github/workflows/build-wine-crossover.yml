@@ -191,7 +191,10 @@ jobs:
             echo "$OUT" | grep -q d3d11-ok || { echo "FAIL: DXVK D3D11 test failed ($b-bit)"; exit 1; }
           done
           /opt/local/bin/wine-dxvk uninstall
-          /opt/local/bin/wine-dxvk status | grep -q 'd3d11: wine' || { echo "FAIL: wine-dxvk uninstall"; exit 1; }
+          # not piped into grep -q: wine-dxvk would die of SIGPIPE under pipefail
+          ST=$(/opt/local/bin/wine-dxvk status)
+          echo "$ST"
+          echo "$ST" | grep -q 'd3d11: wine' || { echo "FAIL: wine-dxvk uninstall"; exit 1; }
           /opt/local/bin/wineserver -k || true
           echo "PASS: DXVK renders through MoltenVK in 64-bit and 32-bit"
 
