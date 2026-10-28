@@ -9,6 +9,44 @@ description: MacPorts package manager development workflow including Portfile cr
 
 Comprehensive guide for MacPorts port development workflows: creating and updating Portfiles, testing ports, debugging build failures, and mastering the `port` command-line tool.
 
+## Ports I Maintain in MacPorts
+
+As a MacPorts maintainer, my job is to keep these ports current in the official
+`macports/macports-ports` tree: watch for upstream releases, update them in blakeports,
+test them in CI, and submit the update PRs. These are the ports to check when asked
+"are my ports up to date?"
+
+| Port | Directory | Notes |
+|---|---|---|
+| `bstring` | `textproc/bstring` | |
+| `libcbor` | `devel/libcbor` | |
+| `libfido2` | `security/libfido2` | update check uses livecheck (developers.yubico.com) |
+| `libtpms` | `security/libtpms` | |
+| `netatalk` | `net/netatalk` | |
+| `netatalk4` | `net/netatalk` | subport of netatalk |
+| `nrsc5` | `audio/nrsc5` | |
+| `previous` | `emulators/previous` | SVN-hosted (SourceForge) |
+| `snowemu` | `emulators/snowemu` | |
+| `swtpm` | `sysutils/swtpm` | |
+
+Every other port in blakeports is a **personal port**: local-only, or a local override
+or test copy of someone else's port (for example qemu, qemu-cat7, lima, lima-devl,
+netatalk_client, openssh9-client, omlx-app, vault, and the icu/libarchive/libevent/
+libgcrypt/libomp/python314 dependency overrides). Don't track those for upstream
+updates or submit them to MacPorts unless asked, even if the blakeports copy lists
+`@trodemaster`.
+
+**Keep this table current.** When I create a new port or adopt an existing one in
+MacPorts, add it here once the PR is merged; remove ports I stop maintaining. To check
+the table against MacPorts (the list as of 2026-10-28, 10 ports, matched it):
+
+```bash
+curl -s https://ports.macports.org/api/v1/maintainer/trodemaster/ | jq -r '.[].ports[]' | sort
+```
+
+`scripts/check-updates.sh` reads that same API, so it follows MacPorts automatically;
+this table is what tells an agent which ports are mine.
+
 ## Core Workflows
 
 ### 1. Checking for Updates
