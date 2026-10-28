@@ -159,11 +159,12 @@ ensure_git_configured() {
 # ports nothing depends on. Without this the VMs sit at 50-190 ports.
 #
 # EXCEPTION: the from-source compiler toolchain (gcc10-bootstrap, llvm-*,
-# clang-*, cmake, cctools/ld64, libcxx/libomp, icu) is kept even when it goes
-# leaf. On 10.5 the gcc bootstrap alone is ~3h and the full clang chain many
-# more; trimming it would force that rebuild on the next `port install`. The
-# same list is preserved by .github/workflows/macports-cleanup.yml.
-TRIM_KEEP_RE='gcc|llvm|clang|cmake|cctools|ld64|libmacho|libcxx|libcxxabi|libunwind|libomp|^icu$|^boost|^rust$|^go$'
+# clang-*, cmake, cctools/ld64, libcxx/libomp, icu) and Python are kept even
+# when they go leaf. On 10.5 the gcc bootstrap alone is ~3h and the full clang
+# chain many more; trimming it would force that rebuild on the next
+# `port install`. The same list is preserved by
+# .github/workflows/macports-cleanup.yml.
+TRIM_KEEP_RE='gcc|llvm|clang|cmake|cctools|ld64|libmacho|libcxx|libcxxabi|libunwind|libomp|^icu$|^boost|^rust$|^go$|^python[23][0-9]*$|^py-bootstrap-modules$'
 
 trim_build_deps() {
     info "========================================"
