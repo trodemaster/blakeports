@@ -1,8 +1,10 @@
 name: Cache ports
 
 # Build a list of ports on one legacy VM and publish the resulting binary
-# archives (dependencies included) to the packages.jibb.tv cache, so later
-# installs on that OS/arch skip the compile. See tools/macports-cache/.
+# archives to the packages.jibb.tv cache, so later installs on that OS/arch
+# skip the compile. Only dependencies are published: ports in the blakeports
+# tree are built but never cached, so CI always builds them from their
+# Portfiles. See tools/macports-cache/.
 
 on:
   workflow_dispatch:

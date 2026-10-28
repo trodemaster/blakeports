@@ -126,6 +126,15 @@ modified in the last N seconds: MacPorts writes a freshly built archive in place
 stays silent when there's nothing to submit. There is no repacking: the old "tar up a
 directory image" path was for pre-2.0 layouts and has been removed.
 
+**The cache is for dependencies only.** Ports in the blakeports tree (and their
+subports) are never submitted: a cached archive of one would stand in for the Portfile
+a CI build is meant to test. The denylist is the tree's `PortIndex` (`-x`, default the
+blakeports checkout the script lives in; `cache-ports.sh` runs `portindex` first and
+passes its own). With no `PortIndex` the script refuses to submit anything rather than
+risk publishing blakeports ports. This also covers blakeports overrides of common
+deps (`icu`, `libarchive`, `libevent`, `libgcrypt`, `libomp`, `python314`), so those
+always build from source on the legacy VMs.
+
 ## cache-ports.sh behavior
 
 Driven by the `Cache ports` workflow over ssh. It configures the VM as a client (so cached

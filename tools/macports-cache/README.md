@@ -85,15 +85,19 @@ sudo port install netatalk
 # Mount the cache share (AFP or SMB)
 # e.g. Finder → Go → Connect to Server → afp://mymac.local
 
-# Submit
-./scripts/submit-archive.sh -m /Volumes/macports-cache netatalk
+# Submit its dependencies (no port names: every installed port)
+./scripts/submit-archive.sh -m /Volumes/macports-cache
 ```
 
-The script has zero dependencies beyond the standard shell, `cp`, and `tar` — it runs on Mac OS X 10.5 and up.
+The cache is for dependencies only: ports in the blakeports tree itself (netatalk here)
+are never submitted, so CI always builds them from their Portfiles. The list comes from
+the tree's `PortIndex`, so run `portindex` first; without one the script submits nothing.
+
+The script needs only the standard shell, `awk`, `cp` and `stat` — it runs on Mac OS X 10.5 and up.
 
 From the server machine you can also use:
 ```bash
-make submit PORTNAME=netatalk
+make submit PORTNAME=gettext
 ```
 
 ### 5. Test

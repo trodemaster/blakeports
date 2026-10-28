@@ -10,6 +10,8 @@
 #
 # Dependencies already in the cache install as binaries, because the script
 # first configures this machine as a cache client (setup-client.sh, idempotent).
+# Ports in the blakeports tree itself are built but never published (see
+# submit-archive.sh): caching a blakeports port only caches its dependencies.
 #
 # Usage:
 #   ./cache-ports.sh "netatalk, curl +ssl -http2, libcbor"
@@ -86,10 +88,10 @@ reactivate() {
 }
 
 # publish [submit-archive.sh args]: submit every installed archive not yet on
-# the share (dependencies included).
+# the share (dependencies included), except blakeports' own ports.
 publish() {
     ensure_mounted || return 1
-    "$HERE/submit-archive.sh" -m "$MNT" "$@"
+    "$HERE/submit-archive.sh" -m "$MNT" -x "$PORTS_TREE/PortIndex" "$@"
 }
 
 # install_spec spec: run `port install` in the background, publishing as the
