@@ -261,37 +261,68 @@ jobs:
             echo ""
 
             # On the legacy VMs the compiler toolchain (gcc10-bootstrap, llvm-*,
-            # clang-*, cmake, cctools/ld64, libcxx/libomp, icu) is built FROM
-            # SOURCE and costs many hours -- on 10.5 the gcc bootstrap alone is
-            # ~3h. Never uninstall those, curl/git, or anything they still need;
-            # only sweep the genuinely cheap ports (the port under test and its
-            # light deps). Add one-off keepers via the keep_ports workflow input.
+            # clang-*, cmake, cctools/ld64, libcxx/libomp, icu) and Python are
+            # built FROM SOURCE and cost many hours -- on 10.5 the gcc bootstrap
+            # alone is ~3h, and blakeports' own ports (icu, python314, ...) are
+            # never in the binary cache. Never uninstall those, curl/git, or
+            # anything they still need; only sweep the genuinely cheap ports (the
+            # port under test and its light deps). Add one-off keepers via the
+            # keep_ports workflow input.
             KEEP_ROOTS="curl curl-ca-bundle git ${EXTRA_KEEP}"
-            KEEP_PATTERN='gcc|llvm|clang|cmake|cctools|ld64|libmacho|libcxx|libcxxabi|libunwind|libomp|^icu$|^boost|^rust$|^go$'
+            KEEP_PATTERN='gcc|llvm|clang|cmake|cctools|ld64|libmacho|libcxx|libcxxabi|libunwind|libomp|^icu$|^boost|^rust$|^go$|^python[23][0-9]*$|^py-bootstrap-modules$'
 
             INSTALLED=$(port -q echo installed 2>/dev/null | awk '{print $1}' | sort -u)
-            TOOLCHAIN=$(echo "$INSTALLED" | grep -E "$KEEP_PATTERN")
-
-            PRESERVE=$(port echo $KEEP_ROOTS $TOOLCHAIN \
-                         $(for p in $KEEP_ROOTS $TOOLCHAIN; do echo "rdepof:$p"; done) \
-                         2>/dev/null | awk '{print $1}' | sort -u)
-            PRESERVE=" $(echo $PRESERVE | tr '\n' ' ') "
-
-            echo "Preserving (curl/git + toolchain + full dependency closure):"
-            echo "$PRESERVE" | tr ' ' '\n' | grep . | sed 's/^/  /'
-            echo ""
-            echo "Uninstalling everything else..."
-            for p in $INSTALLED; do
-              case "$PRESERVE" in
-                *" $p "*) echo "  keep      $p" ;;
-                *)        echo "  uninstall $p"; sudo port -f uninstall "$p" || true ;;
-              esac
+            KEEP=""
+            for p in $KEEP_ROOTS $(echo "$INSTALLED" | grep -E "$KEEP_PATTERN"); do
+              echo "$INSTALLED" | grep -qx "$p" && KEEP="$KEEP $p"
             done
+
+            # Keep by the registry, not the ports tree: mark only the keepers as
+            # requested, then remove leaves (unrequested ports nothing installed
+            # depends on) until none are left. Whatever a keeper links against
+            # stays, even if its Portfile has changed since it was built.
+            echo "Keeping (with everything they depend on):$KEEP"
             echo ""
-            echo "Cleaning dist files..."
-            sudo port clean --all all || true
+            echo "Removing inactive ports..."
+            sudo port -N uninstall inactive || true
+            sudo port -q unsetrequested installed
+            sudo port -q setrequested $KEEP
+            echo ""
+            echo "Removing everything else..."
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              LEAVES=$(port -q echo leaves 2>/dev/null | awk '{print $1}')
+              [ -n "$LEAVES" ] || break
+              echo "  pass $i:" $LEAVES
+              sudo port -N uninstall --follow-dependencies leaves || true
+            done
+
+            # Uninstalling removes images; the build tree and the distfiles of
+            # removed ports are left behind. `port clean --all all` would parse
+            # every Portfile in every source -- hours on these VMs.
+            echo ""
+            echo "Cleaning build tree and distfiles of removed ports..."
+            AFTER=$(port -q echo installed 2>/dev/null | awk '{print $1}' | sort -u)
+            sudo rm -rf /opt/local/var/macports/build/*
+            for p in $INSTALLED; do
+              echo "$AFTER" | grep -qx "$p" || sudo rm -rf "/opt/local/var/macports/distfiles/$p"
+            done
             echo ""
             echo "Installed ports after cleanup:"
             port installed || echo "No ports installed"
+            echo ""
+
+            # Fail loudly rather than leave a broken VM behind.
+            FAIL=0
+            check() { if "$@" >/dev/null 2>&1; then echo "  ok    $*"; else echo "  FAIL  $*"; FAIL=1; fi; }
+            echo "Checks:"
+            check /opt/local/bin/curl --version
+            check /opt/local/bin/git --version
+            check sh -c "otool -L /opt/local/libexec/macports/lib/pextlib1.0/Pextlib.dylib | grep -q /opt/local/lib/libcurl"
+            check sh -c "[ -z \"\$(port -q installed inactive)\" ]"
+            check sh -c "[ -z \"\$(port -q echo leaves)\" ]"
+            for p in $KEEP; do
+              check sh -c "port -q installed $p | grep -q '(active)'"
+            done
+            [ "$FAIL" -eq 0 ] || { echo "❌ Cleanup left problems"; exit 1; }
             echo "✅ Cleanup complete"
           EOF
