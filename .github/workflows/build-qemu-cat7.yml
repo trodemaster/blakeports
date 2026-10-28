@@ -215,34 +215,20 @@ jobs:
             ls -la /opt/local/libexec/qemu-cat7/share/qemu/openbios-ppc
           fi
 
-      - name: Verify the decrementer cap property exists
-        run: |
-          # cat7 carries the decrementer cap as a machine property, which
-          # replaced the QEMU_PPC_DECR_CAP_MS environment variable.
-          OUT=$(/opt/local/bin/qemu-system-ppc64-cat7 -M mac99,help 2>&1 || true)
-          echo "$OUT"
-          echo ""
-          if echo "$OUT" | grep decr-cap-ms > /dev/null; then
-            echo "PASS: mac99 has the decr-cap-ms property"
-          else
-            echo "FAIL: decr-cap-ms not found in mac99 properties"
-            exit 1
-          fi
-
       - name: Verify the G5 machine starts
         run: |
           # The point of the fork: a Power Mac G5 with a 970FX. -S starts the
           # VM paused and QMP quit exits at once, so this never boots a guest
           # and never hangs. No firmware is needed to get this far.
           OUT=$(printf '%s' '{"execute":"qmp_capabilities"}{"execute":"query-cpus-fast"}{"execute":"quit"}' \
-            | /opt/local/bin/qemu-system-ppc64-cat7 -M mac99,via=pmu -cpu 970fx \
+            | /opt/local/bin/qemu-system-ppc64-cat7 -M mac99,via=pmu,decr-cap-ms=100 -cpu 970fx \
                 -smp 2 -accel tcg,thread=multi -display none -S -qmp stdio 2>&1) || true
           echo "$OUT" | head -20
           echo ""
           if echo "$OUT" | grep -q '"cpu-index"'; then
-            echo "PASS: mac99 with a 970FX starts with 2 CPUs"
+            echo "PASS: mac99 with a 970FX and decr-cap-ms starts with 2 CPUs"
           else
-            echo "FAIL: could not start mac99 with -cpu 970fx"
+            echo "FAIL: could not start mac99 with -cpu 970fx and decr-cap-ms"
             exit 1
           fi
 
