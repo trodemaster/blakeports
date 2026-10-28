@@ -1,20 +1,24 @@
 name: Cache ports
 
-# Build a list of ports on one legacy VM and publish the resulting binary
+# Build a list of ports on one runner and publish the resulting binary
 # archives to the packages.jibb.tv cache, so later installs on that OS/arch
-# skip the compile. Only dependencies are published: ports in the blakeports
-# tree are built but never cached, so CI always builds them from their
-# Portfiles. See tools/macports-cache/.
+# skip the compile. Modern runners build in place and submit over SMB; legacy
+# runners build on their VM over ssh and submit over AFP. Only dependencies
+# are published: ports in the blakeports tree are built but never cached, so
+# CI always builds them from their Portfiles. See tools/macports-cache/.
 
 on:
   workflow_dispatch:
     inputs:
       runner:
-        description: 'Legacy VM to build on'
+        description: 'Runner to build on'
         required: true
         type: choice
         default: leopard-ppc
         options:
+          - macOS_27
+          - macOS_26
+          - macOS_15
           - leopard-ppc
           - leopard
           - snowleopard
@@ -42,10 +46,10 @@ defaults:
   run:
     shell: bash
 
-# One job per VM at a time: two builds would fight over the MacPorts registry
-# lock and the ports tree in ~/code/blakeports.
+# One job per runner at a time: two builds would fight over the MacPorts
+# registry lock and the ports tree.
 concurrency:
-  group: legacy-vm-${{ inputs.runner }}
+  group: cache-ports-${{ inputs.runner }}
   cancel-in-progress: false
 
 jobs:
@@ -53,6 +57,8 @@ jobs:
     name: cache-ports (${{ inputs.runner }})
     runs-on: [self-hosted, "${{ inputs.runner }}"]
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    env:
+      MODERN: ${{ startsWith(inputs.runner, 'macOS_') }}
 
     steps:
       - name: Checkout repository
@@ -60,15 +66,33 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
 
+      # sources.conf points at this checkout, so blakeports' own ports resolve
+      # from the branch checked out above.
+      - name: Setup MacPorts
+        if: env.MODERN == 'true'
+        run: |
+          sw_vers; uname -m; /opt/local/bin/port version
+          ./scripts/installmacports
+
+      - name: Build and cache (modern)
+        if: env.MODERN == 'true'
+        env:
+          PORTS: ${{ inputs.ports }}
+        run: |
+          set -o pipefail
+          ./tools/macports-cache/scripts/cache-ports.sh "$PORTS" 2>&1 | tee cache-ports.log
+
       # The runner container's entrypoint defines the `legacyvm` ssh alias for
       # its VM, with the old kex/cipher/hostkey algorithms 10.5+ need.
       - name: Check VM
+        if: env.MODERN != 'true'
         run: |
           ssh legacyvm 'sw_vers; uname -m; /opt/local/bin/port version'
 
       # The VMs' sources.conf points at this path, so blakeports' own ports
       # resolve from whatever branch was checked out.
       - name: Copy ports tree to VM
+        if: env.MODERN != 'true'
         run: |
           tar cf - --exclude=.git . | ssh legacyvm '
             set -e
@@ -79,7 +103,8 @@ jobs:
             mv ~/code/blakeports.new ~/code/blakeports
           '
 
-      - name: Build and cache
+      - name: Build and cache (legacy)
+        if: env.MODERN != 'true'
         env:
           PORTS: ${{ inputs.ports }}
         run: |

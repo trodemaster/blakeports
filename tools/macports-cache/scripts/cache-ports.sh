@@ -1,8 +1,8 @@
 #!/bin/bash
 # cache-ports.sh — build MacPorts ports and publish their archives to the cache.
 #
-# Runs on the build machine itself (a legacy VM, over ssh from the "Cache ports"
-# workflow). For each port spec it runs `port install` in the background and,
+# Runs on the build machine itself: on a modern runner directly, on a legacy
+# VM over ssh (both from the "Cache ports" workflow). For each port spec it runs `port install` in the background and,
 # while that runs, submits every newly finished archive to the cache share
 # once a minute, so each dependency is published within about a minute of
 # being built. A long run that fails, times out or is cancelled keeps
@@ -18,19 +18,26 @@
 #   (port specs are comma-separated; each may carry variants)
 #
 # Environment:
-#   PACKAGES_AFP_URL  share to submit to (default afp://macports:macports@darkstar.jibb.tv/packages)
+#   PACKAGES_SHARE_URL  share to submit to (default: the darkstar packages share,
+#                     over SMB on macOS 13 and later, AFP before that)
 #   PACKAGES_URL      cache to configure as a client (default http://packages.jibb.tv)
 #   PORTS_TREE        local ports tree to portindex first (default: the blakeports
 #                     checkout this script lives in)
 #   PUBLISH_INTERVAL  seconds between submits during a build (default 60)
 #
 # Prints one "CACHE-RESULT <status> <minutes> <spec>" line per port at the end,
-# and exits non-zero if any port failed. Dependencies: bash 3.2, mount_afp —
-# Mac OS X 10.5+.
+# and exits non-zero if any port failed. Dependencies: bash 3.2, mount_afp or
+# mount_smbfs — Mac OS X 10.5+.
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PACKAGES_AFP_URL="${PACKAGES_AFP_URL:-afp://macports:macports@darkstar.jibb.tv/packages}"
+# Newer macOS is dropping the AFP client, and the legacy VMs can't speak the
+# SMB that darkstar's Samba does: SMB from macOS 13 (Darwin 22), AFP before.
+if [ "$(uname -r | cut -d. -f1)" -ge 22 ]; then
+    PACKAGES_SHARE_URL="${PACKAGES_SHARE_URL:-smb://macports:macports@darkstar.jibb.tv/packages}"
+else
+    PACKAGES_SHARE_URL="${PACKAGES_SHARE_URL:-afp://macports:macports@darkstar.jibb.tv/packages}"
+fi
 PACKAGES_URL="${PACKAGES_URL:-http://packages.jibb.tv}"
 PORTS_TREE="${PORTS_TREE:-$(cd "$HERE/../../.." && pwd)}"
 PUBLISH_INTERVAL="${PUBLISH_INTERVAL:-60}"
@@ -50,8 +57,11 @@ is_mounted() { mount | grep -q " on $MNT "; }
 ensure_mounted() {
     is_mounted && return 0
     mkdir -p "$MNT" || return 1
-    mount_afp "$PACKAGES_AFP_URL" "$MNT" >/dev/null 2>&1 && return 0
-    echo "warning: cannot mount ${PACKAGES_AFP_URL%%@*}@..." >&2
+    case "$PACKAGES_SHARE_URL" in
+        smb://*) mount_smbfs "${PACKAGES_SHARE_URL#smb:}" "$MNT" >/dev/null 2>&1 && return 0 ;;
+        *) mount_afp "$PACKAGES_SHARE_URL" "$MNT" >/dev/null 2>&1 && return 0 ;;
+    esac
+    echo "warning: cannot mount ${PACKAGES_SHARE_URL%%@*}@..." >&2
     return 1
 }
 
@@ -66,12 +76,15 @@ unmount() {
 INSTALL_PID=""
 TAIL_PID=""
 LOG="$(cd /tmp && pwd -P)/cache-ports.$$.log"
+# Archives found on an official mirror, so the minute-by-minute publishes ask
+# the mirrors about each one only once (see submit-archive.sh).
+export MIRROR_MEMO="$(cd /tmp && pwd -P)/cache-ports.$$.mirrored"
 REACTIVATE=""
 cleanup() {
     [ -n "$INSTALL_PID" ] && sudo kill "$INSTALL_PID" 2>/dev/null
     [ -n "$TAIL_PID" ] && kill "$TAIL_PID" 2>/dev/null
     reactivate
-    rm -f "$LOG"
+    rm -f "$LOG" "$MIRROR_MEMO"
     unmount
 }
 trap cleanup EXIT
@@ -131,7 +144,7 @@ sudo "$HERE/setup-client.sh" "$PACKAGES_URL" </dev/null || die "setup-client.sh 
 echo "::endgroup::"
 
 echo "::group::Check the cache share"
-ensure_mounted || die "cannot mount ${PACKAGES_AFP_URL%%@*}@... (share down or bad credentials)"
+ensure_mounted || die "cannot mount ${PACKAGES_SHARE_URL%%@*}@... (share down or bad credentials)"
 echo "share OK, mounted at $MNT"
 echo "::endgroup::"
 

@@ -51,6 +51,9 @@ tools/macports-cache/
 ├── CLAUDE.md                 This file
 └── scripts/
     ├── submit-archive.sh     Run on build machines to push archives to cache
+    ├── cache-ports.sh        Build ports and publish as they finish ("Cache ports" workflow)
+    ├── on-mirror.sh          Does an official mirror already serve this archive?
+    ├── prune-cache.sh        Delete archives the cache no longer needs ("Prune cache" workflow)
     └── setup-client.sh       Run on client machines to configure MacPorts
 ```
 
@@ -95,8 +98,11 @@ share) and re-signs any archive newer than its `.rmd160` (replaced on resubmit).
 The live cache is **`http://packages.jibb.tv`** (named after `packages.macports.org`):
 Caddy `file_server` serves `/media/blake/jonesfarm/macports-packages` over plain HTTP,
 LAN-only; this tool runs beside it with `-port 0` as the `macports-signer` systemd unit;
-build machines submit through the `[packages]` netatalk volume as `macports`/`macports`
-(`mount_afp afp://macports:macports@darkstar.jibb.tv/packages /Volumes/packages`).
+build machines submit as `macports`/`macports` through the `[packages]` share, which
+darkstar exports twice: macOS 12 and older (the legacy VMs among them) use the netatalk volume
+(`mount_afp afp://macports:macports@darkstar.jibb.tv/packages /Volumes/packages`), and
+macOS 13+ uses the Samba share (`mount_smbfs //macports:macports@darkstar.jibb.tv/packages /Volumes/packages`).
+Samba's share is limited to the `macports` user and writes files owned by it, 0644/0755.
 Clients' `archive_sites.conf` entry is named `jibb_archives`. All of the darkstar side
 (unit, Caddy site, afp.conf, account script) is in machine-cfg `darkstar/macports-packages/`.
 Go isn't installed on darkstar: cross-compile with
@@ -124,7 +130,8 @@ then renames, and with no port names submits every installed port. `-a N` skips 
 modified in the last N seconds: MacPorts writes a freshly built archive in place
 (`portinstall.tcl` `create_archive`), so a running build can expose a partial one. `-q`
 stays silent when there's nothing to submit. There is no repacking: the old "tar up a
-directory image" path was for pre-2.0 layouts and has been removed.
+directory image" path was for pre-2.0 layouts and has been removed. Archives an official
+mirror already serves are skipped (`-M` turns that off); see "Keeping the cache lean".
 
 **The cache is for dependencies only.** Ports in the blakeports tree (and their
 subports) are never submitted: a cached archive of one would stand in for the Portfile
@@ -137,7 +144,9 @@ always build from source on the legacy VMs.
 
 ## cache-ports.sh behavior
 
-Driven by the `Cache ports` workflow over ssh. It configures the VM as a client (so cached
+Driven by the `Cache ports` workflow: directly on a modern runner, over ssh on a legacy
+VM. It mounts the share over SMB on macOS 13+ (Darwin 22) and AFP before that
+(`PACKAGES_SHARE_URL` overrides it). It configures the VM as a client (so cached
 dependencies install as binaries), mounts the share once for the whole run, then for each
 spec runs `port install` in the background and calls `submit-archive.sh -a 120 -q` every
 `PUBLISH_INTERVAL` (60s) until it exits, then flushes. Each dependency reaches the cache
@@ -146,6 +155,66 @@ about a minute after it finishes, so failed, timed-out or cancelled runs keep th
 The install's output goes to a log (followed on stdout with `tail -f`); if it failed with
 "X cannot be built while Y is active" (gcc vs libunwind-headers on Leopard), it deactivates
 Y, retries up to 3 times, and reactivates Y afterwards, as `scripts/install-deps` does.
+
+## Keeping the cache lean
+
+The cache should hold only what clients can't get elsewhere: dependencies built for
+platforms or variants the official buildbots don't publish (all of Leopard, non-default
+variants such as `curl +ssl` or `git +pcre`, and ports the buildbots skip). Before this
+flow existed, about 80% of the cache (7.9 GB of 9.5 GB, Oct 2026) duplicated archives fcix
+already served. Every client's `archive_sites.conf` lists the official mirrors next to
+`jibb_archives` (and `macports.conf` prefers `mirror.fcix.net`), so a duplicate is never
+needed. Two places enforce this:
+
+**At submit time, `submit-archive.sh`** asks `on-mirror.sh` about each archive it would
+copy, after the same-name-and-size and `-a` checks, and skips one that a mirror has.
+`on-mirror.sh` sends a HEAD request for `<port>/<archive>.tbz2` to each URL in
+`OFFICIAL_MIRRORS` (default fcix over https, then MIT `bos.us.packages.macports.org` over
+plain http, because system curl on old OS X can't do modern TLS; MacPorts' curl is used when
+installed). Only a 200 counts as mirrored. A 404, timeout or outage means "submit it",
+so a failed check makes the cache too big rather than leaving a client without an archive.
+`cache-ports.sh` publishes every minute, so it exports `MIRROR_MEMO` (a temporary file)
+listing archives already found on a mirror, and each archive gets one check per run.
+
+**Afterwards, `prune-cache.sh`**, run weekly by the `Prune cache` workflow
+(`.github/workflows/prune-cache.yml`) on a modern runner that mounts the share over SMB.
+Scheduled runs delete; manual dispatches default to `dry_run`. For each `<port>/*.tbz2` it
+applies the first matching rule and deletes the archive and its `.rmd160`:
+
+1. `blakeports`: the port directory is in the checkout's PortIndex (the workflow runs
+   `portindex` first). This is a safety net for the deps-only rule.
+2. `mirrored`: `on-mirror.sh` says an official mirror has it. The buildbots often
+   publish after we cached something.
+
+It also deletes `*.part` files older than a day (left by an interrupted copy) and removes
+empty port directories. It refuses to run unless `-m` holds `pubkey.pem`, so a wrong mount
+path can't delete anything. Output is one `PRUNE <reason> <bytes> <path>` line per
+archive plus a summary line, which the workflow turns into a job summary table.
+
+**Why there is no "older version" rule.** A rule of "delete an archive once a newer one
+for the same port, variants and platform has been on the share for 30 days" was built and
+dropped before it ever ran. The real cache showed that older versions keep being
+submitted after newer ones, because legacy VMs pin older versions:
+`curl-ca-bundle` 8.22.0 arrived after 8.23.0_1, `py314-setuptools` 80.10.2 after 84.2.1,
+and `py314-meson` 1.12.0 `darwin_9` after 1.12.1. `darwin_any`/`any_any` noarch archives
+are shared by every OS, so several versions really are in use at once. Neither "newest
+mtime" nor "highest version" says which ones are dead. Every outdated archive in that
+data was on fcix anyway, so the `mirrored` rule removed it. What's left is pinned
+versions that only we have, and those are worth keeping.
+
+Known limits, and how to change the flow:
+
+- **Unused-but-unmirrored archives are never removed.** An archive for a version no
+  client asks for any more stays forever. The right signal is the last download:
+  Caddy's access log on darkstar records every fetch. A prune by "not fetched in N days"
+  has to run on darkstar (or read logs exported from it), not in a GitHub Action.
+- **Mirror checks are sequential**: about 1000 HEAD requests (roughly 4 minutes for 815
+  archives). Parallelize in `prune-cache.sh` if the cache grows a lot.
+- **Changing what counts as mirrored**: edit `OFFICIAL_MIRRORS` in `on-mirror.sh`. Both
+  scripts use it. Keep at least one plain-http mirror for Leopard.
+- **Adding a prune rule**: add it to the `while read` loop in `prune-cache.sh`. The first
+  matching rule wins, and cheap local checks go before the network check. Also add a counter
+  (`n_<reason>`), the summary line, and the header comment.
 
 ## setup-client.sh behavior
 

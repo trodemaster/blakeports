@@ -82,18 +82,23 @@ On the build machine, install the port normally, then mount the cache share and 
 # Build the port
 sudo port install netatalk
 
-# Mount the cache share (AFP or SMB)
-# e.g. Finder → Go → Connect to Server → afp://mymac.local
+# Mount the cache share (SMB on macOS 13+, AFP on older systems)
+mkdir -p ~/packages
+mount_smbfs //macports:macports@darkstar.jibb.tv/packages ~/packages
 
 # Submit its dependencies (no port names: every installed port)
-./scripts/submit-archive.sh -m /Volumes/macports-cache
+./scripts/submit-archive.sh -m ~/packages
 ```
 
 The cache is for dependencies only: ports in the blakeports tree itself (netatalk here)
 are never submitted, so CI always builds them from their Portfiles. The list comes from
 the tree's `PortIndex`, so run `portindex` first; without one the script submits nothing.
 
-The script needs only the standard shell, `awk`, `cp` and `stat` — it runs on Mac OS X 10.5 and up.
+Archives an official MacPorts mirror (fcix, MIT) already serves are skipped as well, since
+clients fetch those from the mirror. The weekly `Prune cache` workflow (`scripts/prune-cache.sh`)
+removes archives that mirrors have since picked up, and any blakeports port. See CLAUDE.md, "Keeping the cache lean".
+
+The script needs only the standard shell, `awk`, `cp`, `stat` and `curl` — it runs on Mac OS X 10.5 and up.
 
 From the server machine you can also use:
 ```bash

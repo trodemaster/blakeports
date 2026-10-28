@@ -1,0 +1,84 @@
+name: Prune cache
+
+# Delete archives the packages.jibb.tv cache no longer needs: ones an official
+# mirror (fcix, MIT) now serves, and any blakeports port that got in. The rules
+# live in tools/macports-cache/scripts/prune-cache.sh; see
+# tools/macports-cache/CLAUDE.md ("Keeping the cache lean").
+#
+# Scheduled runs delete; manual runs default to a dry run.
+
+on:
+  schedule:
+    - cron: '0 10 * * 0'   # Sundays 10:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List what would be deleted, delete nothing'
+        required: false
+        default: true
+        type: boolean
+      runner:
+        description: 'Modern runner that mounts the share over SMB'
+        required: false
+        type: choice
+        default: macOS_26
+        options:
+          - macOS_26
+          - macOS_27
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: prune-cache
+  cancel-in-progress: false
+
+jobs:
+  prune-cache:
+    name: prune-cache (${{ inputs.runner || 'macOS_26' }})
+    runs-on: [self-hosted, "${{ inputs.runner || 'macOS_26' }}"]
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # The PortIndex lists blakeports' own ports, which are never cached.
+      - name: Index blakeports
+        run: /opt/local/bin/portindex >/dev/null
+
+      - name: Prune
+        env:
+          DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry_run }}
+        run: |
+          set -o pipefail
+          # Physical path: `mount` lists the resolved path.
+          MNT="$(cd "${TMPDIR:-/tmp}" && pwd -P)/packages-prune.$$"
+          mkdir -p "$MNT"
+          mount_smbfs //macports:macports@darkstar.jibb.tv/packages "$MNT"
+          trap 'umount "$MNT" || diskutil unmount force "$MNT"; rmdir "$MNT"' EXIT
+          args=(-m "$MNT")
+          [ "$DRY_RUN" = "true" ] && args+=(-n)
+          ./tools/macports-cache/scripts/prune-cache.sh "${args[@]}" | tee prune.log
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Prune cache"
+            echo ""
+            tail -1 prune.log 2>/dev/null
+            echo ""
+            echo "| Reason | Archives | MB |"
+            echo "|---|---|---|"
+            awk '$1 == "PRUNE" { n[$2]++; b[$2] += $3 }
+                 END { for (r in n) printf "| %s | %d | %.1f |\n", r, n[r], b[r] / 1048576 }' prune.log 2>/dev/null
+            echo ""
+            echo "<details><summary>Archives</summary>"
+            echo ""
+            echo '```'
+            grep '^PRUNE ' prune.log 2>/dev/null
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"

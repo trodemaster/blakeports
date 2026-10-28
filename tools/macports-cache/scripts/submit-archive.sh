@@ -12,8 +12,13 @@
 # Portfile under test instead of installing a cached binary. The list comes from
 # that tree's PortIndex (run portindex first); without one nothing is submitted.
 #
+# Archives an official mirror already serves (fcix, MIT; see on-mirror.sh) are
+# skipped too: clients fetch those from the mirror. If the check can't reach a
+# mirror the archive is submitted, and prune-cache.sh removes it later if a
+# mirror turns out to have it.
+#
 # Usage:
-#   ./submit-archive.sh [-m mount_path] [-x PortIndex] [-a seconds] [-q] [portname ...]
+#   ./submit-archive.sh [-m mount_path] [-x PortIndex] [-a seconds] [-M] [-q] [portname ...]
 #   (no port names: submit every installed port not in blakeports)
 #
 #   -m  where the share is mounted (default /Volumes/packages)
@@ -21,7 +26,13 @@
 #       the blakeports checkout this script lives in)
 #   -a  skip archives modified less than this many seconds ago (default 0),
 #       for running while a build may still be writing one
+#   -M  submit archives even if an official mirror has them
 #   -q  print nothing when there is nothing to submit
+#
+# Environment:
+#   MIRROR_MEMO  file of archives already found on a mirror, read and appended
+#                so repeated runs (cache-ports.sh calls this every minute) ask
+#                the mirrors about each archive once; unset means no memo
 #
 # Examples:
 #   ./submit-archive.sh                       # seed the cache with every dep
@@ -31,7 +42,7 @@
 # Archives already on the share (same name and size) are skipped, so it's
 # cheap to run after every build, or every minute during one.
 #
-# Dependencies: bash 3.2, awk, cp, stat — runs on Mac OS X 10.5.
+# Dependencies: bash 3.2, awk, cp, stat, curl — runs on Mac OS X 10.5.
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -40,6 +51,8 @@ MOUNT_PATH="${MOUNT:-/Volumes/packages}"
 SOFTWARE_DIR="${SOFTWARE_DIR:-/opt/local/var/macports/software}"
 MIN_AGE=0
 QUIET=0
+CHECK_MIRRORS=1
+MIRROR_MEMO="${MIRROR_MEMO:-}"
 
 PORTS=""
 while [ $# -gt 0 ]; do
@@ -47,15 +60,16 @@ while [ $# -gt 0 ]; do
         -m) MOUNT_PATH="${2:?-m needs a path}"; shift 2 ;;
         -x) DENY_INDEX="${2:?-x needs a PortIndex path}"; shift 2 ;;
         -a) MIN_AGE="${2:?-a needs seconds}"; shift 2 ;;
+        -M) CHECK_MIRRORS=0; shift ;;
         -q) QUIET=1; shift ;;
-        -h|--help) sed -n '2,34p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,46p' "$0"; exit 0 ;;
         *) PORTS="$PORTS $1"; shift ;;
     esac
 done
 
 if [ ! -d "$MOUNT_PATH" ]; then
     echo "error: cache share not mounted at $MOUNT_PATH" >&2
-    echo "       mount afp://darkstar.jibb.tv/packages, or pass -m /your/path" >&2
+    echo "       mount smb:// (macOS 13+) or afp://darkstar.jibb.tv/packages, or pass -m /your/path" >&2
     exit 1
 fi
 
@@ -76,6 +90,7 @@ copied=0
 skipped=0
 young=0
 denied=0
+mirrored=0
 for port in $PORTS; do
     case "$DENY" in
         *" $port "*) denied=$((denied + 1)); continue ;;
@@ -97,6 +112,17 @@ for port in $PORTS; do
             young=$((young + 1))
             continue
         fi
+        if [ "$CHECK_MIRRORS" -eq 1 ]; then
+            if [ -n "$MIRROR_MEMO" ] && grep -qxF "${port}/${name}" "$MIRROR_MEMO" 2>/dev/null; then
+                mirrored=$((mirrored + 1))
+                continue
+            fi
+            if "$HERE/on-mirror.sh" "${port}/${name}"; then
+                [ -z "$MIRROR_MEMO" ] || echo "${port}/${name}" >> "$MIRROR_MEMO"
+                mirrored=$((mirrored + 1))
+                continue
+            fi
+        fi
         mkdir -p "${MOUNT_PATH}/${port}"
         echo "submit: ${port}/${name}"
         # Copy to a temp name and rename, so a client never sees a partial file.
@@ -109,7 +135,7 @@ done
 
 [ "$QUIET" -eq 1 ] && [ "$copied" -eq 0 ] && exit 0
 echo ""
-msg="Done: ${copied} submitted, ${skipped} already present, ${denied} in blakeports (never cached)"
+msg="Done: ${copied} submitted, ${skipped} already present, ${mirrored} on an official mirror, ${denied} in blakeports (never cached)"
 [ "$young" -eq 0 ] || msg="${msg}, ${young} still being written"
 echo "${msg}."
 [ "$copied" -eq 0 ] || echo "The signer adds the .rmd160 signatures within about 30 seconds."
