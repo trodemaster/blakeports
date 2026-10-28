@@ -53,6 +53,7 @@ blakeports/
 |--------|---------|
 | `scripts/installmacports` | Installs MacPorts and configures BlakePorts as default source |
 | `scripts/preparemacports` | Run by every CI job: regenerates PortIndex, runs syncports, configures the packages.jibb.tv binary cache |
+| `scripts/cleanupmacports` | Uninstalls every port except curl and git (MacPorts Cleanup workflow, modern and legacy) |
 | `scripts/syncports` | Syncs the official ports tree when it is more than a day old |
 | `scripts/install-deps` | Installs dependencies for a port (build + runtime or runtime-only) |
 | `scripts/syncfromgitports` | Syncs `_resources` and port directories from upstream MacPorts |
