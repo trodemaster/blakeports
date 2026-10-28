@@ -41,12 +41,17 @@ fi
 
 # -v is required: without a tty, a quiet sync dies with
 # 'can't read "verboseflag": no such variable' (see scripts/install-deps).
+# rsync.macports.org rotates between mirrors and some are unreachable from
+# here ("No route to host"), so retry a few times.
 SYNC_LOG=$(mktemp /tmp/syncports.XXXXXX)
-if sudo port -v sync >"$SYNC_LOG" 2>&1; then
-    rm -f "$SYNC_LOG"
-    echo "✓ Ports tree synced"
-    exit 0
-fi
+for attempt in 1 2 3; do
+    if sudo port -v sync >"$SYNC_LOG" 2>&1; then
+        rm -f "$SYNC_LOG"
+        echo "✓ Ports tree synced"
+        exit 0
+    fi
+    [ $attempt -lt 3 ] && { echo "port sync failed (attempt $attempt/3), retrying in 10s..."; sleep 10; }
+done
 
 echo "port sync failed. Last 30 lines of output:" >&2
 tr '\r' '\n' <"$SYNC_LOG" | tail -n 30 >&2
