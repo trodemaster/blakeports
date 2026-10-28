@@ -215,23 +215,19 @@ jobs:
             ls -la /opt/local/libexec/qemu-cat7/share/qemu/openbios-ppc
           fi
 
-      - name: Verify the three patches are in the binary
+      - name: Verify the decrementer cap property exists
         run: |
-          # Each patch is its own file in the port and a failed hunk would have
-          # stopped the build. The decrementer cap is also visible in the
-          # binary as the environment variable it reads, so check that.
-          BIN=/opt/local/libexec/qemu-cat7/bin/qemu-system-ppc64
-          # no grep -q: it exits at the first match, strings then dies of SIGPIPE
-          # and the step fails under pipefail
-          if strings "$BIN" | grep QEMU_PPC_DECR_CAP_MS > /dev/null; then
-            echo "PASS: decrementer cap (QEMU_PPC_DECR_CAP_MS) is compiled in"
+          # cat7 carries the decrementer cap as a machine property, which
+          # replaced the QEMU_PPC_DECR_CAP_MS environment variable.
+          OUT=$(/opt/local/bin/qemu-system-ppc64-cat7 -M mac99,help 2>&1 || true)
+          echo "$OUT"
+          echo ""
+          if echo "$OUT" | grep decr-cap-ms > /dev/null; then
+            echo "PASS: mac99 has the decr-cap-ms property"
           else
-            echo "FAIL: QEMU_PPC_DECR_CAP_MS not found in $BIN"
+            echo "FAIL: decr-cap-ms not found in mac99 properties"
             exit 1
           fi
-          echo ""
-          echo "Patch files the port applied:"
-          ls -1 emulators/qemu-cat7/files/
 
       - name: Verify the G5 machine starts
         run: |
