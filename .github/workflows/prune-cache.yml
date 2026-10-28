@@ -65,6 +65,7 @@ jobs:
       - name: Summary
         if: always()
         run: |
+          [ -f prune.log ] || exit 0
           {
             echo "## Prune cache"
             echo ""
