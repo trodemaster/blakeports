@@ -73,30 +73,12 @@ if [[ "$NEED_SYNC" != "true" ]]; then
   fi
 fi
 
-# sync macports to update port index (only if needed)
-# Note: -v flag is required due to MacPorts bug "can't read verboseflag: no such variable"
-# Output is logged because it is tens of thousands of lines; the tail is shown on failure.
+# Sync the official ports tree: forced when it is missing or broken (above),
+# otherwise only when it is more than a day old.
 if [[ "$NEED_SYNC" == "true" ]]; then
-  echo "Syncing MacPorts port index..."
-  SYNC_LOG="$(mktemp)"
-  if ! sudo port -v sync >"$SYNC_LOG" 2>&1; then
-    echo "Error: port sync failed. Last 30 lines of output:" >&2
-    tr '\r' '\n' <"$SYNC_LOG" | tail -n 30 >&2
-    # A failed sync can leave an empty/partial tarball that blocks later syncs
-    # ("No updates"). Remove it, plus the stale ports dir whose mtime gates it.
-    OFFICIAL_TARBALL_GLOB=(/opt/local/var/macports/sources/*/macports/release/tarballs)
-    for dir in "${OFFICIAL_TARBALL_GLOB[@]}"; do
-      for tarball in "$dir"/ports.tar*; do
-        echo "Removing incomplete $tarball" >&2
-        sudo rm -rf "$tarball" "$dir/ports"
-      done
-    done
-    rm -f "$SYNC_LOG"
-    exit 1
-  fi
-  rm -f "$SYNC_LOG"
+  "$SCRIPT_DIR/syncports" --force
 else
-  echo "✓ Skipping port sync - no changes detected"
+  "$SCRIPT_DIR/syncports"
 fi
 
 echo "✓ MacPorts setup complete!"

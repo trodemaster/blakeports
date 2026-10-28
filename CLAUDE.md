@@ -52,6 +52,7 @@ blakeports/
 | Script | Purpose |
 |--------|---------|
 | `scripts/installmacports` | Installs MacPorts and configures BlakePorts as default source |
+| `scripts/syncports` | Syncs the official ports tree when it is more than a day old (CI runs it on every job) |
 | `scripts/install-deps` | Installs dependencies for a port (build + runtime or runtime-only) |
 | `scripts/syncfromgitports` | Syncs `_resources` and port directories from upstream MacPorts |
 | `scripts/fulltest` | Comprehensive test - recreates runners and triggers all builds |

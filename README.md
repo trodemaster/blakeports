@@ -24,6 +24,7 @@ See [net/openssh9-client/Portfile](net/openssh9-client/Portfile) for port detail
 ## Scripts
 
 - `scripts/installmacports` - Installs MacPorts and configures BlakePorts as the default source
+- `scripts/syncports` - Syncs the official ports tree when it is more than a day old
 - `scripts/boop` - Creates an empty commit to trigger GitHub Actions workflows
 - `scripts/install-deps` - Installs all dependencies for a given port (build + runtime or runtime-only)
 - `scripts/syncfromgitports` - Syncs `_resources` and active port directories from upstream MacPorts repository

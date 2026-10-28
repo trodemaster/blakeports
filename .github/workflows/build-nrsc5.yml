@@ -405,6 +405,7 @@ jobs:
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
             portindex
+            ./scripts/syncports
             echo "✅ MacPorts verified"
           EOF
 

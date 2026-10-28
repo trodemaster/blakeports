@@ -1,0 +1,69 @@
+#!/bin/bash
+# Sync the official MacPorts ports tree when it is more than a day old.
+#
+# Runner VMs live for weeks (legacy ones are reverted to a snapshot before
+# each job), and nothing else syncs them: updatemacports builds base from
+# source rather than running selfupdate. A stale tree resolves dependencies
+# to old versions whose distfiles may be gone from the mirrors.
+#
+# Usage: syncports [--force]
+#   --force  sync regardless of age, and fail if the sync fails. Without it a
+#            failed sync is a warning and the existing tree is used.
+#
+# Runs on Mac OS X 10.5 and later (bash 3.2, BSD find).
+
+set -u
+
+FORCE=false
+[ "${1:-}" = "--force" ] && FORCE=true
+
+TARBALL_DIRS=$(ls -d /opt/local/var/macports/sources/*/macports/release/tarballs 2>/dev/null)
+
+NEED_SYNC=$FORCE
+if [ "$NEED_SYNC" = false ]; then
+    if [ -z "$TARBALL_DIRS" ]; then
+        echo "No official ports tree found - syncing"
+        NEED_SYNC=true
+    else
+        for dir in $TARBALL_DIRS; do
+            if [ ! -d "$dir/ports" ] || [ -n "$(find "$dir/ports" -maxdepth 0 -mtime +0)" ]; then
+                echo "Official ports tree $dir/ports is more than a day old - syncing"
+                NEED_SYNC=true
+            fi
+        done
+    fi
+fi
+
+if [ "$NEED_SYNC" = false ]; then
+    echo "✓ Official ports tree synced within the last day"
+    exit 0
+fi
+
+# -v is required: without a tty, a quiet sync dies with
+# 'can't read "verboseflag": no such variable' (see scripts/install-deps).
+SYNC_LOG=$(mktemp /tmp/syncports.XXXXXX)
+if sudo port -v sync >"$SYNC_LOG" 2>&1; then
+    rm -f "$SYNC_LOG"
+    echo "✓ Ports tree synced"
+    exit 0
+fi
+
+echo "port sync failed. Last 30 lines of output:" >&2
+tr '\r' '\n' <"$SYNC_LOG" | tail -n 30 >&2
+rm -f "$SYNC_LOG"
+
+if [ "$FORCE" = false ]; then
+    echo "⚠️  Continuing with the existing ports tree" >&2
+    exit 0
+fi
+
+# A failed forced sync can leave an empty/partial tarball that makes later
+# syncs report "No updates". Remove it, plus the ports dir whose mtime gates it.
+for dir in $TARBALL_DIRS; do
+    for tarball in "$dir"/ports.tar*; do
+        [ -f "$tarball" ] || continue
+        echo "Removing incomplete $tarball" >&2
+        sudo rm -rf "$tarball" "$dir/ports"
+    done
+done
+exit 1

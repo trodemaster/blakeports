@@ -141,6 +141,12 @@ if [ -d "$PORTS_TREE" ]; then
     echo "::endgroup::"
 fi
 
+if [ -x "$PORTS_TREE/scripts/syncports" ]; then
+    echo "::group::Sync the official ports tree"
+    "$PORTS_TREE/scripts/syncports"
+    echo "::endgroup::"
+fi
+
 RESULTS=""
 FAILED=0
 OLDIFS=$IFS
