@@ -60,7 +60,7 @@ on:
         default: false
         type: boolean
       keep_ports:
-        description: 'Extra ports to preserve on legacy VMs (space-separated), on top of curl and git'
+        description: 'Extra ports to preserve (space-separated), on top of curl and git'
         required: false
         default: ''
         type: string
@@ -176,35 +176,12 @@ jobs:
         if: matrix.type == 'modern'
         uses: actions/checkout@v6
 
-      # Modern runners pull prebuilt binary archives (the official mirrors,
-      # then the packages.jibb.tv cache), so a full wipe back to curl costs
-      # minutes.
-      - name: Uninstall all ports except curl and its dependencies
+      # scripts/cleanupmacports is shared with the legacy step below.
+      - name: Uninstall all ports except curl and git
         if: matrix.type == 'modern'
-        run: |
-          source ./setupenv.bash
-          echo "Installed ports before cleanup:"
-          port installed || true
-          echo ""
-          echo "Determining ports to preserve (curl + dependencies)..."
-          PRESERVE=$(port echo curl rdepof:curl 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')
-          echo "Preserving: $PRESERVE"
-          echo ""
-          echo "Uninstalling all other ports..."
-          for p in $(port echo installed 2>/dev/null | awk '{print $1}' | sort -u); do
-            if ! echo " $PRESERVE " | grep -q " $p "; then
-              echo "Uninstalling: $p"
-              sudo port -f uninstall "$p" || true
-            else
-              echo "Keeping: $p"
-            fi
-          done
-          echo ""
-          echo "Cleaning all dist files..."
-          sudo port clean --all all || true
-          echo ""
-          echo "Installed ports after cleanup:"
-          port installed || echo "No ports installed"
+        env:
+          EXTRA_KEEP: ${{ inputs.keep_ports }}
+        run: ./scripts/cleanupmacports
 
       #
       # LEGACY PLATFORM STEPS
@@ -247,79 +224,4 @@ jobs:
         env:
           EXTRA_KEEP: ${{ inputs.keep_ports }}
         run: |
-          ssh -F ~/.ssh/config ${{ matrix.platform }} "EXTRA_KEEP=\"${EXTRA_KEEP}\" bash -s" <<'EOF'
-            set +e
-            if [ -f ~/.profile ]; then
-              source ~/.profile
-            fi
-            echo "=================================================="
-            echo "  MacPorts Cleanup on Mac OS X ${{ matrix.os_version }} (${{ matrix.vm_name }})"
-            echo "=================================================="
-            echo ""
-            echo "Installed ports before cleanup:"
-            port installed || true
-            echo ""
-
-            # Keep only curl and git (MacPorts' own fetches need curl). Builds
-            # get everything else, the compiler toolchain included, as binaries
-            # from the packages.jibb.tv cache (scripts/preparemacports), so a
-            # port's dependencies come from the current ports tree instead of a
-            # frozen snapshot. blakeports' own ports are never cached and build
-            # from source. Add one-off keepers via the keep_ports workflow input.
-            KEEP_ROOTS="curl curl-ca-bundle git ${EXTRA_KEEP}"
-
-            INSTALLED=$(port -q echo installed 2>/dev/null | awk '{print $1}' | sort -u)
-            KEEP=""
-            for p in $KEEP_ROOTS; do
-              echo "$INSTALLED" | grep -qx "$p" && KEEP="$KEEP $p"
-            done
-
-            # Keep by the registry, not the ports tree: mark only the keepers as
-            # requested, then remove leaves (unrequested ports nothing installed
-            # depends on) until none are left. Whatever a keeper links against
-            # stays, even if its Portfile has changed since it was built.
-            echo "Keeping (with everything they depend on):$KEEP"
-            echo ""
-            echo "Removing inactive ports..."
-            sudo port -N uninstall inactive || true
-            sudo port -q unsetrequested installed
-            sudo port -q setrequested $KEEP
-            echo ""
-            echo "Removing everything else..."
-            for i in 1 2 3 4 5 6 7 8 9 10; do
-              LEAVES=$(port -q echo leaves 2>/dev/null | awk '{print $1}')
-              [ -n "$LEAVES" ] || break
-              echo "  pass $i:" $LEAVES
-              sudo port -N uninstall --follow-dependencies leaves || true
-            done
-
-            # Uninstalling removes images; the build tree and the distfiles of
-            # removed ports are left behind. `port clean --all all` would parse
-            # every Portfile in every source -- hours on these VMs.
-            echo ""
-            echo "Cleaning build tree and distfiles of removed ports..."
-            AFTER=$(port -q echo installed 2>/dev/null | awk '{print $1}' | sort -u)
-            sudo rm -rf /opt/local/var/macports/build/*
-            for p in $INSTALLED; do
-              echo "$AFTER" | grep -qx "$p" || sudo rm -rf "/opt/local/var/macports/distfiles/$p"
-            done
-            echo ""
-            echo "Installed ports after cleanup:"
-            port installed || echo "No ports installed"
-            echo ""
-
-            # Fail loudly rather than leave a broken VM behind.
-            FAIL=0
-            check() { if "$@" >/dev/null 2>&1; then echo "  ok    $*"; else echo "  FAIL  $*"; FAIL=1; fi; }
-            echo "Checks:"
-            check /opt/local/bin/curl --version
-            check /opt/local/bin/git --version
-            check sh -c "otool -L /opt/local/libexec/macports/lib/pextlib1.0/Pextlib.dylib | grep -q /opt/local/lib/libcurl"
-            check sh -c "[ -z \"\$(port -q installed inactive)\" ]"
-            check sh -c "[ -z \"\$(port -q echo leaves)\" ]"
-            for p in $KEEP; do
-              check sh -c "port -q installed $p | grep -q '(active)'"
-            done
-            [ "$FAIL" -eq 0 ] || { echo "❌ Cleanup left problems"; exit 1; }
-            echo "✅ Cleanup complete"
-          EOF
+          ssh -F ~/.ssh/config ${{ matrix.platform }} "EXTRA_KEEP=\"${EXTRA_KEEP}\" bash -s" < scripts/cleanupmacports

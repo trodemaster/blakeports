@@ -1,0 +1,91 @@
+#!/bin/bash
+# Uninstall every port except curl and git (and what they link against),
+# leaving a runner ready for the next build. Run by the MacPorts Cleanup
+# workflow: directly on modern runners, piped over ssh to legacy VMs
+# (ssh vm "EXTRA_KEEP='...' bash -s" < scripts/cleanupmacports).
+#
+# Builds get everything else, the compiler toolchain included, as binaries
+# from the official mirrors or the packages.jibb.tv cache (see
+# scripts/preparemacports), so a port's dependencies come from the current
+# ports tree instead of a frozen snapshot. blakeports' own ports are never
+# cached and build from source.
+#
+# Environment:
+#   EXTRA_KEEP  extra ports to preserve (space-separated)
+#
+# Runs on Mac OS X 10.5 and later (bash 3.2). Exits non-zero if the result
+# is not clean.
+
+set +e
+PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+OS_MAJOR=$(uname -r | cut -d. -f1)
+
+echo "=================================================="
+echo "  MacPorts cleanup on macOS $(sw_vers -productVersion) ($(hostname -s))"
+echo "=================================================="
+echo ""
+echo "Installed ports before cleanup:"
+port installed || true
+echo ""
+
+KEEP_ROOTS="curl curl-ca-bundle git ${EXTRA_KEEP:-}"
+INSTALLED=$(port -q echo installed 2>/dev/null | awk '{print $1}' | sort -u)
+KEEP=""
+for p in $KEEP_ROOTS; do
+    echo "$INSTALLED" | grep -qx "$p" && KEEP="$KEEP $p"
+done
+
+# Keep by the registry, not the ports tree: mark only the keepers as
+# requested, then remove leaves (unrequested ports nothing installed depends
+# on) until none are left. Whatever a keeper links against stays, even if
+# its Portfile has changed since it was built. Inactive ports go first, which
+# also clears extra variants of one port (bstring and bstring +tests).
+echo "Keeping (with everything they depend on):$KEEP"
+echo ""
+echo "Removing inactive ports..."
+sudo port -N uninstall inactive || true
+sudo port -q unsetrequested installed
+[ -n "$KEEP" ] && sudo port -q setrequested $KEEP
+echo ""
+echo "Removing everything else..."
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    LEAVES=$(port -q echo leaves 2>/dev/null | awk '{print $1}')
+    [ -n "$LEAVES" ] || break
+    echo "  pass $i:" $LEAVES
+    sudo port -N uninstall --follow-dependencies leaves || true
+done
+
+# Uninstalling removes images; the build tree and the distfiles of removed
+# ports are left behind. `port clean --all all` would parse every Portfile
+# in every source -- hours on the legacy VMs.
+echo ""
+echo "Cleaning build tree and distfiles of removed ports..."
+AFTER=$(port -q echo installed 2>/dev/null | awk '{print $1}' | sort -u)
+sudo rm -rf /opt/local/var/macports/build/*
+for p in $INSTALLED; do
+    echo "$AFTER" | grep -qx "$p" || sudo rm -rf "/opt/local/var/macports/distfiles/$p"
+done
+echo ""
+echo "Installed ports after cleanup:"
+port installed || echo "No ports installed"
+echo ""
+
+# Fail loudly rather than leave a broken runner behind.
+FAIL=0
+check() { if "$@" >/dev/null 2>&1; then echo "  ok    $*"; else echo "  FAIL  $*"; FAIL=1; fi; }
+echo "Checks:"
+# OS X 10.11 and older: MacPorts fetches through its own curl (the system
+# one cannot reach GitHub), so curl and git must survive and Pextlib must
+# still link the MacPorts libcurl (see scripts/updatemacports).
+if [ "$OS_MAJOR" -le 15 ]; then
+    check /opt/local/bin/curl --version
+    check /opt/local/bin/git --version
+    check sh -c "otool -L /opt/local/libexec/macports/lib/pextlib1.0/Pextlib.dylib | grep -q /opt/local/lib/libcurl"
+fi
+check sh -c "[ -z \"\$(port -q installed inactive)\" ]"
+check sh -c "[ -z \"\$(port -q echo leaves)\" ]"
+for p in $KEEP; do
+    check sh -c "port -q installed $p | grep -q '(active)'"
+done
+[ "$FAIL" -eq 0 ] || { echo "❌ Cleanup left problems"; exit 1; }
+echo "✅ Cleanup complete"
