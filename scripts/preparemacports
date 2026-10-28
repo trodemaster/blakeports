@@ -1,0 +1,42 @@
+#!/bin/bash
+# Prepare MacPorts on a CI runner before a build: index this checkout, sync
+# the official ports tree when it is stale, and use the packages.jibb.tv
+# binary cache. Shared by modern jobs (through installmacports) and legacy
+# jobs (run over ssh on the VM).
+#
+# Usage: preparemacports [--force-sync]
+#   --force-sync  sync the official tree regardless of age, and fail if the
+#                 sync fails (syncports --force)
+#
+# Runs on Mac OS X 10.5 and later (bash 3.2).
+
+set -u
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+
+# Always regenerate the blakeports PortIndex from what is actually checked
+# out, so stale entries from another checkout are never used.
+echo "Regenerating blakeports port index..."
+if ! (cd "$REPO_ROOT" && portindex >/dev/null 2>&1); then
+    echo "portindex failed in $REPO_ROOT" >&2
+    exit 1
+fi
+echo "✓ Port index regenerated"
+
+if [ "${1:-}" = "--force-sync" ]; then
+    "$REPO_ROOT/scripts/syncports" --force || exit 1
+else
+    "$REPO_ROOT/scripts/syncports"
+fi
+
+# Dependencies come from the cache when it has them (blakeports' own ports
+# never do, see tools/macports-cache). A cache outage must not fail the
+# build: MacPorts then builds from source.
+echo "Configuring the packages.jibb.tv binary cache..."
+if sudo "$REPO_ROOT/tools/macports-cache/scripts/setup-client.sh" </dev/null; then
+    echo "✓ Binary cache configured"
+else
+    echo "⚠️  Could not configure the binary cache - dependencies not on the official mirrors build from source" >&2
+fi
+exit 0

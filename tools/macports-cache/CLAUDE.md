@@ -149,7 +149,10 @@ Y, retries up to 3 times, and reactivates Y afterwards, as `scripts/install-deps
 
 ## setup-client.sh behavior
 
-Runs on each MacPorts machine that should consume from the cache:
+Runs on each MacPorts machine that should consume from the cache. Every CI job runs it
+(modern and legacy) through `scripts/preparemacports`, so all runners are clients; the
+legacy cleanup keeps only curl and git and relies on the cache for the toolchain. It:
+
 1. Downloads `pubkey.pem` from the server (default `http://packages.jibb.tv`) and saves it to `/opt/local/share/macports/jibb_archives-pubkey.pem`
 2. Appends that path to `/opt/local/etc/macports/pubkeys.conf`
 3. Appends an entry to `/opt/local/etc/macports/archive_sites.conf` with:
