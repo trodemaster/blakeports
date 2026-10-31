@@ -254,7 +254,7 @@ jobs:
             echo "Removing existing icu installation..."
             # icu has many installed dependents on a runner, so force it
             sudo port -f uninstall icu
-            sudo port clean --dist icu
+            sudo port clean --all icu
           else
             echo "No existing icu installation found"
           fi
@@ -491,7 +491,7 @@ jobs:
             source ./setupenv.bash
             # Note: Do not uninstall openssl - it's needed for curl in legacy VMs
             sudo port -f uninstall icu || true
-            sudo port clean --dist icu
+            sudo port clean --all icu
             echo "✅ Clean complete"
           EOF
 
