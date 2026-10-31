@@ -505,7 +505,10 @@ jobs:
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
             # Note: Do not uninstall openssl - it's needed for curl in legacy VMs
-            sudo port -f uninstall icu || true
+            # libxml2 links icu and clang-11-bootstrap links libxml2, so with icu
+            # gone and libxml2 left behind the bootstrap compiler cannot start
+            # (trac #71616). The VM is reverted to its snapshot after the run.
+            sudo port -f uninstall icu libxml2 || true
             sudo port clean --all icu
             echo "✅ Clean complete"
           EOF
