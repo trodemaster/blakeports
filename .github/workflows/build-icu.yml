@@ -246,6 +246,10 @@ jobs:
           source ./setupenv.bash
           port lint --nitpick ${{ matrix.port }}
 
+      - name: Install dependencies
+        if: matrix.type == 'modern'
+        run: ./scripts/install-deps icu
+
       - name: Clean existing installation
         if: matrix.type == 'modern'
         run: |
@@ -258,10 +262,6 @@ jobs:
           else
             echo "No existing icu installation found"
           fi
-
-      - name: Install dependencies
-        if: matrix.type == 'modern'
-        run: ./scripts/install-deps icu
 
       - name: Build port
         if: matrix.type == 'modern'
@@ -478,6 +478,21 @@ jobs:
             echo "✅ Lint passed"
           EOF
 
+      - name: Install dependencies (legacy)
+        if: matrix.type == 'legacy'
+        run: |
+          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
+            set -e
+            set -o pipefail
+            set -x
+            if [ -f ~/.profile ]; then
+              source ~/.profile
+            fi
+            cd /Users/blake/code/blakeports
+            ./scripts/install-deps icu
+            echo "✅ Dependencies installed"
+          EOF
+
       - name: Clean existing installation (legacy)
         if: matrix.type == 'legacy'
         run: |
@@ -493,21 +508,6 @@ jobs:
             sudo port -f uninstall icu || true
             sudo port clean --all icu
             echo "✅ Clean complete"
-          EOF
-
-      - name: Install dependencies (legacy)
-        if: matrix.type == 'legacy'
-        run: |
-          ssh -F ~/.ssh/config ${{ matrix.platform }} bash <<'EOF'
-            set -e
-            set -o pipefail
-            set -x
-            if [ -f ~/.profile ]; then
-              source ~/.profile
-            fi
-            cd /Users/blake/code/blakeports
-            ./scripts/install-deps icu
-            echo "✅ Dependencies installed"
           EOF
 
       - name: Build port (legacy)
