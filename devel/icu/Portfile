@@ -134,8 +134,10 @@ if {${subport} eq ${name} || ${subport} eq "${name}-lx"} {
             }
 
             # add_deps no skips the libgcc dependency base adds for
-            # macports-clang, so clang-11-bootstrap finds no libstdc++
-            if {${configure.cxx_stdlib} eq "macports-libstdc++"} {
+            # macports-clang. 10.5 has only the gcc 4.0 C++ headers, which lack
+            # <memory>, so clang-11-bootstrap needs libgcc's libstdc++ there.
+            # 10.6 and later ship the 4.2.1 headers.
+            if {${os.major} < 10 && ${configure.cxx_stdlib} eq "macports-libstdc++"} {
                 depends_lib-append path:lib/libgcc/libgcc_s.1.dylib:libgcc
             }
         }
