@@ -95,6 +95,20 @@ else
     echo "    Added."
 fi
 
+# ── macports.conf: fetch_threads ─────────────────────────────────────────────
+# MacPorts 2.12.7 starts archive downloads on a pool of reused worker threads,
+# and cancelling a finished job can hit the job that took over its thread. The
+# stale cancel aborts a large download with "Transfer cancelled", and base then
+# builds the port from source (hours on Leopard). 0 turns the background
+# prefetch off so archives download in the main thread.
+echo "==> Updating ${MACPORTS_CONF} (fetch_threads)"
+if grep -qE "^fetch_threads[[:space:]]" "$MACPORTS_CONF" 2>/dev/null; then
+    echo "    Already present."
+else
+    printf '\n# Download archives in the main thread (see tools/macports-cache/CLAUDE.md).\nfetch_threads       0\n' >> "$MACPORTS_CONF"
+    echo "    Added."
+fi
+
 echo ""
 echo "Done. MacPorts will now try ${CACHE_URL} before building from source."
 echo ""
