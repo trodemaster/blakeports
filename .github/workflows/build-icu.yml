@@ -539,6 +539,14 @@ jobs:
             source ./setupenv.bash
             port installed icu
             ls -la ${prefix}/lib/icu* || echo "icu libraries not found"
+            # Diagnostic: was icu compiled here, or unpacked from an archive?
+            # Freshly built files carry today's mtime; an unpacked archive keeps
+            # the mtimes of whoever built it.
+            echo "--- icu provenance"
+            date
+            stat -f "%Sm %N" -t "%Y-%m-%d %H:%M:%S" /opt/local/lib/libicuuc.*.*.dylib /opt/local/include/unicode/platform.h /opt/local/var/macports/software/icu/*.tbz2 || true
+            echo "select name,version,revision,datetime(date,'unixepoch','localtime') from ports where name='icu';" | /opt/local/bin/sqlite3 -readonly /opt/local/var/macports/registry/registry.db || true
+            ls -d /opt/local/var/macports/distfiles/icu /opt/local/var/macports/build/*icu* 2>&1 || true
             echo "✅ Installation verified"
           EOF
 
