@@ -267,7 +267,7 @@ jobs:
         if: matrix.type == 'modern'
         run: |
           source ./setupenv.bash
-          sudo port -v install icu
+          sudo port -sv install icu
 
       - name: Verify installation
         if: matrix.type == 'modern'
@@ -522,7 +522,7 @@ jobs:
             fi
             cd /Users/blake/code/blakeports
             source ./setupenv.bash
-            sudo port -v install icu
+            sudo port -sv install icu
             echo "✅ Build complete"
           EOF
 
