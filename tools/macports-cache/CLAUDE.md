@@ -20,7 +20,7 @@ Where `archive_filename` encodes the platform:
 {portname}-{version}_{revision}+{variants}.darwin_{os_major}.{arch}
 ```
 
-It fetches both files, verifies the signature with a key from `pubkeys.conf`, then installs. If fetching or verification fails it falls back to building from source (unless `-b` binary-only mode is set).
+It fetches the archive and a signature (`.sig`, then `.rmd160`), verifies the signature with a key from `pubkeys.conf` (`.pub` keys for `.sig`, `.pem` keys for `.rmd160`), then installs. If fetching or verification fails it falls back to building from source (unless `-b` binary-only mode is set).
 
 The filter in `portarchivefetch.tcl` also checks `cxx_stdlib` and `delete_la_files` fields in `archive_sites.conf` against the local MacPorts config before even attempting to fetch — these must match or the server is silently skipped. `setup-client.sh` detects the Darwin kernel version and writes the correct values.
 
@@ -37,6 +37,35 @@ Do not change this signing approach without re-running the compatibility test:
 # Sign with Go-generated key, verify with MacPorts openssl
 /opt/local/bin/openssl dgst -ripemd160 -verify pubkey.pem \
     -signature archive.tbz2.rmd160 archive.tbz2
+```
+
+### signify `.sig` — needed for build-dependency planning
+
+The signer also writes a signify (Ed25519) `.sig` next to every `.rmd160`, with a
+second key published as `signify.pub`. Fetching would work with `.rmd160` alone, but
+before planning a port's build dependencies MacPorts checks `archive_site_local` for
+the archive **and a signature of the official mirrors' type**, which is `.sig`
+(`portutil.tcl` `_eval_archive_available`, `archive_sigtype(macports_archives) sig` in
+`_resources/port1.0/fetch/archive_sites.tcl`). With only `.rmd160` on the server, every
+cached archive counted as unavailable: on a clean Leopard VM all 6 checks in one run came
+back `0 0`, so every dependency's whole build toolchain was planned, and every port got
+a distfile prefetch next to its archive fetch.
+
+Those prefetches also set off a base bug: when the archive arrives, base cancels the
+distfile job, and if that job had already finished the cancel goes to its old worker
+thread and aborts whatever download that thread is doing now ("Transfer cancelled",
+then a silent "Archive not available, building locally"). Traced on Leopard: the
+cmake distfile job's cancel killed the 167 MB `gcc10-bootstrap` archive download.
+Serving `.sig` removes the prefetches, so this no longer happens to us.
+
+Format (OpenBSD signify, what `signify -V -p key.pub -x file.sig -m file` expects):
+two lines, `untrusted comment: ...` then base64 of `"Ed" || keynum[8] || data`, where
+data is the 32-byte public key or the 64-byte Ed25519 signature of the whole archive
+(not a digest, so the signer reads each archive into memory). The private side is
+`.signify.key` in `-key-dir` (base64 of keynum || seed, mode 0600). That's this server's
+own format, not signify's passphrase-protected one. Test after any change:
+```bash
+/opt/local/libexec/macports/bin/signify -V -p signify.pub -x archive.tbz2.sig -m archive.tbz2
 ```
 
 ## File structure
@@ -61,10 +90,13 @@ The cache directory layout on disk:
 ```
 CACHE_DIR/
 ├── .privkey.pem              RSA-2048 private key, mode 0600
+├── .signify.key              signify (Ed25519) private key, mode 0600
 ├── pubkey.pem                RSA public key, served at GET /pubkey.pem
+├── signify.pub               signify public key, served at GET /signify.pub
 └── {subport}/
     ├── {imagename}.tbz2
-    └── {imagename}.tbz2.rmd160
+    ├── {imagename}.tbz2.rmd160
+    └── {imagename}.tbz2.sig
 ```
 
 ## Key design decisions
@@ -73,11 +105,11 @@ CACHE_DIR/
 - No authentication logic in the server
 - `submit-archive.sh` needs only `bash`, `cp`, `cmp` — runs on Mac OS X 10.5
 - Server auto-signs newly-arrived archives every 15 seconds (configurable via `-sign-interval`)
-- Additionally signs on-demand if a `.rmd160` GET arrives before the scan fires
+- Additionally signs on-demand if a `.rmd160` or `.sig` GET arrives before the scan fires (HTTP mode only)
 
 **Single file server, no routing logic.** `http.ServeFile` handles GET requests at `/{portname}/{filename}`. MacPorts constructs the exact URL it needs based on its own platform — the server just has to have the file.
 
-**RSA keypair generated on first run.** Stored in the cache directory (`.privkey.pem` mode 0600, `pubkey.pem` world-readable). If the cache directory is wiped, a new keypair is generated and all client machines need to re-run `setup-client.sh`.
+**Keypairs generated on first run.** The RSA and signify private keys live in `-key-dir` (default the cache directory; `.privkey.pem` and `.signify.key`, mode 0600); `pubkey.pem` and `signify.pub` are (re)written into the cache directory on every start. If a private key is lost, a new one is generated and all client machines need to re-run `setup-client.sh`.
 
 **Multiple platforms coexist naturally.** The platform is encoded in the filename. No routing or platform-detection logic in the server.
 
@@ -86,12 +118,13 @@ CACHE_DIR/
 ```
 -port int           HTTP listen port (default 8030); 0 = sign only, no HTTP
 -dir string         Cache directory, also the file-share root
--key-dir string     Where .privkey.pem lives (default: -dir); pubkey.pem is always written to -dir
+-key-dir string     Where .privkey.pem and .signify.key live (default: -dir); pubkey.pem and signify.pub are always written to -dir
 -sign-interval dur  How often to scan for unsigned archives (default 15s)
 ```
 
 The signer skips archives modified within the last interval (still arriving over the
-share) and re-signs any archive newer than its `.rmd160` (replaced on resubmit).
+share) and re-signs any archive newer than its `.rmd160` or `.sig`, or missing either
+(replaced on resubmit; the first start after adding `.sig` signs the whole cache).
 
 ## Production deployment: packages.jibb.tv on darkstar
 
@@ -222,13 +255,13 @@ Runs on each MacPorts machine that should consume from the cache. Every CI job r
 (modern and legacy) through `scripts/preparemacports`, so all runners are clients; the
 legacy cleanup keeps only curl and git and relies on the cache for the toolchain. It:
 
-1. Downloads `pubkey.pem` from the server (default `http://packages.jibb.tv`) and saves it to `/opt/local/share/macports/jibb_archives-pubkey.pem`
-2. Appends that path to `/opt/local/etc/macports/pubkeys.conf`
+1. Downloads `pubkey.pem` from the server (default `http://packages.jibb.tv`) to `/opt/local/share/macports/jibb_archives-pubkey.pem`, and `signify.pub` to `/opt/local/share/macports/jibb_archives.pub` (a missing `signify.pub` is a warning, not an error)
+2. Appends both paths to `/opt/local/etc/macports/pubkeys.conf`
 3. Appends an entry to `/opt/local/etc/macports/archive_sites.conf` with:
    - The server URL
    - `cxx_stdlib libc++` or `libstdc++` depending on Darwin major version (threshold: 13)
    - `delete_la_files yes` or `no` depending on Darwin major version (threshold: 13)
-4. Adds `archive_site_local <server URL>/` to `/opt/local/etc/macports/macports.conf` (left alone if already set to another value). Base decides whether to skip a port's build-time dependencies by looking for its archive on the official mirror only (`_eval_archive_available` in `portutil.tcl`); `archive_sites.conf` entries are not consulted until the fetch. Without this setting a port served only by the cache (all of Leopard) still has its whole build toolchain planned and installed before the cached archive is fetched: `libgcc15` on a clean 10.5 VM planned texinfo, autoconf, `ld64-127` and `llvm-3.3` even though `libgcc15-15.3.0_0+stdlib_flag.darwin_9.i386` was in the cache.
+4. Adds `archive_site_local <server URL>/` to `/opt/local/etc/macports/macports.conf` (left alone if already set to another value). Base decides whether to skip a port's build-time dependencies by looking for its archive on `archive_site_local` and the official mirror only (`_eval_archive_available` in `portutil.tcl`); `archive_sites.conf` entries are not consulted until the fetch. Without this a port served only by the cache (all of Leopard) still has its whole build toolchain planned and installed before the cached archive is fetched: `libgcc15` on a clean 10.5 VM planned texinfo, autoconf, `ld64-127` and `llvm-3.3` even though `libgcc15-15.3.0_0+stdlib_flag.darwin_9.i386` was in the cache. The check asks for a `.sig`, so this only works once the server publishes them (see "signify `.sig`" above). Before that it had no effect.
 
 ## Common tasks
 

@@ -25,6 +25,7 @@ MACPORTS_ETC="${MACPORTS_ETC:-/opt/local/etc/macports}"
 MACPORTS_CONF="${MACPORTS_CONF:-${MACPORTS_ETC}/macports.conf}"
 MACPORTS_SHARE="${MACPORTS_SHARE:-/opt/local/share/macports}"
 PUBKEY_PATH="${MACPORTS_SHARE}/${SITE_NAME}-pubkey.pem"
+SIGNIFY_PUBKEY_PATH="${MACPORTS_SHARE}/${SITE_NAME}.pub"
 
 # ── detect macOS version → cxx_stdlib and delete_la_files ────────────────────
 # These must match the local MacPorts installation or filter_sites rejects the
@@ -49,15 +50,32 @@ curl -fsSL "${CACHE_URL}/pubkey.pem" -o "$PUBKEY_PATH"
 grep -q 'BEGIN PUBLIC KEY' "$PUBKEY_PATH" || { echo "error: ${CACHE_URL}/pubkey.pem is not a PEM public key" >&2; exit 1; }
 echo "    Saved to ${PUBKEY_PATH}"
 
+# The signify key verifies the cache's .sig files. MacPorts looks for a .sig
+# (the official mirrors' type) when it checks archive_site_local, below.
+# Without it, fetching still works through the .rmd160, so a server that
+# doesn't publish one yet only gets a warning.
+echo "==> Fetching signify public key from ${CACHE_URL}/signify.pub"
+if curl -fsSL "${CACHE_URL}/signify.pub" -o "${SIGNIFY_PUBKEY_PATH}.tmp" \
+    && head -1 "${SIGNIFY_PUBKEY_PATH}.tmp" | grep -q '^untrusted comment: '; then
+    mv "${SIGNIFY_PUBKEY_PATH}.tmp" "$SIGNIFY_PUBKEY_PATH"
+    echo "    Saved to ${SIGNIFY_PUBKEY_PATH}"
+else
+    rm -f "${SIGNIFY_PUBKEY_PATH}.tmp"
+    echo "    warning: no signify key at ${CACHE_URL}/signify.pub; build deps will be planned as if nothing were cached." >&2
+fi
+
 # ── pubkeys.conf ─────────────────────────────────────────────────────────────
 PUBKEYS_CONF="${MACPORTS_ETC}/pubkeys.conf"
 echo "==> Updating ${PUBKEYS_CONF}"
-if grep -qF "$PUBKEY_PATH" "$PUBKEYS_CONF" 2>/dev/null; then
-    echo "    Already present."
-else
-    echo "$PUBKEY_PATH" >> "$PUBKEYS_CONF"
-    echo "    Added."
-fi
+for key in "$PUBKEY_PATH" "$SIGNIFY_PUBKEY_PATH"; do
+    [ -f "$key" ] || continue
+    if grep -qF "$key" "$PUBKEYS_CONF" 2>/dev/null; then
+        echo "    Already present: $key"
+    else
+        echo "$key" >> "$PUBKEYS_CONF"
+        echo "    Added: $key"
+    fi
+done
 
 # ── archive_sites.conf ───────────────────────────────────────────────────────
 # Each client gets an entry matching its own cxx_stdlib/delete_la_files.
@@ -84,7 +102,9 @@ fi
 # _eval_archive_available); archive_sites.conf entries are not consulted until
 # the fetch. Without this a port served only by the cache (all of Leopard)
 # still has its whole build toolchain planned and installed first.
-# archive_site_local is checked ahead of the official mirror.
+# archive_site_local is checked ahead of the official mirror, for the archive
+# and a .sig (the official mirrors' signature type, not .rmd160), so it only
+# works with a server that publishes .sig files and the signify key above.
 echo "==> Updating ${MACPORTS_CONF}"
 if grep -qE "^archive_site_local[[:space:]].*${CACHE_URL}/?([[:space:]]|\$)" "$MACPORTS_CONF" 2>/dev/null; then
     echo "    Already present."

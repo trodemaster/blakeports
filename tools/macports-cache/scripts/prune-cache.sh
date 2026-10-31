@@ -2,7 +2,7 @@
 # prune-cache.sh — delete archives the packages cache no longer needs.
 #
 # Runs against the mounted cache share (the "Prune cache" workflow mounts it
-# over SMB on a modern runner). An archive is deleted, with its .rmd160, for
+# over SMB on a modern runner). An archive is deleted, with its .rmd160 and .sig, for
 # the first of these reasons that applies:
 #
 #   blakeports  its port is in the blakeports tree (PortIndex). The cache is
@@ -14,7 +14,7 @@
 #   partial     a *.part left by an interrupted copy, older than a day.
 #
 # Port directories left empty are removed. Nothing else on the share (the
-# signer's pubkey.pem and .privkey.pem) is touched.
+# signer's pubkey.pem, signify.pub and .privkey.pem) is touched.
 #
 # There is deliberately no "older version" rule: legacy VMs pin older versions,
 # so several versions of one archive are in use at once (see CLAUDE.md,
@@ -87,10 +87,10 @@ prune() {   # prune reason bytes path...
 while read -r bytes path; do
     port="${path%%/*}"
     case "$DENY" in
-        *" $port "*) prune blakeports "$bytes" "$path" "$path.rmd160"; continue ;;
+        *" $port "*) prune blakeports "$bytes" "$path" "$path.rmd160" "$path.sig"; continue ;;
     esac
     if "$HERE/on-mirror.sh" "$path" </dev/null; then
-        prune mirrored "$bytes" "$path" "$path.rmd160"
+        prune mirrored "$bytes" "$path" "$path.rmd160" "$path.sig"
         continue
     fi
     kept=$((kept + 1))

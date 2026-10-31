@@ -72,7 +72,7 @@ sudo make setup-client HOST=mymac.local
 sudo ./scripts/setup-client.sh mymac.local 8030
 ```
 
-This downloads the server's public key, adds it to `pubkeys.conf`, and writes the right entry into `archive_sites.conf` (including the correct `cxx_stdlib` and `delete_la_files` values for the client's OS version).
+This downloads the server's two public keys (RSA and signify), adds them to `pubkeys.conf`, and writes the right entry into `archive_sites.conf` (including the correct `cxx_stdlib` and `delete_la_files` values for the client's OS version).
 
 ### 4. Submit builds from build machines
 
@@ -138,10 +138,13 @@ make setup-client   Configure a client machine  [HOST=xxx] [PORT=8030]
 ```
 cache-dir/
 ├── .privkey.pem          RSA private key (mode 0600, never leave this machine)
+├── .signify.key          signify private key (mode 0600, never leave this machine)
 ├── pubkey.pem            RSA public key  (served at GET /pubkey.pem)
+├── signify.pub           signify public key (served at GET /signify.pub)
 └── {portname}/
     ├── {portname}-{version}_{rev}+{variants}.darwin_{os}.{arch}.tbz2
-    └── {portname}-{version}_{rev}+{variants}.darwin_{os}.{arch}.tbz2.rmd160
+    ├── {portname}-{version}_{rev}+{variants}.darwin_{os}.{arch}.tbz2.rmd160
+    └── {portname}-{version}_{rev}+{variants}.darwin_{os}.{arch}.tbz2.sig
 ```
 
 ## HTTP endpoints
@@ -149,18 +152,22 @@ cache-dir/
 | Endpoint | Description |
 |---|---|
 | `GET /{portname}/{archive}.tbz2` | Serve a cached archive |
-| `GET /{portname}/{archive}.tbz2.rmd160` | Serve the signature (generated on-demand if missing) |
+| `GET /{portname}/{archive}.tbz2.rmd160` | Serve the RSA signature (generated on-demand if missing) |
+| `GET /{portname}/{archive}.tbz2.sig` | Serve the signify signature (generated on-demand if missing) |
 | `GET /pubkey.pem` | Server's RSA public key for client setup |
+| `GET /signify.pub` | Server's signify public key for client setup |
 | `GET /status` | Archive count, total size, cache path |
 
 ## Signing
 
-MacPorts verifies every downloaded archive against a signature file (`.rmd160`) using RSA/RIPEMD-160 before installing. The server generates its own keypair on first run and signs archives automatically. Clients add the server's public key to `/opt/local/etc/macports/pubkeys.conf`.
+MacPorts verifies every downloaded archive against a signature file before installing: `.rmd160` (RSA/RIPEMD-160) or `.sig` (signify, Ed25519, what the official mirrors use). The server generates a keypair of each kind on first run and writes both signatures for every archive. Clients add both public keys to `/opt/local/etc/macports/pubkeys.conf`.
 
-Signing is compatible with the OpenSSL command MacPorts documents:
+Both are needed: with `archive_site_local` pointing at the cache, MacPorts decides whether to skip a port's build dependencies by looking there for the archive and a `.sig`. See CLAUDE.md, "signify `.sig`".
+
+Both verify with the commands MacPorts uses:
 ```bash
-openssl dgst -ripemd160 -sign privkey.pem -out archive.tbz2.rmd160 archive.tbz2
 openssl dgst -ripemd160 -verify pubkey.pem -signature archive.tbz2.rmd160 archive.tbz2
+signify -V -p signify.pub -x archive.tbz2.sig -m archive.tbz2
 ```
 
 ## Multi-architecture / multi-OS
