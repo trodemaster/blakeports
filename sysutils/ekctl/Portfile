@@ -1,0 +1,65 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           github 1.0
+
+github.setup        schappim ekctl 1.9.0 v
+github.tarball_from archive
+revision            0
+
+categories          sysutils
+platforms           {darwin >= 22}
+license             MIT
+maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+
+description         Command line tool for Calendar events and Reminders
+long_description    ekctl is a native macOS command line tool that manages \
+                    Calendar events and Reminders through EventKit, with \
+                    JSON, CSV or plain-text output suitable for scripting.
+
+checksums           rmd160  f841494347cddf57171fd3e9fb39f66858c84686 \
+                    sha256  9930297868f192c15d39a52315221683cb923dd497cf4861009471f725138422 \
+                    size    125462
+
+use_configure       no
+use_xcode           yes
+
+# ekctl depends on Apple's swift-argument-parser, which has no MacPorts
+# port; SwiftPM fetches it from GitHub during the build step (same approach
+# as sysutils/vd_agent).
+build.cmd           swift
+build.target        build
+build.args          --configuration release \
+                    --arch ${configure.build_arch} \
+                    --disable-sandbox
+
+test.cmd            swift
+test.target         test
+test.args           --disable-sandbox
+
+variant tests description {Run the test suite} {
+    test.run        yes
+}
+
+destroot {
+    # EventKit needs the calendar and reminders entitlements, which an
+    # ad-hoc signature can carry.
+    system "codesign --force --sign - \
+        --entitlements ${worksrcpath}/ekctl.entitlements \
+        ${worksrcpath}/.build/release/ekctl"
+
+    xinstall -m 0755 ${worksrcpath}/.build/release/ekctl \
+        ${destroot}${prefix}/bin/ekctl
+
+    set docdir ${destroot}${prefix}/share/doc/${name}
+    xinstall -d ${docdir}
+    xinstall -m 0644 ${worksrcpath}/README.md ${docdir}
+}
+
+notes "
+The first run prompts for Calendar and Reminders access. Grant it with:
+   ekctl list calendars
+
+If the prompt does not appear, enable ekctl under System Settings >
+Privacy & Security > Calendars and Reminders.
+"

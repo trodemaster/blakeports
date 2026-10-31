@@ -22,6 +22,7 @@ grep -rn --include=Portfile -E '^platforms .*>=' . | grep -v _resources
 | [vd_agent](sysutils/vd_agent/Portfile) | macOS 11 Big Sur | `>= 20` | `5d147a1` | Not recorded; the port also requires Xcode 15 or later |
 | [netatalk_client](net/netatalk_client/Portfile) | macOS 12 Monterey | `>= 21` | `7f979a5` | Matches macFUSE 5.x's own minimum |
 | [SwiftKHD](sysutils/SwiftKHD/Portfile) | macOS 13 Ventura | `>= 22` | `7400e96` | Upstream requires macOS 13 or later |
+| [ekctl](sysutils/ekctl/Portfile) | macOS 13 Ventura | `>= 22` | this commit | Upstream requires macOS 13 or later |
 | [omlx-app](aqua/omlx-app/Portfile) | macOS 15 Sequoia | `>= 24` | `78b72ad` | Requires macOS 15; a `pre-fetch` check also enforces it |
 
 ## Legacy cutoffs in detail
