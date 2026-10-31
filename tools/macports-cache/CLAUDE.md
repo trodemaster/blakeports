@@ -228,6 +228,7 @@ legacy cleanup keeps only curl and git and relies on the cache for the toolchain
    - The server URL
    - `cxx_stdlib libc++` or `libstdc++` depending on Darwin major version (threshold: 13)
    - `delete_la_files yes` or `no` depending on Darwin major version (threshold: 13)
+4. Adds `archive_site_local <server URL>/` to `/opt/local/etc/macports/macports.conf` (left alone if already set to another value). Base decides whether to skip a port's build-time dependencies by looking for its archive on the official mirror only (`_eval_archive_available` in `portutil.tcl`); `archive_sites.conf` entries are not consulted until the fetch. Without this setting a port served only by the cache (all of Leopard) still has its whole build toolchain planned and installed before the cached archive is fetched: `libgcc15` on a clean 10.5 VM planned texinfo, autoconf, `ld64-127` and `llvm-3.3` even though `libgcc15-15.3.0_0+stdlib_flag.darwin_9.i386` was in the cache.
 
 ## Common tasks
 

@@ -22,6 +22,7 @@ else
 fi
 SITE_NAME="${SITE_NAME:-jibb_archives}"
 MACPORTS_ETC="${MACPORTS_ETC:-/opt/local/etc/macports}"
+MACPORTS_CONF="${MACPORTS_CONF:-${MACPORTS_ETC}/macports.conf}"
 MACPORTS_SHARE="${MACPORTS_SHARE:-/opt/local/share/macports}"
 PUBKEY_PATH="${MACPORTS_SHARE}/${SITE_NAME}-pubkey.pem"
 
@@ -74,6 +75,23 @@ urls                ${CACHE_URL}/
 cxx_stdlib          ${CXX_STDLIB}
 delete_la_files     ${DELETE_LA}
 EOF
+    echo "    Added."
+fi
+
+# ── macports.conf: archive_site_local ────────────────────────────────────────
+# MacPorts decides whether to skip a port's build-time dependencies by asking
+# whether its archive exists on the official mirror only (portutil.tcl,
+# _eval_archive_available); archive_sites.conf entries are not consulted until
+# the fetch. Without this a port served only by the cache (all of Leopard)
+# still has its whole build toolchain planned and installed first.
+# archive_site_local is checked ahead of the official mirror.
+echo "==> Updating ${MACPORTS_CONF}"
+if grep -qE "^archive_site_local[[:space:]].*${CACHE_URL}/?([[:space:]]|\$)" "$MACPORTS_CONF" 2>/dev/null; then
+    echo "    Already present."
+elif grep -qE "^archive_site_local[[:space:]]" "$MACPORTS_CONF" 2>/dev/null; then
+    echo "    warning: archive_site_local is already set to something else; left alone." >&2
+else
+    printf '\n# Look for archives in the cache before planning a port'"'"'s build dependencies.\narchive_site_local  %s/\n' "$CACHE_URL" >> "$MACPORTS_CONF"
     echo "    Added."
 fi
 
