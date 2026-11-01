@@ -61,15 +61,27 @@ bug, so no upstream source fix is coming.
 
 Questions:
 
-- [ ] Does 3.8.11 still ICE with gcc-4.2, on ppc and on i386?
-- [ ] Which compilers does MacPorts try on 10.5 (Xcode 3.1.4) for this
-      port, in what order? Is llvm-gcc-4.2 also affected, or only Apple
-      gcc-4.2? That decides `gcc-4.2` versus `*gcc-4.2`.
-- [ ] Does the compiler it falls back to build and pass a basic check on
-      both arches?
-- [ ] Is the compiler unchanged on 10.6–10.11 and modern macOS?
-- [ ] Anything else on #74268 (ballapete's test failures with gcc15) that
-      matters for the fix?
+- [x] Does 3.8.11 still ICE with gcc-4.2? Yes, on both i386 and ppc,
+      same line (`archive_write_set_format_pax.c:682`).
+- [x] Which compilers does MacPorts try, in what order? See below. On
+      Xcode 3.1 the next after `gcc-4.2` is `llvm-gcc-4.2`.
+- [ ] Is llvm-gcc-4.2 affected? Not on i386 (builds, smoke test passes,
+      same `port test` result as gcc-4.0). ppc: running.
+- [x] Is `apple-gcc-4.2` affected? Treat as yes: #3189's reporter hit the
+      ICE "on OS X 10.5 & 10.6 with GCC 4.2"; 10.6's Xcode 3.2 gcc-4.2 is
+      build 5666.3, the same as the apple-gcc42 port.
+- [x] Is the compiler unchanged on 10.6–10.11 and modern macOS? Yes on our
+      builders (Xcode 4.2–8.2.1, CLT 26/27). Xcode 3.2 on 10.6 would move
+      from gcc-4.2 (which ICEs) to llvm-gcc-4.2.
+- [x] ballapete's gcc15 test failures on #74268? The same two tests fail on
+      i386 with both gcc-4.0 and llvm-gcc-4.2 (957 run, 2 fail:
+      `test_acl_platform_nfs4`, `test_read_disk_directory_traversals`), so
+      they are 10.5 platform issues, independent of the compiler and of
+      this fix.
+
+Candidate: `compiler.blacklist-append gcc-4.2 apple-gcc-4.2`, blacklisting
+exactly Apple's gcc-4.2 and letting base pick the next compiler, rather than
+`*gcc-4.2` (which also drops llvm-gcc-4.2) or an OS/arch condition.
 
 Compiler order (base 2.12.7, `get_apple_compilers_xcode_version`):
 Xcode 3.1 (our 10.5 VMs): `gcc-4.2 llvm-gcc-4.2 apple-gcc-4.2 gcc-4.0`;
@@ -84,5 +96,8 @@ Runs:
 |---|---|---|---|
 | [41350699595](https://github.com/trodemaster/blakeports/actions/runs/41350699595) | 10.6–10.11, 26, 27 | compiler check only, upstream and `*gcc-4.2` | Same compiler with both everywhere: 10.6 (Xcode 4.2) `macports-clang-3.7` (base already rules out llvm-gcc-4.2 and Xcode clang there), 10.7–27 `clang` |
 | [41350828016](https://github.com/trodemaster/blakeports/actions/runs/41350828016) | 10.5 i386, cleaned | upstream 3.8.11 | **Fails**: picks `gcc-4.2`; `libarchive/archive_write_set_format_pax.c:682: internal compiler error: Bus error`. With `*gcc-4.2` it would pick `gcc-4.0` |
-| [41350828016](https://github.com/trodemaster/blakeports/actions/runs/41350828016) | 10.5 ppc, cleaned | upstream 3.8.11 | running |
-| [41351520047](https://github.com/trodemaster/blakeports/actions/runs/41351520047) | 10.5 i386 | blacklist `gcc-4.2` only (picks `llvm-gcc-4.2`) | running |
+| [41350828016](https://github.com/trodemaster/blakeports/actions/runs/41350828016) | 10.5 ppc, cleaned | upstream 3.8.11 | **Fails** the same way: picks `gcc-4.2`; `archive_write_set_format_pax.c:682: internal compiler error: Bus error` |
+| [41351520047](https://github.com/trodemaster/blakeports/actions/runs/41351520047) | 10.5 i386 | blacklist `gcc-4.2` only (picks `llvm-gcc-4.2`) | Builds and installs; `llvm-gcc-4.2` compiles `archive_write_set_format_pax.c` |
+| [41351791328](https://github.com/trodemaster/blakeports/actions/runs/41351791328) | 10.5 i386 | same, plus smoke test and `port test` | Smoke test passes (pax round trip incl. a 120-char name). `port test`: 4 of 5 programs pass; `libarchive_test` fails `test_acl_platform_nfs4` (80) and `test_read_disk_directory_traversals` (3), the same tests ballapete reported failing with gcc15 on ppc in #74268 |
+| [41352472924](https://github.com/trodemaster/blakeports/actions/runs/41352472924) | 10.5 i386 | `*gcc-4.2` (picks `gcc-4.0`), smoke test and `port test` | Smoke test passes. `port test`: same as llvm-gcc-4.2: 957 tests, the same 2 fail with the same counts (80, 3) |
+| [41353225724](https://github.com/trodemaster/blakeports/actions/runs/41353225724) | 10.5 i386 and ppc | candidate `gcc-4.2 apple-gcc-4.2` (picks `llvm-gcc-4.2`), smoke test and `port test` | running |
