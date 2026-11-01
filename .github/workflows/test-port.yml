@@ -37,6 +37,16 @@ on:
         required: false
         default: true
         type: boolean
+      check:
+        description: 'Shell command run after the install, from the ports tree (e.g. a smoke test)'
+        required: false
+        default: ''
+        type: string
+      port_test:
+        description: 'Run sudo port test on the installed port'
+        required: false
+        default: false
+        type: boolean
       timeout_minutes:
         description: 'Job timeout in minutes (emulated PPC builds are slow)'
         required: false
@@ -72,6 +82,7 @@ jobs:
       MODERN: ${{ startsWith(matrix.runner, 'macOS_') }}
       PORT: ${{ inputs.port }}
       PORTFILE: ${{ inputs.portfile }}
+      CHECK: ${{ inputs.check }}
 
     steps:
       - name: Checkout repository
@@ -193,6 +204,25 @@ jobs:
             TREE=$PWD bash -c ". $RUNNER_TEMP/steps/env.sh; set -e; . $RUNNER_TEMP/steps/build.sh"
           else
             { cat "$RUNNER_TEMP/steps/env.sh"; echo "set -e"; cat "$RUNNER_TEMP/steps/build.sh"; } | ssh legacyvm "TREE=~/code/blakeports PORT=$PORT bash -s"
+          fi
+
+      - name: Check the installed port
+        if: inputs.build && inputs.check != ''
+        run: |
+          printf '%s\n' "$CHECK" > "$RUNNER_TEMP/steps/check.sh"
+          if [ "$MODERN" = true ]; then
+            TREE=$PWD bash -c ". $RUNNER_TEMP/steps/env.sh; set -ex; . $RUNNER_TEMP/steps/check.sh"
+          else
+            { cat "$RUNNER_TEMP/steps/env.sh"; echo "set -ex"; cat "$RUNNER_TEMP/steps/check.sh"; } | ssh legacyvm "TREE=~/code/blakeports PORT=$PORT bash -s"
+          fi
+
+      - name: port test
+        if: inputs.build && inputs.port_test
+        run: |
+          if [ "$MODERN" = true ]; then
+            TREE=$PWD bash -c ". $RUNNER_TEMP/steps/env.sh; sudo port -v test \"\$PORT\""
+          else
+            { cat "$RUNNER_TEMP/steps/env.sh"; echo 'sudo port -v test "$PORT"'; } | ssh legacyvm "TREE=~/code/blakeports PORT=$PORT bash -s"
           fi
 
       - name: Diagnostics
