@@ -1,0 +1,205 @@
+name: Test port
+
+# Build one port from source on chosen runners to test a Portfile change
+# against upstream's. Run it on a test branch where <category>/<port>/Portfile
+# is upstream's file verbatim and Portfile.fixed carries the change:
+#
+#   gh workflow run "Test port" --ref test/<port> -f port=<port> \
+#     -f runners="leopard, leopard-ppc" -f portfile=tree
+#
+# Every job first reports the compiler MacPorts picks with each Portfile on
+# that runner (scripts/portcompiler.tcl, no build), then builds the one chosen
+# by the portfile input. Clean the runners first (MacPorts Cleanup) for a
+# from-scratch test. Findings go in findings/.
+
+on:
+  workflow_dispatch:
+    inputs:
+      port:
+        description: 'Port to build (its directory must be <category>/<port>)'
+        required: true
+        type: string
+      runners:
+        description: 'Comma-separated runner labels (e.g. "leopard, leopard-ppc, snowleopard, macOS_26")'
+        required: true
+        default: 'leopard, leopard-ppc'
+        type: string
+      portfile:
+        description: 'Portfile to build: tree (as on the branch) or fixed (Portfile.fixed)'
+        required: true
+        default: tree
+        type: choice
+        options:
+          - tree
+          - fixed
+      build:
+        description: 'Build the port (off: only report the compiler each Portfile picks)'
+        required: false
+        default: true
+        type: boolean
+      timeout_minutes:
+        description: 'Job timeout in minutes (emulated PPC builds are slow)'
+        required: false
+        default: '1440'
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      runners: ${{ steps.set.outputs.runners }}
+    steps:
+      - id: set
+        env:
+          RUNNERS: ${{ inputs.runners }}
+        run: |
+          echo "runners=$(echo "$RUNNERS" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | grep -v '^$' | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+  test-port:
+    needs: matrix
+    name: test-port ${{ inputs.port }} (${{ matrix.runner }}, ${{ inputs.portfile }})
+    runs-on: [self-hosted, "${{ matrix.runner }}"]
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    strategy:
+      matrix:
+        runner: ${{ fromJSON(needs.matrix.outputs.runners) }}
+      fail-fast: false
+    env:
+      MODERN: ${{ startsWith(matrix.runner, 'macOS_') }}
+      PORT: ${{ inputs.port }}
+      PORTFILE: ${{ inputs.portfile }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # The compiler check reads both Portfiles from copies outside the ports
+      # tree (inside it, portindex would index them as extra ports). Then the
+      # tree gets the Portfile under test, and Portfile.fixed is removed.
+      - name: Prepare Portfiles
+        run: |
+          set -e
+          dirs=$(ls -d */"$PORT" 2>/dev/null | grep -v '^_' || true)
+          [ "$(echo "$dirs" | grep -c .)" -eq 1 ] || { echo "error: need exactly one <category>/$PORT, found: $dirs" >&2; exit 1; }
+          echo "PORTDIR=$dirs" >> "$GITHUB_ENV"
+          EVAL="$RUNNER_TEMP/test-eval"
+          rm -rf "$EVAL"; mkdir -p "$EVAL"
+          cp -R "$dirs" "$EVAL/tree"
+          rm -f "$EVAL/tree/Portfile.fixed"
+          if [ -f "$dirs/Portfile.fixed" ]; then
+            cp -R "$dirs" "$EVAL/fixed"
+            mv -f "$EVAL/fixed/Portfile.fixed" "$EVAL/fixed/Portfile"
+            echo "--- Portfile.fixed vs Portfile"
+            diff -u "$dirs/Portfile" "$dirs/Portfile.fixed" || true
+          elif [ "$PORTFILE" = fixed ]; then
+            echo "error: portfile=fixed but $dirs/Portfile.fixed doesn't exist" >&2; exit 1
+          fi
+          [ "$PORTFILE" = fixed ] && cp "$dirs/Portfile.fixed" "$dirs/Portfile"
+          rm -f "$dirs/Portfile.fixed"
+          echo "TEST port=$PORT dir=$dirs portfile=$PORTFILE"
+          echo "EVAL=$EVAL" >> "$GITHUB_ENV"
+
+      - name: Setup MacPorts (modern)
+        if: env.MODERN == 'true'
+        run: ./scripts/installmacports
+
+      # The runner container's entrypoint defines the `legacyvm` ssh alias for
+      # its VM. The VMs' sources.conf points at ~/code/blakeports.
+      - name: Copy ports tree to VM (legacy)
+        if: env.MODERN != 'true'
+        run: |
+          set -e
+          tar cf - --exclude=.git . | ssh legacyvm '
+            set -e
+            rm -rf ~/code/blakeports.new
+            mkdir -p ~/code/blakeports.new
+            tar xf - -C ~/code/blakeports.new
+            rm -rf ~/code/blakeports
+            mv ~/code/blakeports.new ~/code/blakeports
+          '
+          tar cf - -C "$EVAL" . | ssh legacyvm 'rm -rf ~/code/test-eval && mkdir -p ~/code/test-eval && tar xf - -C ~/code/test-eval'
+
+      # Each step below runs the same script here (modern) or on the VM (legacy).
+      - name: Write step scripts
+        run: |
+          mkdir -p "$RUNNER_TEMP/steps"
+          cat > "$RUNNER_TEMP/steps/env.sh" <<'EOF'
+          [ -f ~/.profile ] && . ~/.profile
+          cd "$TREE"
+          . ./setupenv.bash
+          EOF
+          cat > "$RUNNER_TEMP/steps/sysinfo.sh" <<'EOF'
+          sw_vers
+          echo "Architecture: $(uname -m)"
+          xcodebuild -version 2>/dev/null | head -2 || echo "Xcode: none"
+          pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | grep version || true
+          port version
+          EOF
+          cat > "$RUNNER_TEMP/steps/compiler.sh" <<'EOF'
+          for d in "$EVALDIR"/*; do
+            echo "TEST-COMPILER $(basename "$d")"
+            port-tclsh ./scripts/portcompiler.tcl "$d"
+          done
+          EOF
+          cat > "$RUNNER_TEMP/steps/build.sh" <<'EOF'
+          set -o pipefail
+          ./scripts/install-deps "$PORT"
+          sudo port -f uninstall "$PORT" || true
+          sudo port clean --all "$PORT" || true
+          sudo port -v -s install "$PORT"
+          EOF
+          cat > "$RUNNER_TEMP/steps/diag.sh" <<'EOF'
+          echo "--- installed"
+          port -q installed "$PORT" || true
+          f=$(port logfile "$PORT" 2>/dev/null)
+          if [ -n "$f" ] && [ -f "$f" ]; then
+            echo "--- $f"
+            grep -n -E "internal compiler error|Bus error|error:|Error: " "$f" | head -40
+          else
+            echo "--- no log left for $PORT (removed after a successful install)"
+          fi
+          EOF
+
+      - name: System information
+        run: |
+          if [ "$MODERN" = true ]; then
+            TREE=$PWD bash -c ". $RUNNER_TEMP/steps/env.sh; . $RUNNER_TEMP/steps/sysinfo.sh"
+          else
+            { cat "$RUNNER_TEMP/steps/env.sh" "$RUNNER_TEMP/steps/sysinfo.sh"; } | ssh legacyvm 'TREE=~/code/blakeports bash -s'
+          fi
+
+      - name: Prepare MacPorts (legacy)
+        if: env.MODERN != 'true'
+        run: |
+          { cat "$RUNNER_TEMP/steps/env.sh"; echo ./scripts/preparemacports; } | ssh legacyvm 'TREE=~/code/blakeports bash -s'
+
+      - name: Compiler each Portfile picks
+        run: |
+          if [ "$MODERN" = true ]; then
+            TREE=$PWD EVALDIR=$EVAL bash -c ". $RUNNER_TEMP/steps/env.sh; . $RUNNER_TEMP/steps/compiler.sh"
+          else
+            { cat "$RUNNER_TEMP/steps/env.sh" "$RUNNER_TEMP/steps/compiler.sh"; } | ssh legacyvm 'TREE=~/code/blakeports EVALDIR=~/code/test-eval bash -s'
+          fi
+
+      - name: Build from source
+        if: inputs.build
+        run: |
+          set -o pipefail
+          if [ "$MODERN" = true ]; then
+            TREE=$PWD bash -c ". $RUNNER_TEMP/steps/env.sh; set -e; . $RUNNER_TEMP/steps/build.sh"
+          else
+            { cat "$RUNNER_TEMP/steps/env.sh"; echo "set -e"; cat "$RUNNER_TEMP/steps/build.sh"; } | ssh legacyvm "TREE=~/code/blakeports PORT=$PORT bash -s"
+          fi
+
+      - name: Diagnostics
+        if: always() && inputs.build
+        run: |
+          if [ "$MODERN" = true ]; then
+            TREE=$PWD bash -c ". $RUNNER_TEMP/steps/env.sh; . $RUNNER_TEMP/steps/diag.sh"
+          else
+            { cat "$RUNNER_TEMP/steps/env.sh" "$RUNNER_TEMP/steps/diag.sh"; } | ssh legacyvm "TREE=~/code/blakeports PORT=$PORT bash -s"
+          fi
