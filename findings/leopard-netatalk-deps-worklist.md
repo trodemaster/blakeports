@@ -42,7 +42,7 @@ Tooling:
 | # | Port | blakeports fix | Arch (as found) | Trac | Maintainer | Status |
 |---|---|---|---|---|---|---|
 | 0 | icu | depend on libgcc under `macports-libstdc++` | i386 | none | mohd-akram | PR [#36312](https://github.com/macports/macports-ports/pull/36312) open |
-| 1 | libarchive | `compiler.blacklist-append *gcc-4.2` (ICE in `archive_write_pax_header`) | ppc, i386 | [#74145](https://trac.macports.org/ticket/74145), [#74268](https://trac.macports.org/ticket/74268) open | tobypeterson | PR [#36316](https://github.com/macports/macports-ports/pull/36316) open ([findings](libarchive-gcc42-ice.md)) |
+| 1 | libarchive | `compiler.blacklist-append gcc-4.2 apple-gcc-4.2` (ICE in `archive_write_pax_header`; was `*gcc-4.2`) | ppc, i386 | [#74145](https://trac.macports.org/ticket/74145), [#74268](https://trac.macports.org/ticket/74268) open | tobypeterson | PR [#36316](https://github.com/macports/macports-ports/pull/36316) open ([findings](libarchive-gcc42-ice.md)) |
 | 2 | libevent | patch: `#pragma GCC diagnostic` only for gcc ≥ 12 | ppc (i386 untested) | [#74414](https://trac.macports.org/ticket/74414) open | jerryyhom | to do |
 | 3 | libgcrypt | widen `gcc-4.2` blacklist to `*gcc-4.2` (llvm-gcc-4.2 fails on McEliece asm) | i386 | none | Schamschula | to do |
 | 4 | python314 | preset `-msse`/`-mavx2` checks to no on 10.5 (`_hmac` needs `posix_memalign`) | 10.5 | [#73578](https://trac.macports.org/ticket/73578) closed (`_blake2`, same family) | jmroot | to do |
@@ -102,7 +102,6 @@ Runs:
 | [41352472924](https://github.com/trodemaster/blakeports/actions/runs/41352472924) | 10.5 i386 | `*gcc-4.2` (picks `gcc-4.0`), smoke test and `port test` | Smoke test passes. `port test`: same as llvm-gcc-4.2: 957 tests, the same 2 fail with the same counts (80, 3) |
 | [41353225724](https://github.com/trodemaster/blakeports/actions/runs/41353225724) | 10.5 i386 and ppc | candidate `gcc-4.2 apple-gcc-4.2` (picks `llvm-gcc-4.2`), smoke test and `port test` | i386: builds, smoke test passes, `port test` 957 run / same 2 fail (80, 3). ppc job cancelled by the runner's SSH health check (fixed in actions_runners a8354f4) |
 | [41353357546](https://github.com/trodemaster/blakeports/actions/runs/41353357546) | 10.5 ppc | candidate, retry | Builds with `llvm-gcc-4.2` (4 min), smoke test passes, `port test` 957 run / same 2 fail (80, 3) |
-
 | [41357335230](https://github.com/trodemaster/blakeports/actions/runs/41357335230) | all 11 builders, cleaned | candidate | All build and pass the smoke test; only 10.5 changes compiler (`gcc-4.2` → `llvm-gcc-4.2`) |
 
 Result: [libarchive-gcc42-ice.md](libarchive-gcc42-ice.md). The same ICE was

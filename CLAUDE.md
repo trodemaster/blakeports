@@ -48,6 +48,41 @@ blakeports/
 | `findings/` | Write-ups of CI investigations (evidence and conclusions); index in `findings/README.md` |
 | `PLATFORM_CUTOFFS.md` | Ports with a minimum OS (`platforms {darwin >= N}`), why, and how to add one — update it with any new cutoff |
 
+## Open Work
+
+Keep this list current: add items when work is left for a later session,
+remove them when done. Detail lives in the linked findings.
+
+**Leopard netatalk dependencies** — work through
+[findings/leopard-netatalk-deps-worklist.md](findings/leopard-netatalk-deps-worklist.md)
+one port at a time (reproduce with upstream's Portfile on cleaned 10.5 i386
+and ppc, minimal fix, verify on all builders, write up, draft PR for review):
+
+- [ ] **icu** — upstream PR [#36312](https://github.com/macports/macports-ports/pull/36312)
+  open (icu and icu-devel). After merge: delete `devel/icu`, then cache
+  upstream icu on packages.jibb.tv (left out until then by choice).
+- [ ] **libarchive** — upstream PR [#36316](https://github.com/macports/macports-ports/pull/36316)
+  open. After merge: delete `archivers/libarchive` and the
+  `test/libarchive` branch on origin.
+- [ ] **libevent** — next. Trac [#74414](https://trac.macports.org/ticket/74414);
+  blakeports patch guards `#pragma GCC diagnostic` for gcc ≥ 12. Reproduce
+  on 10.5 i386 and ppc first (only ppc seen so far).
+- [ ] **libgcrypt** — widen `gcc-4.2` blacklist to `*gcc-4.2` (llvm-gcc-4.2
+  fails on McEliece asm, i386). No Trac ticket; re-prove on upstream 1.12.4.
+- [ ] **python314** — `_hmac` SIMD blake2 needs `posix_memalign` on 10.5;
+  blakeports presets the `-msse`/`-mavx2` checks to no. Re-prove on
+  upstream 3.14.10; [#73578](https://trac.macports.org/ticket/73578) is
+  closed (`_blake2`).
+
+**Infrastructure reminders:**
+
+- [ ] Back up the packages.jibb.tv signing key,
+  darkstar `/var/lib/macports-packages/key/.signify.key`.
+- [ ] Rebuild darkstar's ghrunnerd binary: its actions_runners checkout
+  pulled ghrunnerd `netres.go` changes (2026-11-01) that aren't built yet.
+- [ ] machine-cfg: local main has diverged from origin, and `stash@{0}`
+  duplicates a far-star settings edit. Reconcile, then drop the stash.
+
 ## Scripts Reference
 
 | Script | Purpose |
@@ -60,6 +95,7 @@ blakeports/
 | `scripts/syncfromgitports` | Syncs `_resources` and port directories from upstream MacPorts |
 | `scripts/fulltest` | Comprehensive test - recreates runners and triggers all builds |
 | `scripts/ghrunner` | GitHub runner management script |
+| `scripts/portcompiler.tcl` | Prints the compiler (and blacklist) each Portfile picks on this machine, without building: `port-tclsh scripts/portcompiler.tcl <dir>...` |
 
 ## CI/CD Architecture
 
@@ -178,6 +214,29 @@ gh run view --log-failed    # View failed logs
 **Workflow inputs**:
 - `branch`: Branch to build from (default: main)
 - `run_legacy`: Run legacy platform builds (10.5, 10.7) - default: false
+
+### Testing a Candidate Fix (`Test port` workflow)
+
+`.github/workflows/test-port.yml` builds one port on chosen runners, for
+upstream-PR investigations (see `findings/`). Use a `test/<port>` branch
+whose `<category>/<port>/Portfile` is upstream's verbatim and whose
+`Portfile.fixed` holds the candidate change:
+
+```bash
+gh workflow run "Test port" --ref test/libarchive \
+  -f port=libarchive -f runners="leopard, leopard-ppc" -f portfile=fixed \
+  -f port_test=true -f check='...smoke test...'
+# -f build=false: only report the compiler each Portfile picks (fast, all runners)
+```
+
+- Each job first reports the compiler both Portfiles pick on that runner,
+  then (if `build`) installs deps, cleans and builds from source.
+- `--ref` runs the workflow file **from that branch**: after changing the
+  workflow on main, merge main into the test branch before dispatching.
+- Run `MacPorts Cleanup` first for a clean-VM result. On leopard-ppc, wait
+  for the runner to be online after any `runner_up`.
+- Stage files explicitly when committing on test branches (`git commit -a`
+  once swept a findings edit onto one).
 
 ## Portfile Conventions
 
@@ -299,6 +358,7 @@ scripts/ghrunner -lima macos-26             # Register (VM must be running)
 6. **The `_resources` directory is synced from upstream** - don't modify directly
 7. **Check `.cursorrules`** for comprehensive MacPorts development standards
 8. **URLs must be formatted as clickable links** in all documentation and PR descriptions
+9. **Check [Open Work](#open-work) at session start** and update it before ending a session
 
 ## Troubleshooting
 
