@@ -42,7 +42,7 @@ Tooling:
 | # | Port | blakeports fix | Arch (as found) | Trac | Maintainer | Status |
 |---|---|---|---|---|---|---|
 | 0 | icu | depend on libgcc under `macports-libstdc++` | i386 | none | mohd-akram | PR [#36312](https://github.com/macports/macports-ports/pull/36312) open |
-| 1 | libarchive | `compiler.blacklist-append *gcc-4.2` (ICE in `archive_write_pax_header`) | ppc, i386 | [#74268](https://trac.macports.org/ticket/74268) open | tobypeterson | **in progress** |
+| 1 | libarchive | `compiler.blacklist-append *gcc-4.2` (ICE in `archive_write_pax_header`) | ppc, i386 | [#74145](https://trac.macports.org/ticket/74145), [#74268](https://trac.macports.org/ticket/74268) open | tobypeterson | proven, PR drafted ([findings](libarchive-gcc42-ice.md)) |
 | 2 | libevent | patch: `#pragma GCC diagnostic` only for gcc ≥ 12 | ppc (i386 untested) | [#74414](https://trac.macports.org/ticket/74414) open | jerryyhom | to do |
 | 3 | libgcrypt | widen `gcc-4.2` blacklist to `*gcc-4.2` (llvm-gcc-4.2 fails on McEliece asm) | i386 | none | Schamschula | to do |
 | 4 | python314 | preset `-msse`/`-mavx2` checks to no on 10.5 (`_hmac` needs `posix_memalign`) | 10.5 | [#73578](https://trac.macports.org/ticket/73578) closed (`_blake2`, same family) | jmroot | to do |
@@ -103,6 +103,8 @@ Runs:
 | [41353225724](https://github.com/trodemaster/blakeports/actions/runs/41353225724) | 10.5 i386 and ppc | candidate `gcc-4.2 apple-gcc-4.2` (picks `llvm-gcc-4.2`), smoke test and `port test` | i386: builds, smoke test passes, `port test` 957 run / same 2 fail (80, 3). ppc job cancelled by the runner's SSH health check (fixed in actions_runners a8354f4) |
 | [41353357546](https://github.com/trodemaster/blakeports/actions/runs/41353357546) | 10.5 ppc | candidate, retry | Builds with `llvm-gcc-4.2` (4 min), smoke test passes, `port test` 957 run / same 2 fail (80, 3) |
 
-Next for libarchive: clean every builder and build the candidate on all of
-them (10.6+ compilers are already shown unchanged), then write
-`findings/libarchive-gcc42-ice.md` and draft the PR (closes #74268).
+| [41357335230](https://github.com/trodemaster/blakeports/actions/runs/41357335230) | all 11 builders, cleaned | candidate | All build and pass the smoke test; only 10.5 changes compiler (`gcc-4.2` → `llvm-gcc-4.2`) |
+
+Result: [libarchive-gcc42-ice.md](libarchive-gcc42-ice.md). The same ICE was
+first reported as [#74145](https://trac.macports.org/ticket/74145)
+(barracuda156, 3.8.8, ppc); the PR closes both tickets.
