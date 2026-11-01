@@ -45,6 +45,7 @@ blakeports/
 | `.cursorrules` | Comprehensive MacPorts development rules and conventions |
 | `README.md` | User-facing documentation with quick reference |
 | `AGENTS.md` | Agent instructions for session workflow |
+| `findings/` | Write-ups of CI investigations (evidence and conclusions); index in `findings/README.md` |
 | `PLATFORM_CUTOFFS.md` | Ports with a minimum OS (`platforms {darwin >= N}`), why, and how to add one — update it with any new cutoff |
 
 ## Scripts Reference
