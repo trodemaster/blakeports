@@ -82,6 +82,9 @@ compiler (`llvm-gcc-4.2` on i386 and ppc, `gcc-4.0` on i386), and
 ballapete's gcc15 build on #74268 failed the same tests. They are 10.5
 platform behaviour, unrelated to the compiler and to this fix.
 
+Submitted 2026-11-01 as
+[macports/macports-ports#36316](https://github.com/macports/macports-ports/pull/36316).
+
 ## Alternatives considered
 
 - **`*gcc-4.2`** (falls back to `gcc-4.0`): builds and tests the same on
