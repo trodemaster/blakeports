@@ -82,9 +82,27 @@ compiler (`llvm-gcc-4.2` on i386 and ppc, `gcc-4.0` on i386), and
 ballapete's gcc15 build on #74268 failed the same tests. They are 10.5
 platform behaviour, unrelated to the compiler and to this fix.
 
+## Alternatives considered
+
+- **`*gcc-4.2`** (falls back to `gcc-4.0`): builds and tests the same on
+  i386, and is what blakeports used first. Not chosen because it also drops
+  `llvm-gcc-4.2`, which works; the narrow blacklist removes only the broken
+  compiler and keeps base's own order.
+- **A bootstrap compiler** (`clang-11-bootstrap` on Intel, `gcc10-bootstrap`
+  on ppc, since clang-11-bootstrap has no ppc support). No dependency cycle
+  (both build only from bootstrap ports), but upstream uses them where a port
+  needs a newer compiler than the system has and sits under MacPorts clang
+  (openssl3, libressl, icu, libomp, libcxx, libtapi). libarchive builds with
+  the Xcode compilers, and there are no 10.5 binaries, so every 10.5 user
+  would build gcc10-bootstrap (and on Intel clang-11-bootstrap) first, under
+  cmake's whole dependency tree. For cmake's dependencies on old systems
+  upstream keeps clang-3.7 (`lang/llvm-3.7`: "kept around in order to build
+  cmake (or its dependencies)"), which is what 10.6 already uses here.
+
 ## Notes
 
-- The blakeports override (3.8.10, `*gcc-4.2`) predates this analysis; it
-  is replaced by upstream's port once the fix is merged.
+- The blakeports override is upstream's 3.8.11 port plus exactly this
+  change (it was 3.8.10 with `*gcc-4.2` before this analysis). Delete it
+  once the fix is merged upstream.
 - Our comment on #74268 (2026-10-21) suggested blacklisting on powerpc only.
   The crash happens on i386 too, so the fix isn't arch-specific.
