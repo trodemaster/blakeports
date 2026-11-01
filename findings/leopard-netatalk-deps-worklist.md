@@ -65,8 +65,8 @@ Questions:
       same line (`archive_write_set_format_pax.c:682`).
 - [x] Which compilers does MacPorts try, in what order? See below. On
       Xcode 3.1 the next after `gcc-4.2` is `llvm-gcc-4.2`.
-- [ ] Is llvm-gcc-4.2 affected? Not on i386 (builds, smoke test passes,
-      same `port test` result as gcc-4.0). ppc: running.
+- [x] Is llvm-gcc-4.2 affected? No. It builds on i386 and ppc, the smoke
+      test passes, and `port test` matches gcc-4.0 exactly.
 - [x] Is `apple-gcc-4.2` affected? Treat as yes: #3189's reporter hit the
       ICE "on OS X 10.5 & 10.6 with GCC 4.2"; 10.6's Xcode 3.2 gcc-4.2 is
       build 5666.3, the same as the apple-gcc42 port.
@@ -100,4 +100,9 @@ Runs:
 | [41351520047](https://github.com/trodemaster/blakeports/actions/runs/41351520047) | 10.5 i386 | blacklist `gcc-4.2` only (picks `llvm-gcc-4.2`) | Builds and installs; `llvm-gcc-4.2` compiles `archive_write_set_format_pax.c` |
 | [41351791328](https://github.com/trodemaster/blakeports/actions/runs/41351791328) | 10.5 i386 | same, plus smoke test and `port test` | Smoke test passes (pax round trip incl. a 120-char name). `port test`: 4 of 5 programs pass; `libarchive_test` fails `test_acl_platform_nfs4` (80) and `test_read_disk_directory_traversals` (3), the same tests ballapete reported failing with gcc15 on ppc in #74268 |
 | [41352472924](https://github.com/trodemaster/blakeports/actions/runs/41352472924) | 10.5 i386 | `*gcc-4.2` (picks `gcc-4.0`), smoke test and `port test` | Smoke test passes. `port test`: same as llvm-gcc-4.2: 957 tests, the same 2 fail with the same counts (80, 3) |
-| [41353225724](https://github.com/trodemaster/blakeports/actions/runs/41353225724) | 10.5 i386 and ppc | candidate `gcc-4.2 apple-gcc-4.2` (picks `llvm-gcc-4.2`), smoke test and `port test` | running |
+| [41353225724](https://github.com/trodemaster/blakeports/actions/runs/41353225724) | 10.5 i386 and ppc | candidate `gcc-4.2 apple-gcc-4.2` (picks `llvm-gcc-4.2`), smoke test and `port test` | i386: builds, smoke test passes, `port test` 957 run / same 2 fail (80, 3). ppc job cancelled by the runner's SSH health check (fixed in actions_runners a8354f4) |
+| [41353357546](https://github.com/trodemaster/blakeports/actions/runs/41353357546) | 10.5 ppc | candidate, retry | Builds with `llvm-gcc-4.2` (4 min), smoke test passes, `port test` 957 run / same 2 fail (80, 3) |
+
+Next for libarchive: clean every builder and build the candidate on all of
+them (10.6+ compilers are already shown unchanged), then write
+`findings/libarchive-gcc42-ice.md` and draft the PR (closes #74268).
