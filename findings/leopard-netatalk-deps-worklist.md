@@ -71,4 +71,18 @@ Questions:
 - [ ] Anything else on #74268 (ballapete's test failures with gcc15) that
       matters for the fix?
 
-Runs: (none yet)
+Compiler order (base 2.12.7, `get_apple_compilers_xcode_version`):
+Xcode 3.1 (our 10.5 VMs): `gcc-4.2 llvm-gcc-4.2 apple-gcc-4.2 gcc-4.0`;
+Xcode 3.2: `gcc-4.2 llvm-gcc-4.2 clang gcc-4.0`; Xcode 4.0–4.1:
+`llvm-gcc-4.2 clang gcc-4.2`; Xcode 4.2: `llvm-gcc-4.2 clang`; Xcode
+4.3–4.6: `clang llvm-gcc-4.2`; Xcode 5+: `clang`. On ppc, MacPorts gcc
+comes before MacPorts clang in the fallback.
+
+Runs:
+
+| Run | Builders | Portfile | Result |
+|---|---|---|---|
+| [41350699595](https://github.com/trodemaster/blakeports/actions/runs/41350699595) | 10.6–10.11, 26, 27 | compiler check only, upstream and `*gcc-4.2` | Same compiler with both everywhere: 10.6 (Xcode 4.2) `macports-clang-3.7` (base already rules out llvm-gcc-4.2 and Xcode clang there), 10.7–27 `clang` |
+| [41350828016](https://github.com/trodemaster/blakeports/actions/runs/41350828016) | 10.5 i386, cleaned | upstream 3.8.11 | **Fails**: picks `gcc-4.2`; `libarchive/archive_write_set_format_pax.c:682: internal compiler error: Bus error`. With `*gcc-4.2` it would pick `gcc-4.0` |
+| [41350828016](https://github.com/trodemaster/blakeports/actions/runs/41350828016) | 10.5 ppc, cleaned | upstream 3.8.11 | running |
+| [41351520047](https://github.com/trodemaster/blakeports/actions/runs/41351520047) | 10.5 i386 | blacklist `gcc-4.2` only (picks `llvm-gcc-4.2`) | running |
