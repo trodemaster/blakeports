@@ -132,6 +132,8 @@ Other checks:
 
 ## Upstream
 
+- Submitted 2026-11-01 as
+  [macports/macports-ports#36312](https://github.com/macports/macports-ports/pull/36312).
 - The fix applies identically to `devel/icu/Portfile` and
   `devel/icu-devel/Portfile`; their clang-11-bootstrap blocks are the same.
 - Revision bump: where icu already built, the installed files are unchanged;
