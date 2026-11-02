@@ -85,6 +85,11 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 
 - [ ] Back up the packages.jibb.tv signing key,
   darkstar `/var/lib/macports-packages/key/.signify.key`.
+- [ ] umac ghrunnerd: pull actions_runners `cc706bd` (launchd
+  `ProcessType` `Interactive`), render the plist into
+  `~/Library/LaunchAgents` and reload the agent, then restart macos-15
+  through ghrunnerd. Check with `ps -M` (31T, not 20T/4T); see
+  machine-cfg `kb/LAUNCHD_PROCESS_TYPE.md`.
 - [ ] Rebuild darkstar's ghrunnerd binary: its actions_runners checkout
   pulled ghrunnerd `netres.go` changes (2026-11-01) that aren't built yet.
 - [ ] machine-cfg: local main has diverged from origin, and `stash@{0}`
