@@ -3,5 +3,13 @@
     "allow": [
       "Bash(scripts/check-updates.sh *)"
     ]
+  },
+  "sandbox": {
+    "network": {
+      "allowedDomains": [
+        "sourceforge.net",
+        "developers.yubico.com"
+      ]
+    }
   }
 }

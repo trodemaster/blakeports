@@ -6,10 +6,12 @@ This directory contains project-specific Cursor IDE and Claude AI configuration.
 
 ```
 .claude/
+├── settings.json          # Shared project settings (permissions, sandbox hosts)
 ├── settings.local.json    # Local Cursor settings
 └── skills/                # Project-specific AI skills
     ├── macports/          # MacPorts development skill
-    └── ghrunnerd/         # Runner management via the ghrunnerd MCP servers
+    ├── ghrunnerd/         # Runner management via the ghrunnerd MCP servers
+    └── check-updates/     # Upstream release / PR check via scripts/check-updates.sh
 ```
 
 ## ghrunnerd Skill

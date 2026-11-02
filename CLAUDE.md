@@ -93,6 +93,7 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 | `scripts/syncports` | Syncs the official ports tree when it is more than a day old |
 | `scripts/install-deps` | Installs dependencies for a port (build + runtime or runtime-only) |
 | `scripts/syncfromgitports` | Syncs `_resources` and port directories from upstream MacPorts |
+| `scripts/check-updates.sh` | Reports ports with newer upstream releases and others' macports-ports PRs; `--all` adds blakeports-only ports (see the `check-updates` skill) |
 | `scripts/fulltest` | Comprehensive test - recreates runners and triggers all builds |
 | `scripts/ghrunner` | GitHub runner management script |
 | `scripts/portcompiler.tcl` | Prints the compiler (and blacklist) each Portfile picks on this machine, without building: `port-tclsh scripts/portcompiler.tcl <dir>...` |

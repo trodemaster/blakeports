@@ -1,13 +1,29 @@
 #!/bin/bash
 # Check for port updates by comparing Portfile versions with latest releases
-# Usage: check-updates.sh [path/to/ports/directory]
+# Usage: check-updates.sh [--all] [path/to/ports/directory]
 #
-# By default searches current directory for Portfiles.
+# By default searches current directory for Portfiles and checks only the
+# ports ports.macports.org lists @trodemaster as maintainer of. --all also
+# checks the blakeports-only ports (qemu, lima, vault, ...).
 # Supports:
-#   - GitHub-hosted ports (github PortGroup)
+#   - Ports with their own livecheck (livecheck.type/url/regex), via port livecheck
+#   - GitHub-hosted ports (github PortGroup), via gh api (curl if gh is missing)
 #   - SVN-hosted ports (fetch.type svn) via SourceForge RSS feeds
+#   - Anything else, via port livecheck
+# Ports with livecheck.type none are reported as skipped.
 
-REPO_ROOT="${1:-.}"
+ALL=0
+REPO_ROOT="."
+for arg in "$@"; do
+    case "$arg" in
+        --all) ALL=1 ;;
+        -h|--help)
+            sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0 ;;
+        -*) echo "Unknown option: $arg" >&2; exit 2 ;;
+        *) REPO_ROOT="$arg" ;;
+    esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -25,7 +41,8 @@ MAINTAINER_API="https://ports.macports.org/api/v1/maintainer/trodemaster/"
 MAINTAINED_LIST=$(curl -sf "$MAINTAINER_API" | jq -r '.[].ports[]' 2>/dev/null)
 if [ -z "$MAINTAINED_LIST" ]; then
     echo "Could not fetch maintained ports from $MAINTAINER_API" >&2
-    exit 1
+    # --all can still check every port; it just can't tell which are ours
+    [ $ALL -eq 1 ] || exit 1
 fi
 
 is_maintained_by_trodemaster() {
@@ -48,52 +65,61 @@ get_github_info() {
         return 1
     fi
 
-    # Parse: github.setup owner repo version [tag_prefix]
+    # Parse: github.setup owner repo version [tag_prefix [tag_suffix]]
     local owner=$(echo "$setup_line" | awk '{print $2}')
     local repo=$(echo "$setup_line" | awk '{print $3}')
     local version=$(echo "$setup_line" | awk '{print $4}')
     local tag_prefix=$(echo "$setup_line" | awk '{print $5}')
+    local tag_suffix=$(echo "$setup_line" | awk '{print $6}')
 
-    echo "$owner|$repo|$version|$tag_prefix"
+    # Tcl variables (${my_name}) can't be resolved here, and a commit hash
+    # isn't a version to compare against a release tag: let livecheck decide.
+    if [[ "$owner$repo$version" == *'$'* ]] || [[ "$version" =~ ^[0-9a-f]{40}$ ]]; then
+        return 1
+    fi
+
+    echo "$owner|$repo|$version|$tag_prefix|$tag_suffix"
 }
 
-# Function to get latest GitHub release
+# GitHub API GET of $1 filtered by jq $2. gh api is authenticated (5000
+# requests/hour); unauthenticated curl gets 60, which --all can exhaust.
+github_api() {
+    if command -v gh >/dev/null 2>&1; then
+        gh api "$1" --jq "$2" 2>/dev/null
+    else
+        curl -sf -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/$1" | jq -r "$2" 2>/dev/null
+    fi
+}
+
+# Function to get latest GitHub release (or newest tag if there are no releases)
 get_latest_release() {
     local owner="$1"
     local repo="$2"
-    
-    # Query GitHub API for latest release
-    local api_url="https://api.github.com/repos/${owner}/${repo}/releases/latest"
-    local response=$(curl -s -H "Accept: application/vnd.github.v3+json" "$api_url")
-    
-    # Check if we got a valid response
-    if echo "$response" | grep -q '"tag_name"'; then
-        echo "$response" | grep '"tag_name"' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/'
-        return 0
+    local tag
+
+    tag=$(github_api "repos/${owner}/${repo}/releases/latest" '.tag_name // empty')
+    if [ -z "$tag" ]; then
+        tag=$(github_api "repos/${owner}/${repo}/tags" '.[0].name // empty')
     fi
-    
-    # If no releases, try tags
-    api_url="https://api.github.com/repos/${owner}/${repo}/tags"
-    response=$(curl -s -H "Accept: application/vnd.github.v3+json" "$api_url" | head -20)
-    
-    if echo "$response" | grep -q '"name"'; then
-        echo "$response" | grep '"name"' | head -1 | sed -E 's/.*"name": "([^"]+)".*/\1/'
-        return 0
-    fi
-    
-    return 1
+    [ -n "$tag" ] || return 1
+    echo "$tag"
 }
 
 # Function to normalize version (strip common prefixes)
 normalize_version() {
     local version="$1"
     local tag_prefix="$2"
-    
-    # Remove tag_prefix if specified
+    local tag_suffix="$3"
+
+    # Remove tag_prefix / tag_suffix if specified
     if [ -n "$tag_prefix" ]; then
         version="${version#$tag_prefix}"
     fi
-    
+    if [ -n "$tag_suffix" ]; then
+        version="${version%$tag_suffix}"
+    fi
+
     # Remove common version prefixes
     version="${version#v}"
     version="${version#V}"
@@ -179,19 +205,39 @@ version_compare() {
     
     if [ "$current" = "$latest" ]; then
         echo "="
+    elif [ "$(printf '%s\n%s\n' "$current" "$latest" | sort -V | head -1)" = "$current" ]; then
+        # version sort, so 1.9 < 1.10
+        echo "<"
     else
-        # Simple string comparison for now
-        # Could be enhanced with proper semantic versioning
-        if [ "$current" \< "$latest" ]; then
-            echo "<"
-        else
-            echo ">"
-        fi
+        echo ">"
     fi
 }
 
+# Run MacPorts' livecheck on the port in $portdir and report the result.
+# Returns 1 if livecheck gave no usable answer.
+check_livecheck() {
+    command -v port >/dev/null 2>&1 || return 1
+    local lc current_version
+    lc=$(cd "$portdir" && port -v livecheck 2>&1 | tail -1)
+    current_version=$(grep -m1 -E "^[[:space:]]*version[[:space:]]" "$portfile" | awk '{print $2}')
+    if [[ "$lc" == *"seems to be up to date"* ]]; then
+        echo -e "${GREEN}✓${NC}  ${category}/${portname}${label}: ${current_version} (up to date, livecheck)"
+        up_to_date=$((up_to_date + 1))
+        return 0
+    elif [[ "$lc" =~ "port version: "([^,]+)", new version: "([^\)]+)\) ]]; then
+        echo -e "${RED}✗${NC}  ${category}/${portname}${label}: ${BASH_REMATCH[1]} → ${BASH_REMATCH[2]} ${BLUE}(update available, livecheck)${NC}"
+        updates_available=$((updates_available + 1))
+        return 0
+    fi
+    return 1
+}
+
 echo "==========================================="
-echo "Checking for port updates (ports.macports.org maintainer: trodemaster)"
+if [ $ALL -eq 1 ]; then
+    echo "Checking for port updates (all blakeports ports)"
+else
+    echo "Checking for port updates (ports.macports.org maintainer: trodemaster)"
+fi
 echo "==========================================="
 echo ""
 
@@ -200,6 +246,7 @@ total=0
 updates_available=0
 up_to_date=0
 errors=0
+skipped=0
 maintained_ports=()
 
 while IFS= read -r portfile; do
@@ -213,43 +260,60 @@ while IFS= read -r portfile; do
         continue
     fi
     
-    # Skip ports not maintained by @trodemaster
-    if ! is_maintained_by_trodemaster "$portfile"; then
+    # Without --all, skip ports not maintained by @trodemaster
+    label=""
+    if is_maintained_by_trodemaster "$portfile"; then
+        maintained_ports+=("$portname")
+    elif [ $ALL -eq 1 ]; then
+        label=" (blakeports only)"
+    else
         continue
     fi
 
     total=$((total + 1))
-    maintained_ports+=("$portname")
 
-    # Try GitHub first
+    # Pinned ports (forks, commit snapshots) opt out of livecheck
+    if grep -qE "^[[:space:]]*livecheck\.type[[:space:]]+none" "$portfile"; then
+        echo -e "${BLUE}-${NC}  ${category}/${portname}${label}: skipped (livecheck.type none)"
+        skipped=$((skipped + 1))
+        continue
+    fi
+
+    # A port's own livecheck knows its release scheme better than the
+    # generic checks below
+    if grep -qE "^[[:space:]]*livecheck\.(type|url|regex)" "$portfile" && check_livecheck; then
+        continue
+    fi
+
+    # Try GitHub
     github_info=$(get_github_info "$portfile")
     if [ $? -eq 0 ]; then
-        IFS='|' read -r owner repo current_version tag_prefix <<< "$github_info"
-        
+        IFS='|' read -r owner repo current_version tag_prefix tag_suffix <<< "$github_info"
+
         # Get latest release
         latest_tag=$(get_latest_release "$owner" "$repo")
         if [ $? -ne 0 ]; then
-            echo -e "${YELLOW}⚠${NC}  ${category}/${portname}: Could not fetch latest release from ${owner}/${repo}"
+            echo -e "${YELLOW}⚠${NC}  ${category}/${portname}${label}: Could not fetch latest release from ${owner}/${repo}"
             errors=$((errors + 1))
             continue
         fi
-        
+
         # Normalize versions for comparison
-        current_norm=$(normalize_version "$current_version" "$tag_prefix")
-        latest_norm=$(normalize_version "$latest_tag" "$tag_prefix")
-        
+        current_norm=$(normalize_version "$current_version" "$tag_prefix" "$tag_suffix")
+        latest_norm=$(normalize_version "$latest_tag" "$tag_prefix" "$tag_suffix")
+
         # Compare versions
         comparison=$(version_compare "$current_norm" "$latest_norm")
-        
+
         if [ "$comparison" = "<" ]; then
-            echo -e "${RED}✗${NC}  ${category}/${portname}: ${current_version} → ${latest_tag} ${BLUE}(update available)${NC}"
+            echo -e "${RED}✗${NC}  ${category}/${portname}${label}: ${current_version} → ${latest_tag} ${BLUE}(update available)${NC}"
             echo "   GitHub: https://github.com/${owner}/${repo}"
             updates_available=$((updates_available + 1))
         elif [ "$comparison" = "=" ]; then
-            echo -e "${GREEN}✓${NC}  ${category}/${portname}: ${current_version} (up to date)"
+            echo -e "${GREEN}✓${NC}  ${category}/${portname}${label}: ${current_version} (up to date)"
             up_to_date=$((up_to_date + 1))
         else
-            echo -e "${YELLOW}?${NC}  ${category}/${portname}: ${current_version} vs ${latest_tag} (version mismatch?)"
+            echo -e "${YELLOW}?${NC}  ${category}/${portname}${label}: ${current_version} vs ${latest_tag} (version mismatch?)"
             errors=$((errors + 1))
         fi
         continue
@@ -263,7 +327,7 @@ while IFS= read -r portfile; do
         # Get latest release from SourceForge RSS
         latest_release=$(get_latest_svn_release "$svn_url" "$port_name")
         if [ $? -ne 0 ] || [ -z "$latest_release" ]; then
-            echo -e "${YELLOW}⚠${NC}  ${category}/${portname}: Could not fetch latest release from SVN"
+            echo -e "${YELLOW}⚠${NC}  ${category}/${portname}${label}: Could not fetch latest release from SVN"
             errors=$((errors + 1))
             continue
         fi
@@ -272,37 +336,25 @@ while IFS= read -r portfile; do
         
         # Compare revisions
         if [ "$current_revision" -lt "$latest_revision" ]; then
-            echo -e "${RED}✗${NC}  ${category}/${portname}: r${current_revision} (v${current_version}) → r${latest_revision} (v${latest_version}) ${BLUE}(update available)${NC}"
+            echo -e "${RED}✗${NC}  ${category}/${portname}${label}: r${current_revision} (v${current_version}) → r${latest_revision} (v${latest_version}) ${BLUE}(update available)${NC}"
             echo "   SVN: ${svn_url}"
             updates_available=$((updates_available + 1))
         elif [ "$current_revision" -eq "$latest_revision" ]; then
-            echo -e "${GREEN}✓${NC}  ${category}/${portname}: r${current_revision} (v${current_version}) (up to date)"
+            echo -e "${GREEN}✓${NC}  ${category}/${portname}${label}: r${current_revision} (v${current_version}) (up to date)"
             up_to_date=$((up_to_date + 1))
         else
-            echo -e "${YELLOW}?${NC}  ${category}/${portname}: r${current_revision} vs r${latest_revision} (ahead of release?)"
+            echo -e "${YELLOW}?${NC}  ${category}/${portname}${label}: r${current_revision} vs r${latest_revision} (ahead of release?)"
             errors=$((errors + 1))
         fi
         continue
     fi
 
     # Fallback: MacPorts' own livecheck (ports with plain master_sites, etc.)
-    if command -v port >/dev/null 2>&1; then
-        lc=$(port -v livecheck "$portname" 2>&1 | tail -1)
-        current_version=$(grep -m1 "^version" "$portfile" | awk '{print $2}')
-        if [[ "$lc" == *"seems to be up to date"* ]]; then
-            echo -e "${GREEN}✓${NC}  ${category}/${portname}: ${current_version} (up to date, livecheck)"
-            up_to_date=$((up_to_date + 1))
-            continue
-        elif [[ "$lc" =~ "new version: "([^\)]+)\) ]]; then
-            echo -e "${RED}✗${NC}  ${category}/${portname}: ${current_version} → ${BASH_REMATCH[1]} ${BLUE}(update available, livecheck)${NC}"
-            updates_available=$((updates_available + 1))
-            continue
-        fi
-    fi
-    echo -e "${YELLOW}⚠${NC}  ${category}/${portname}: No GitHub/SVN source and livecheck gave no answer"
+    check_livecheck && continue
+    echo -e "${YELLOW}⚠${NC}  ${category}/${portname}${label}: No GitHub/SVN source and livecheck gave no answer"
     errors=$((errors + 1))
 
-done < <(find "$REPO_ROOT" -name "Portfile" -type f)
+done < <(find "$REPO_ROOT" -name "Portfile" -type f | sort)
 
 # Check macports-ports for PRs by others against our ports: all open PRs,
 # plus PRs merged/closed in the last PR_DAYS days (the local Portfile may be
@@ -350,6 +402,7 @@ echo "Total ports checked: $total"
 echo -e "${GREEN}Up to date:${NC} $up_to_date"
 echo -e "${RED}Updates available:${NC} $updates_available"
 echo -e "${YELLOW}Errors/Unable to check:${NC} $errors"
+[ $skipped -gt 0 ] && echo -e "${BLUE}Skipped (livecheck.type none):${NC} $skipped"
 echo -e "${YELLOW}PRs by others:${NC} $pr_hits"
 echo ""
 
