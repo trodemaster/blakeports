@@ -9,6 +9,7 @@
 #   - Ports with their own livecheck (livecheck.type/url/regex), via port livecheck
 #   - GitHub-hosted ports (github PortGroup), via gh api (curl if gh is missing)
 #   - SVN-hosted ports (fetch.type svn) via SourceForge RSS feeds
+#   - Git-based ports (commit snapshots, fetch.type git) via git ls-remote
 #   - Anything else, via port livecheck
 # Ports with livecheck.type none are reported as skipped.
 
@@ -18,7 +19,7 @@ for arg in "$@"; do
     case "$arg" in
         --all) ALL=1 ;;
         -h|--help)
-            sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
         -*) echo "Unknown option: $arg" >&2; exit 2 ;;
         *) REPO_ROOT="$arg" ;;
@@ -213,6 +214,65 @@ version_compare() {
     fi
 }
 
+# Check git-based ports with git ls-remote. `port livecheck` can't do this in
+# a Claude sandbox: MacPorts strips GIT_CONFIG_PARAMETERS, which carries the
+# http.proxyAuthMethod git needs to get through the sandbox proxy. Handles:
+#   - ports pinned to a commit (github.setup / go.setup with a 40-hex hash):
+#     compared with upstream HEAD
+#   - fetch.type git ports whose git.branch contains ${version}: the newest
+#     branch matching that pattern
+# Returns 1 if the port is neither, or upstream couldn't be read.
+check_git() {
+    command -v git >/dev/null 2>&1 || return 1
+    local setup url pinned head branch prefix suffix latest current
+    setup=$(grep -m1 -E "^[[:space:]]*(github|go)\.setup[[:space:]]" "$portfile")
+    if [[ "$setup" =~ github\.setup[[:space:]]+([^[:space:]]+)[[:space:]]+([^[:space:]]+)[[:space:]]+([0-9a-f]{40}) ]]; then
+        url="https://github.com/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}.git"
+        pinned="${BASH_REMATCH[3]}"
+    elif [[ "$setup" =~ go\.setup[[:space:]]+github\.com/([^[:space:]]+)[[:space:]]+([0-9a-f]{40}) ]]; then
+        url="https://github.com/${BASH_REMATCH[1]}.git"
+        pinned="${BASH_REMATCH[2]}"
+    fi
+    current=$(grep -m1 -E "^[[:space:]]*version[[:space:]]" "$portfile" | awk '{print $2}')
+
+    if [ -n "$pinned" ]; then
+        head=$(git ls-remote "$url" HEAD 2>/dev/null | awk '{print $1}')
+        [ -n "$head" ] || return 1
+        if [ "$head" = "$pinned" ]; then
+            echo -e "${GREEN}✓${NC}  ${category}/${portname}${label}: ${current} (at upstream HEAD ${pinned:0:7})"
+            up_to_date=$((up_to_date + 1))
+        else
+            echo -e "${RED}✗${NC}  ${category}/${portname}${label}: ${current} @ ${pinned:0:7} → HEAD ${head:0:7} ${BLUE}(new commits)${NC}"
+            echo "   ${url%.git}/compare/${pinned:0:12}...${head:0:12}"
+            updates_available=$((updates_available + 1))
+        fi
+        return 0
+    fi
+
+    grep -qE "^[[:space:]]*fetch\.type[[:space:]]+git" "$portfile" || return 1
+    url=$(grep -m1 -E "^[[:space:]]*git\.url[[:space:]]" "$portfile" | awk '{print $2}')
+    branch=$(grep -m1 -E "^[[:space:]]*git\.branch[[:space:]]" "$portfile" | awk '{print $2}')
+    [[ -n "$url" && "$branch" == *'${version}'* ]] || return 1
+    prefix="${branch%%\$\{version\}*}"
+    suffix="${branch#*\$\{version\}}"
+    latest=$(git ls-remote --heads --tags "$url" 2>/dev/null | awk '{print $2}' |
+        sed -E 's#^refs/(heads|tags)/##; s#\^\{\}$##' |
+        while IFS= read -r ref; do
+            [[ "$ref" == "$prefix"*"$suffix" ]] || continue
+            ref="${ref#"$prefix"}"; ref="${ref%"$suffix"}"
+            [[ "$ref" =~ ^[0-9][0-9.]*$ ]] && echo "$ref"
+        done | sort -uV | tail -1)
+    [ -n "$latest" ] || return 1
+    if [ "$(version_compare "$current" "$latest")" = "<" ]; then
+        echo -e "${RED}✗${NC}  ${category}/${portname}${label}: ${current} → ${latest} ${BLUE}(update available, git ${prefix}*${suffix})${NC}"
+        updates_available=$((updates_available + 1))
+    else
+        echo -e "${GREEN}✓${NC}  ${category}/${portname}${label}: ${current} (up to date, git)"
+        up_to_date=$((up_to_date + 1))
+    fi
+    return 0
+}
+
 # Run MacPorts' livecheck on the port in $portdir and report the result.
 # Returns 1 if livecheck gave no usable answer.
 check_livecheck() {
@@ -349,9 +409,12 @@ while IFS= read -r portfile; do
         continue
     fi
 
+    # Git-based ports (commit snapshots, fetch.type git)
+    check_git && continue
+
     # Fallback: MacPorts' own livecheck (ports with plain master_sites, etc.)
     check_livecheck && continue
-    echo -e "${YELLOW}⚠${NC}  ${category}/${portname}${label}: No GitHub/SVN source and livecheck gave no answer"
+    echo -e "${YELLOW}⚠${NC}  ${category}/${portname}${label}: No GitHub/SVN/git source and livecheck gave no answer"
     errors=$((errors + 1))
 
 done < <(find "$REPO_ROOT" -name "Portfile" -type f | sort)

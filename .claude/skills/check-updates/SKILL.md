@@ -28,7 +28,9 @@ How each port is checked, in order:
 2. The port's own `livecheck.*` lines: `port livecheck`
 3. `github.setup` with a real version: latest GitHub release/tag via `gh api`
 4. `fetch.type svn` on SourceForge: the project's RSS feed
-5. Anything else: `port livecheck`
+5. Commit-pinned (`github.setup`/`go.setup` hash) or `fetch.type git` ports:
+   `git ls-remote`
+6. Anything else: `port livecheck`
 
 ## Network hosts (sandbox)
 
@@ -42,10 +44,14 @@ github.com, api.github.com and ports.macports.org are allowed globally.
 If a `<sandbox_violations>` block names another host, re-run with that host
 added rather than reporting the port as uncheckable.
 
-Known gaps: git-based livechecks (netatalk_client, lima-devl) fail inside the
-sandbox ("Proxy CONNECT aborted"), and vd_agent's livecheck returns nothing.
-These ports track commits or dev snapshots, so report them as "not checked"
-and don't escape the sandbox just for them.
+Git-based ports (netatalk_client, lima-devl, vd_agent) are checked with the
+script's own `git ls-remote`, not `port livecheck`. Inside the sandbox, git
+needs `http.proxyAuthMethod=basic`, which the sandbox passes in
+`GIT_CONFIG_PARAMETERS`. MacPorts strips that variable (and runs git from
+`/opt/local/var/macports` with its own HOME), so `port livecheck` on these
+ports fails with "Proxy CONNECT aborted". That's not a network block, so don't
+add hosts or escape the sandbox for it. "New commits" for a snapshot port
+means upstream HEAD has moved, not that a release is out.
 
 ## Report
 
