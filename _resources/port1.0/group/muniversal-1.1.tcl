@@ -207,6 +207,25 @@ namespace eval muniversal {}
 # internal procedures
 ####################################################################################################################################
 
+# Check if a file is mach-o or an ar archive. Can be removed with
+# MacPorts 2.13 in favour of just calling fileIsBinary.
+proc muniversal::fileIsBinary {filename} {
+    if {[::fileIsBinary $filename]} {
+        return 1
+    }
+    if {[file isfile $filename]} {
+        set ARMAG "!<arch>\n"
+        set SARMAG 8
+        set fd [open $filename rb]
+        set magic [read $fd $SARMAG]
+        close $fd
+        if {$magic eq $ARMAG} {
+            return 1
+        }
+    }
+    return 0
+}
+
 # the diff utility in macOS Ventura does not have the same functionality as previous versions
 # see https://trac.macports.org/ticket/66103
 # see https://trac.macports.org/ticket/66163
@@ -442,15 +461,19 @@ proc muniversal::merge {base1 base2 base prefixDir arch1 arch2 merger_dont_diff 
                     ui_debug "universal: merge: ${prefixDir}/${fl} is identical in ${base1} and ${base2}"
                 } else {
                     # actually try to merge the files
-                    # first try lipo, then libtool
-                    if { ! [catch {system "/usr/bin/lipo -create \"${dir1}/${fl}\" \"${dir2}/${fl}\" -output \"${dir}/${fl}\""}] } {
-                        # lipo worked
-                        ui_debug "universal: merge: lipo created ${prefixDir}/${fl}"
-                    } elseif { ! [catch {system "/usr/bin/libtool \"${dir1}/${fl}\" \"${dir2}/${fl}\" -o \"${dir}/${fl}\""}] } {
-                        # libtool worked
-                        ui_debug "universal: merge: libtool created ${prefixDir}/${fl}"
+                    if {[fileIsBinary ${dir1}/${fl}] && [fileIsBinary ${dir2}/${fl}]} {
+                        # first try lipo, then libtool
+                        if { ! [catch {system "/usr/bin/lipo -create \"${dir1}/${fl}\" \"${dir2}/${fl}\" -output \"${dir}/${fl}\""}] } {
+                            # lipo worked
+                            ui_debug "universal: merge: lipo created ${prefixDir}/${fl}"
+                        } elseif { ! [catch {system "/usr/bin/libtool \"${dir1}/${fl}\" \"${dir2}/${fl}\" -o \"${dir}/${fl}\""}] } {
+                            # libtool worked
+                            ui_debug "universal: merge: libtool created ${prefixDir}/${fl}"
+                        } else {
+                            return -code error "${prefixDir}/${fl} differs in ${base1} and ${base2} and cannot be merged"
+                        }
                     } else {
-                        # lipo and libtool have failed, so assume they are text files to be merged
+                        # not binaries, so assume they are text files to be merged
                         if {"${prefixDir}/${fl}" in ${merger_dont_diff}} {
                             # user has specified that diff does not work
                             # attempt to give each file a unique name and create a new file which includes one of the original depending on the arch
@@ -605,10 +628,10 @@ proc muniversal::merge {base1 base2 base prefixDir arch1 arch2 merger_dont_diff 
 
 # get default supported architectures then further restrict them depending on muniversal options
 rename portconfigure::choose_supported_archs portconfigure::choose_supported_archs_real
-proc portconfigure::choose_supported_archs {archs} {
+proc portconfigure::choose_supported_archs {args} {
     global  os.arch
 
-    set universal_archs_supported [portconfigure::choose_supported_archs_real ${archs}]
+    set universal_archs_supported [portconfigure::choose_supported_archs_real {*}$args]
 
     # user has specified that build platform must be able to run binaries for supported architectures
     if {[option muniversal.run_binaries]} {
@@ -886,16 +909,15 @@ variant universal {
 
 foreach phase {patch configure build destroot test} {
     foreach part {pre procedure post} {
-
+        set override_procs [list]
         # wrap procedures (either user defined or MacPorts) with architecture specific code
-        foreach p [ditem_key [set org.macports.${phase}] ${part}] {
-            if {[info procs user${p}] ne ""} {
-                set proc_name user${p}
-            } else {
-                set proc_name ${p}
+        foreach proc_name [ditem_key [set org.macports.${phase}] ${part}] {
+            lappend override_procs ${proc_name}_muniversal
+            set ns [namespace qualifiers $proc_name]
+            if {![namespace exists $ns]} {
+                namespace eval $ns {}
             }
-            rename ${proc_name} ${proc_name}_orig
-            proc ${proc_name} {{args ""}} "
+            proc ${proc_name}_muniversal {args} "
                 global worksrcpath UI_PREFIX subport muniversal.current_arch
 
                 foreach arch \"\[option configure.universal_archs\]\" {
@@ -926,7 +948,7 @@ foreach phase {patch configure build destroot test} {
                         option  \${phase_map}.cmd \[muniversal::map_phase \${save-worksrcpath} \[option worksrcpath\] \[option \${phase_map}.cmd\]\]
                     }
 
-                    ${proc_name}_orig
+                    ${proc_name} {*}\${args}
 
                     if {\[option muniversal.arch_compiler\]} {
                         foreach tool {f77 f90 fc objc cc objcxx cxx} {
@@ -947,9 +969,10 @@ foreach phase {patch configure build destroot test} {
                 muniversal.build_arch
             "
         }
+        ditem_key [set org.macports.${phase}] ${part} ${override_procs}
     }
 }
-unset phase part p
+unset phase part proc_name override_procs
 
 # copy `worksrcpath` to architecture-dependent version
 # rename portextract::extract_finish portextract::extract_finish_real
@@ -1003,7 +1026,7 @@ proc portextract::extract_finish {args} {
 # copy `destroot` to architecture-dependent version
 ditem_key ${org.macports.destroot} prerun portdestroot::destroot_start_muniversal
 proc portdestroot::destroot_start_muniversal {args} {
-    portdestroot::destroot_start ${args}
+    portdestroot::destroot_start {*}${args}
 
     foreach arch [option configure.universal_archs] {
         copy [option destroot] [option workpath]/destroot-${arch}
@@ -1063,7 +1086,7 @@ proc portdestroot::destroot_finish_muniversal {args} {
     muniversal::merge  ${workpath}/destroot-powerpc  ${workpath}/destroot-intel     ${workpath}/destroot-ppc-intel ""  powerpc x86    ${muniversal.dont_diff}  ${muniversal.combine} ${muniversal.equivalent} ${diffFormatProc}
     muniversal::merge  ${workpath}/destroot-arm64    ${workpath}/destroot-ppc-intel ${workpath}/destroot           ""  arm64 ppcintel ${muniversal.dont_diff}  ${muniversal.combine} ${muniversal.equivalent} ${diffFormatArmElse}
 
-    portdestroot::destroot_finish ${args}
+    portdestroot::destroot_finish {*}${args}
 }
 }
 }

@@ -2,9 +2,7 @@
 
 PortSystem          1.0
 
-PortGroup           compiler_blacklist_versions 1.0
-
-name                openssh9-client
+name               openssh9-client
 version             9.9p2
 revision            0
 categories          net
