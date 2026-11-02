@@ -8,7 +8,12 @@
     "network": {
       "allowedDomains": [
         "sourceforge.net",
-        "developers.yubico.com"
+        "developers.yubico.com",
+        "gnupg.org",
+        "ftp.gnu.org",
+        "ftp.openbsd.org",
+        "www.python.org",
+        "download.qemu.org"
       ]
     }
   }

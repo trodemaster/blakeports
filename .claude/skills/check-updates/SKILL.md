@@ -34,12 +34,10 @@ How each port is checked, in order:
 
 ## Network hosts (sandbox)
 
-Project settings already allow `sourceforge.net` and `developers.yubico.com`;
+Project settings (`.claude/settings.json`) allow the livecheck hosts both
+modes need: `sourceforge.net`, `developers.yubico.com`, `gnupg.org`,
+`ftp.gnu.org`, `ftp.openbsd.org`, `www.python.org` and `download.qemu.org`.
 github.com, api.github.com and ports.macports.org are allowed globally.
-`--all` livechecks also reach these, so list them in `allowed_domains`:
-
-`gnupg.org`, `ftp.gnu.org`, `ftp.openbsd.org`, `www.python.org`,
-`download.qemu.org`
 
 If a `<sandbox_violations>` block names another host, re-run with that host
 added rather than reporting the port as uncheckable.
