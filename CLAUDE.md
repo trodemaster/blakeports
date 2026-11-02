@@ -291,7 +291,12 @@ checksums           rmd160  HASH \
 ### Body Format
 - Separate from subject with blank line
 - Wrap at 72 characters
-- Use full URLs for tickets/PRs
+- Use full URLs for tickets/PRs, except GitHub issues and PRs in other
+  repos (macports/macports-ports above all): a blakeports commit that
+  links one adds a "referenced this" entry to that PR's timeline. Name it
+  in words instead ("upstream snowemu 1.6.0 PR"). Links in file content
+  (CLAUDE.md, findings/) don't do this; only commit messages, and issue
+  or PR text, do. Trac URLs are fine.
 - Explain the "why" not just the "what"
 
 ### Examples
