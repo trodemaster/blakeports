@@ -16,22 +16,26 @@ uninstalled out from under icu, which breaks icu and everything linked to it.
 The fix is one dependency line in each port:
 
 ```tcl
-            # add_deps no also skips the libgcc dependency base adds for
-            # macports-libstdc++ (the default on 10.5)
+            # add_deps no also drops the libgcc dependency base would add;
+            # with macports-libstdc++ (the default on 10.5) clang-11-bootstrap
+            # links libgcc's libstdc++
             if {${configure.cxx_stdlib} eq "macports-libstdc++"} {
-                depends_lib-append path:lib/libgcc/libgcc_s.1.dylib:libgcc
+                depends_lib-append path:share/doc/libgcc/README:libgcc
             }
 ```
 
 It goes inside the existing clang-11-bootstrap block (darwin 9–17, x86_64 or
-i386). It changes nothing for default 10.6+ setups.
+i386). It changes nothing for default 10.6+ setups. The first version used
+`path:lib/libgcc/libgcc_s.1.dylib:libgcc`; review moved it to the README form
+(see [Review, 2026-11-02/03](#review-2026-11-0203)).
 
 ## Cause
 
 1. icu uses clang-11-bootstrap on 10.13 and older Intel systems
    ([#71616](https://trac.macports.org/ticket/71616)) and sets
    `configure.compiler.add_deps no` so base doesn't add a dependency on the
-   macports-clang port it would otherwise pick.
+   compiler port it would otherwise pick (macports-clang on 10.6–10.13;
+   `macports-gcc-15` on 10.5 i386, found in review).
 2. `add_deps no` makes base skip all of
    `portconfigure::add_compiler_port_dependencies`, not just the compiler
    port. For a macports-clang compiler that proc also adds
@@ -49,6 +53,10 @@ i386). It changes nothing for default 10.6+ setups.
        depends_lib-append "port:libcxx"
    }
    ```
+
+   For a macports-gcc compiler (the 10.5 i386 case) the same proc adds
+   `path:share/doc/libgcc/README:libgcc` unconditionally, so 10.5 loses a
+   libgcc dependency through that branch instead.
 
 3. `configure.cxx_stdlib` is `macports-libstdc++` whenever `cxx_stdlib` is
    `libstdc++` and `compiler.cxx_standard` is 2011 or later
@@ -130,10 +138,47 @@ Other checks:
   `otool -L`, `port dependents`, and an uninstall plus `port rev-upgrade`, as
   above.
 
+## Review, 2026-11-02/03
+
+- barracuda156 asked for the fix in "the `macports-libstdc++` port";
+  mohd-akram (maintainer) noted the dependency form wasn't used anywhere
+  else. Both suggested the fix belonged elsewhere.
+- **There is no `macports-libstdc++` port.** It's a `configure.cxx_stdlib`
+  value. On 10.5 i386, `port provides` gives libgcc15 for
+  `lib/libgcc/libstdc++.6.dylib`, `libgcc_s.1.dylib` and `libgcc_s.1.1.dylib`;
+  `libgcc` is a stub (only `share/doc/libgcc/README`) that depends on libgcc15.
+- **The compiler base picks on 10.5 i386 is `macports-gcc-15`, not
+  macports-clang** (evaluated with `mportopen` on the VM; `configure.cxx` is
+  then overridden to clang-11-bootstrap). So the dependency `add_deps no`
+  drops there is base's gcc one, `path:share/doc/libgcc/README:libgcc`, which
+  is also the form root5, launch4j, g95 and gcc15 use. The macports-clang
+  branch (`libgcc_s.1.dylib` form) is what 10.6+ with `cxx_stdlib libstdc++`
+  would hit. The PR was changed to the README form.
+- **A dependency in clang-11-bootstrap instead** would fix the build but not
+  the runtime: once clang-11-bootstrap is uninstalled nothing keeps libgcc.
+- No precedent Portfile re-adds base's libgcc dependency; libtapi re-adds its
+  stdlib (`port:libcxx`) after `add_deps no`.
+
+Re-test on test/icu-libgcc (blakeports 396301d; upstream Portfile identical to
+macports-ports master b79085d9cf6), after
+[cleanup](https://github.com/trodemaster/blakeports/actions/runs/41578992849):
+
+| Run | OS | Portfile | Result |
+|---|---|---|---|
+| [upstream](https://github.com/trodemaster/blakeports/actions/runs/41579079373) | 10.5 i386, cleaned | upstream | Fails: `'memory' file not found`, `-stdlib=macports-libstdc++` |
+| [fixed](https://github.com/trodemaster/blakeports/actions/runs/41580070106) | 10.5 i386, same VM after the failure | README form | Builds; `Library Dependencies: libgcc`; uninstall of libgcc and libgcc15 refused; `uconv` runs; `rev-upgrade` clean |
+| [fixed](https://github.com/trodemaster/blakeports/actions/runs/41579086976) | 10.6, cleaned | README form | Builds; no libgcc dependency, no `lib/libgcc` link |
+
+10.5's sudo has no `-n`; a check using `sudo -n` failed for that reason
+([run](https://github.com/trodemaster/blakeports/actions/runs/41579608246)).
+
 ## Upstream
 
 - Submitted 2026-11-01 as
-  [macports/macports-ports#36312](https://github.com/macports/macports-ports/pull/36312).
+  [macports/macports-ports#36312](https://github.com/macports/macports-ports/pull/36312);
+  updated 2026-11-03 to the README form (0e7f8be7138) with a
+  [comment](https://github.com/macports/macports-ports/pull/36312#issuecomment-6595900741)
+  giving the results above.
 - The fix applies identically to `devel/icu/Portfile` and
   `devel/icu-devel/Portfile`; their clang-11-bootstrap blocks are the same.
 - Revision bump: where icu already built, the installed files are unchanged;

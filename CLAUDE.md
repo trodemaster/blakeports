@@ -59,7 +59,11 @@ one port at a time (reproduce with upstream's Portfile on cleaned 10.5 i386
 and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 
 - [ ] **icu** — upstream PR [#36312](https://github.com/macports/macports-ports/pull/36312)
-  open (icu and icu-devel). After merge: delete `devel/icu`, then cache
+  open (icu and icu-devel), changes requested. 2026-11-03: switched to
+  `path:share/doc/libgcc/README:libgcc` (0e7f8be7138), re-tested and
+  commented; waiting on barracuda156 and mohd-akram. Test branch
+  `test/icu-libgcc` on origin. After merge: delete `devel/icu` and that
+  branch, then cache
   upstream icu on packages.jibb.tv (left out until then by choice).
 - [ ] **libarchive** — upstream PR [#36316](https://github.com/macports/macports-ports/pull/36316)
   open. After merge: delete `archivers/libarchive` and the
