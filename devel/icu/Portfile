@@ -133,10 +133,11 @@ if {${subport} eq ${name} || ${subport} eq "${name}-lx"} {
                 depends_build-append port:cctools
             }
 
-            # add_deps no also skips the libgcc dependency base adds for
-            # macports-libstdc++ (the default on 10.5)
+            # add_deps no also drops the libgcc dependency base would add;
+            # with macports-libstdc++ (the default on 10.5) clang-11-bootstrap
+            # links libgcc's libstdc++
             if {${configure.cxx_stdlib} eq "macports-libstdc++"} {
-                depends_lib-append path:lib/libgcc/libgcc_s.1.dylib:libgcc
+                depends_lib-append path:share/doc/libgcc/README:libgcc
             }
         }
     }
