@@ -23,6 +23,9 @@ both arches. The compiler doesn't change on 10.6 through macOS 27 (on our
 builders). Not a revision bump: the change only affects configurations that
 failed to build.
 
+The PR now uses `*gcc-4.0 *gcc-4.2` instead (reviewer's choice), which
+moves 10.5 to MacPorts compilers; see [Review, 2026-11-04](#review-2026-11-04).
+
 Trac: [#74145](https://trac.macports.org/ticket/74145) (barracuda156,
 3.8.8, ppc) and [#74268](https://trac.macports.org/ticket/74268)
 (ballapete, 3.8.9/3.8.10, ppc), both open. Upstream closed
@@ -102,10 +105,40 @@ Submitted 2026-11-01 as
   upstream keeps clang-3.7 (`lang/llvm-3.7`: "kept around in order to build
   cmake (or its dependencies)"), which is what 10.6 already uses here.
 
+## Review, 2026-11-04
+
+barracuda156 suggested `compiler.blacklist-append *gcc-4.0 *gcc-4.2`
+(same as his powerpc-ports commit b0d359bf8d2); reneeotten applied it to
+the PR as 3db05d6960d. We tested it and agreed to keep it
+([comment](https://github.com/macports/macports-ports/pull/36316#issuecomment-6644508997)),
+noting the compiler cost on 10.5.
+
+`*gcc-4.2` also matches `llvm-gcc-4.2`, so on 10.5 the pattern removes
+every Xcode compiler and base falls back to a MacPorts one:
+
+| Builder | Picks | Result |
+|---|---|---|
+| 10.5 i386, cleaned | `macports-clang-3.7` | Builds; smoke test passes; `port test` the same 2 of 957 fail ([41922776086](https://github.com/trodemaster/blakeports/actions/runs/41922776086)) |
+| 10.5 ppc, cleaned | `macports-gcc-15` | Builds; smoke test passes; `port test` the same 2 of 957 fail ([41923400990](https://github.com/trodemaster/blakeports/actions/runs/41923400990)) |
+| 10.6 through 27 | unchanged (`macports-clang-3.7` on 10.6, `clang` after) | compiler report only ([41920496892](https://github.com/trodemaster/blakeports/actions/runs/41920496892)) |
+
+- A 10.5 user without the compiler builds it first. clang-3.7's
+  dependencies on 10.5 i386 include clang-3.4, llvm-3.3,
+  clang-11-bootstrap, gcc10-bootstrap and cmake-bootstrap; gcc15's on ppc
+  include llvm-3.3, python27 and gcc10-bootstrap. Neither tree contains
+  cmake or libarchive, so no cycle (libarchive uses the `clang_dependency`
+  PortGroup). Our CI got both compilers from the packages.jibb.tv cache.
+- `llvm-gcc-4.2` and `gcc-4.0` ship with Xcode 3.1.4
+  (`/Developer/usr/bin/llvm-gcc-4.2`, LLVM build 2064.3); `apple-gcc-4.2`
+  is the apple-gcc42 port. Bare names in base's compiler list are Xcode's.
+- Upstream PR comments: link no blakeports run logs (they may not be
+  public).
+
 ## Notes
 
-- The blakeports override is upstream's 3.8.11 port plus exactly this
-  change (it was 3.8.10 with `*gcc-4.2` before this analysis). Delete it
-  once the fix is merged upstream.
+- The blakeports override is upstream's 3.8.11 port plus the PR's
+  blacklist line (`*gcc-4.0 *gcc-4.2` since 2026-11-04; it was
+  `gcc-4.2 apple-gcc-4.2` before, and 3.8.10 with `*gcc-4.2` before this
+  analysis). Delete it once the fix is merged upstream.
 - Our comment on #74268 (2026-10-21) suggested blacklisting on powerpc only.
   The crash happens on i386 too, so the fix isn't arch-specific.

@@ -66,8 +66,10 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   branch, then cache
   upstream icu on packages.jibb.tv (left out until then by choice).
 - [ ] **libarchive** — upstream PR [#36316](https://github.com/macports/macports-ports/pull/36316)
-  open. After merge: delete `archivers/libarchive` and the
-  `test/libarchive` branch on origin.
+  open with barracuda156's `*gcc-4.0 *gcc-4.2` (applied by reneeotten);
+  2026-11-04 tested on 10.5 i386/ppc (clang-3.7 / gcc15) and agreed to
+  keep it. Waiting on merge. After merge: delete `archivers/libarchive`
+  and the `test/libarchive` branch on origin.
 - [ ] **libevent** — next. Trac [#74414](https://trac.macports.org/ticket/74414);
   blakeports patch guards `#pragma GCC diagnostic` for gcc ≥ 12. Reproduce
   on 10.5 i386 and ppc first (only ppc seen so far).
