@@ -23,8 +23,9 @@ both arches. The compiler doesn't change on 10.6 through macOS 27 (on our
 builders). Not a revision bump: the change only affects configurations that
 failed to build.
 
-The PR now uses `*gcc-4.0 *gcc-4.2` instead (reviewer's choice), which
-moves 10.5 to MacPorts compilers; see [Review, 2026-11-04](#review-2026-11-04).
+The PR briefly used the reviewer's `*gcc-4.0 *gcc-4.2`, which moves 10.5
+to MacPorts compilers; since 2026-11-05 it has `*gcc-4.0 apple-gcc-4.2
+gcc-4.2`, which keeps `llvm-gcc-4.2`. See [Review, 2026-11-04](#review-2026-11-04).
 
 Trac: [#74145](https://trac.macports.org/ticket/74145) (barracuda156,
 3.8.8, ppc) and [#74268](https://trac.macports.org/ticket/74268)
@@ -134,11 +135,41 @@ every Xcode compiler and base falls back to a MacPorts one:
 - Upstream PR comments: link no blakeports run logs (they may not be
   public).
 
+2026-11-05: tried `*gcc-4.0 apple-gcc-4.2` (keep `llvm-gcc-4.2`, drop the
+rest). It doesn't work: neither pattern matches Xcode's bare `gcc-4.2`
+(base uses `string match`), which is first in Xcode 3.1's list, so 10.5
+i386 and ppc still pick `gcc-4.2` and hit the ICE
+([42089661641](https://github.com/trodemaster/blakeports/actions/runs/42089661641),
+compiler report only). Keeping `llvm-gcc-4.2` needs bare `gcc-4.2` in the
+list: `*gcc-4.0 apple-gcc-4.2 gcc-4.2` picks `llvm-gcc-4.2` on 10.5
+i386 and ppc and leaves 26 and 27 on `clang`
+([42090152117](https://github.com/trodemaster/blakeports/actions/runs/42090152117),
+compiler report only). Full test on cleaned VMs
+([cleanup](https://github.com/trodemaster/blakeports/actions/runs/42090909891),
+[42091115612](https://github.com/trodemaster/blakeports/actions/runs/42091115612)):
+
+| Builder | Picks | Result |
+|---|---|---|
+| 10.5 i386 | `llvm-gcc-4.2` | Builds; smoke test passes; the same 2 of 957 fail |
+| 10.5 ppc | `llvm-gcc-4.2` | Builds; smoke test passes; the same 2 of 957 fail |
+| 10.6 | `macports-clang-3.7` (as master) | Builds; smoke test passes; 5 of 957 fail |
+
+10.6's extra failures, `test_write_disk_appledouble`,
+`test_write_disk_appledouble_zip` and `test_write_disk_mac_metadata`
+(plus 136 rather than 80 in `test_acl_platform_nfs4`), are master's
+build: the compiler is the same either way. This was the first
+`port test` on 10.6.
+
+Pushed to the PR as 54ec75c3bcd on top of reneeotten's commit, with a
+[comment](https://github.com/macports/macports-ports/pull/36316#issuecomment-6667759667).
+The blakeports override carries the same line.
+
 ## Notes
 
 - The blakeports override is upstream's 3.8.11 port plus the PR's
-  blacklist line (`*gcc-4.0 *gcc-4.2` since 2026-11-04; it was
-  `gcc-4.2 apple-gcc-4.2` before, and 3.8.10 with `*gcc-4.2` before this
-  analysis). Delete it once the fix is merged upstream.
+  blacklist line (`*gcc-4.0 apple-gcc-4.2 gcc-4.2` since 2026-11-05,
+  `*gcc-4.0 *gcc-4.2` on 2026-11-04, `gcc-4.2 apple-gcc-4.2` before
+  that, and 3.8.10 with `*gcc-4.2` before this analysis). Delete it
+  once the fix is merged upstream.
 - Our comment on #74268 (2026-10-21) suggested blacklisting on powerpc only.
   The crash happens on i386 too, so the fix isn't arch-specific.
