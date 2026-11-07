@@ -27,6 +27,14 @@ on:
           - mavericks
           - yosemite
           - elcapitan
+          - sierra
+          - highsierra
+          - mojave
+          - catalina
+          - bigsur
+          - macOS_12
+          - macOS_13
+          - macOS_14
       ports:
         description: 'Comma-separated ports, variants allowed (e.g. "netatalk, curl +ssl -http2")'
         required: true
