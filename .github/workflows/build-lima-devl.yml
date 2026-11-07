@@ -224,6 +224,15 @@ jobs:
           echo "GOPATH:     ${GOPATH_DIR}"
           echo "LIMA_SRCDIR=${SRCDIR}" >> "$GITHUB_ENV"
           echo "LIMA_GOPATH=${GOPATH_DIR}" >> "$GITHUB_ENV"
+          # Use the golangci-lint version upstream lima pins, so the linter
+          # keeps up with the runners' MacPorts go without manual bumps.
+          LINT_VERSION=$(awk '$1 == "github.com/golangci/golangci-lint/v2" {print $2; exit}' "${SRCDIR}/hack/tools/go.mod")
+          if [[ -z "${LINT_VERSION}" ]]; then
+            echo "::error::golangci-lint version not found in hack/tools/go.mod"
+            exit 1
+          fi
+          echo "golangci-lint: ${LINT_VERSION}"
+          echo "GOLANGCI_LINT_VERSION=${LINT_VERSION}" >> "$GITHUB_ENV"
           # Transfer ownership of work directory to runner user
           sudo chown -R "$(id -un):$(id -gn)" "${WORKPATH}"
           # Make MacPorts Go available to the lint action
@@ -232,10 +241,8 @@ jobs:
       - name: Lint Go (golangci-lint)
         uses: golangci/golangci-lint-action@v8
         with:
-          # v2.13.0 added Go 1.27 support (golangci/golangci-lint#6642); the
-          # macOS runners' MacPorts go is now 1.27, which v2.12.2 can't typecheck.
-          # Matches the version upstream lima pins in hack/tools/go.mod.
-          version: v2.13.2
+          # Read from upstream lima's hack/tools/go.mod in the step above
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
           working-directory: ${{ env.LIMA_SRCDIR }}
         env:
           GOPATH: ${{ env.LIMA_GOPATH }}

@@ -11,7 +11,8 @@ Patch revs: see `w1_rev` / `b2_rev` / `p1_rev` in the Portfile (B4 is parked, no
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | ~~macOS 27 fakecloudinit workarounds~~ — **removed from port 2026-10-05** (beta-era; branch `macports/m1-fakecloudinit-macos27` kept in case any SA plist keys are still needed on 27 GA) | dropped |
-| P1 (`patch-10`) | Experimental macOS 27 native guest provisioning via forked vz (`trodemaster/vz` `feat/guest-provisioning`); see upstream issue #5516 | local only — no upstream noise |
+| P1 (`patch-10`) | Experimental macOS 27 native guest provisioning via forked vz (`trodemaster/vz` `feat/guest-provisioning`); see upstream issue #5516 | **parked 2026-11-07** — patch removed from port; branch `macports/p1-guest-provisioning` kept (rebased onto `2f466781`). To be rebuilt on Z1's upstream vz API |
+| Z1 (`patch-11`) | Move to `github.com/Code-Hex/vz/v4` main (`64cc34b`, pseudo-version), which has the macOS 27 guest provisioning API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); adapts to v4's channel-taking `StateChangedNotify`. Branch `macports/vz4-upstream` | local only — drop once lima moves to a tagged vz v4 |
 | W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`); its `Copy-Provision` switch fix was dropped 2026-11-07 (upstream `7cc8a755`) | carried in port; not yet submitted upstream |
 
 `patch-01-g1-thread-pin.diff` merged upstream in PR #5036 and removed from port.
@@ -41,7 +42,7 @@ patch-usrlocalgo.diff
 patch-03-w1-windows-edition-detection.diff  ← carried in port
 patch-04-v1-guest-os-version.diff    ← "PR 1" precursor, log-only
 patch-06-b2-tcc.diff                 ← upstream candidate (B1 dependency merged)
-patch-10-p1-guest-provisioning.diff  ← experimental macOS 27 provisioning, local only
+patch-11-z1-vz-v4-upstream.diff      ← Code-Hex/vz v4 main, local only (P1 parked)
 ```
 
 `patch-04-v1-guest-os-version.diff` — the full "PR 1". Branch
@@ -94,11 +95,18 @@ P1 conflicted on `go.mod`/`go.sum` (upstream bumped vz v3.7.1 → v3.8.0 and hcs
 and on `vz_driver_darwin_test.go` (upstream added hostLoopback tests next to P1's
 `TestGuestProvisioningSkipReason`; kept both). go.mod resolved as upstream's with the
 `vz/v3` → `vz/v4` swap and the `trodemaster/vz` replace re-applied, then `go mod tidy`.
-`go vet ./...` clean on P1. All five patches apply in sequence against a fresh `2f466781`
-archive. `w1_rev` 6→7, `b2_rev` 12→13, `p1_rev` 6→7, `revision` reset to 0.
-Upstream `Code-Hex/vz` main now has its own `NewMacGuestProvisioningOptions` /
-`WithGuestProvisioningOptions` (no tagged release yet, lima still on v3.8.0) — P1 could move
-off the fork onto upstream vz v4 once it's usable. Tested on CI macOS_27 first.
+`go vet ./...` clean on P1. `w1_rev` 6→7, `b2_rev` 12→13, `revision` reset to 0.
+Then parked P1 (removed `patch-10`, dropped `p1_rev`; Blake will rebuild it on upstream vz)
+and added Z1 (`patch-11`, `z1_rev 1`): upstream `Code-Hex/vz` main now has its own guest
+provisioning API but no tagged v4 release, and lima master is still on v3.8.0, so Z1 pins
+`v4.0.0-20261107060947-64cc34bcd7d0` (`// gomodjail:unconfined` kept) and bumps purego
+0.11.3 / x/mod 0.42.0 with it. v4's `StateChangedNotify(chan)` returns a stop func, so
+`startVM` registers a buffered channel before `Start`. Stack (Makefile, usrlocalgo, 03, 06,
+11) applies clean on `2f466781`; `go vet ./...` clean for arm64 and amd64.
+`build-lima-devl.yml` now reads the golangci-lint version from the source's
+`hack/tools/go.mod` instead of a hand-bumped pin: v2.13.2 failed on the macOS_27 runner
+("export data version 5 is greater than maximum supported version 4", newer go-1.27).
+Tested on CI macOS_27 first.
 
 **2026-08-02 review-feedback sync:** PR #5336 got reviewer pushback on
 `suppressFirstLoginSetup: {}` ("why not `true`?") plus a request to keep the custom-plist
