@@ -97,8 +97,12 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   `~/Library/LaunchAgents` and reload the agent, then restart macos-15
   through ghrunnerd. Check with `ps -M` (31T, not 20T/4T); see
   machine-cfg `kb/LAUNCHD_PROCESS_TYPE.md`.
-- [ ] Rebuild darkstar's ghrunnerd binary: its actions_runners checkout
-  pulled ghrunnerd `netres.go` changes (2026-11-01) that aren't built yet.
+- [ ] darkstar actions_runners: 8 commits ahead of origin, unpushed (the
+  10.12–14 runner work plus `8a7bcf4`, the in-VM snapshot runner
+  description, installed 2026-11-07). Uncommitted `ghrunnerd/internal/ops/guest.go`
+  (stale LaunchAgent and `*_migrated` cleanup, already in the running
+  binary) and `darkstar/vm/setupmodernmac`; untracked `darkstar/vm/vnc-screenshot`.
+  Commit and push.
 
 ## Scripts Reference
 

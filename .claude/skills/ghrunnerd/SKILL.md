@@ -85,10 +85,9 @@ done. Jobs live in memory and vanish if the server restarts.
 - Lima runners (`macos-*`) have no snapshots; a reset is a `runner_rebuild`
   that takes hours. Do not use it as a retry.
 - darkstar's `monterey`, `ventura` and `sonoma` (`macOS_12/13/14`) are VMware
-  VMs, not Lima: `runners_status` shows `known_good` snapshots for them. The
-  darkstar server's own instructions still group them with the Lima in-VM
-  runners ("no snapshots"); trust `runners_status`/`vm_snapshots`, and look
-  at the snapshot tree before reverting one.
+  VMs, not Lima. They keep a `known-good` snapshot that `runner_up` requires
+  and `vm_revert` restores; `runner_rebuild` doesn't apply. Look at the
+  snapshot tree before reverting one.
 - `leopard-ppc` is a QEMU G5 whose runner container runs in the Lima `default`
   Docker VM on far-star. If `runner_up` fails with "Cannot connect to the
   Docker daemon", `limactl start default` (sandbox off), then `runner_up`
