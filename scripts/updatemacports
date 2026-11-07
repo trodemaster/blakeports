@@ -104,7 +104,15 @@ ensure_git_configured() {
         # A stale ports tree (>2 weeks) has Portfile checksums that no longer
         # match the mirrors -> `port install` aborts. Refresh first.
         info "Refreshing ports tree (port selfupdate)..."
+        # The [default] source is the blakeports copy a build job unpacks into
+        # ~/code/blakeports; jobs remove it when they finish, and syncing a
+        # missing file:// source fails the whole selfupdate. Stand in an empty
+        # dir for the sync only.
+        local src_dir made=""
+        src_dir=$(sed -n 's#^file://\(/[^ ]*\) *\[default\].*#\1#p' /opt/local/etc/macports/sources.conf 2>/dev/null | head -1)
+        if [ -n "$src_dir" ] && [ ! -d "$src_dir" ]; then mkdir -p "$src_dir" && made=1; fi
         sudo port selfupdate 2>&1 | tail -3 || warn "selfupdate failed - continuing with existing tree"
+        if [ -n "$made" ]; then rmdir "$src_dir" 2>/dev/null || true; fi
 
         # Clear any partial/variant-mismatched build left by an earlier run
         # ("Requested variants ... do not match those the build was started with").

@@ -523,5 +523,7 @@ jobs:
               source ~/.profile
             fi
             rm -f /tmp/blakeports.tar.gz
+            # each job unpacks a fresh copy; don't leave one on the VM
+            rm -rf /Users/blake/code/blakeports
             echo "✅ Cleanup complete"
           EOF
