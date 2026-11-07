@@ -65,6 +65,23 @@ ensure_mounted() {
     return 1
 }
 
+# A run killed outright (a cancelled job) never reaches its EXIT trap, so its
+# mount stays. macOS won't mount the same SMB share twice for one user ("File
+# exists"), so every later run would fail. Unmount any packages-cache.<pid>
+# whose script is gone.
+unmount_stale() {
+    local m pid
+    for m in $(mount | sed -n 's|.* on \(/private/tmp/packages-cache\.[0-9][0-9]*\) .*|\1|p'); do
+        pid=${m##*.}
+        [ "$m" = "$MNT" ] && continue
+        ps -p "$pid" >/dev/null 2>&1 && continue
+        echo "unmounting stale $m"
+        umount "$m" 2>/dev/null || sudo umount -f "$m" 2>/dev/null || diskutil unmount force "$m" >/dev/null 2>&1
+        rmdir "$m" 2>/dev/null
+    done
+    return 0
+}
+
 unmount() {
     if is_mounted; then
         umount "$MNT" || diskutil unmount force "$MNT" >/dev/null 2>&1
@@ -144,6 +161,7 @@ sudo "$HERE/setup-client.sh" "$PACKAGES_URL" </dev/null || die "setup-client.sh 
 echo "::endgroup::"
 
 echo "::group::Check the cache share"
+unmount_stale
 ensure_mounted || die "cannot mount ${PACKAGES_SHARE_URL%%@*}@... (share down or bad credentials)"
 echo "share OK, mounted at $MNT"
 echo "::endgroup::"
