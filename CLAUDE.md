@@ -66,10 +66,11 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   branch, then cache
   upstream icu on packages.jibb.tv (left out until then by choice).
 - [ ] **libarchive** — upstream PR [#36316](https://github.com/macports/macports-ports/pull/36316)
-  open with barracuda156's `*gcc-4.0 *gcc-4.2` (applied by reneeotten);
-  2026-11-04 tested on 10.5 i386/ppc (clang-3.7 / gcc15) and agreed to
-  keep it. Waiting on merge. After merge: delete `archivers/libarchive`
-  and the `test/libarchive` branch on origin.
+  open. 2026-11-05: pushed `*gcc-4.0 apple-gcc-4.2 gcc-4.2` (54ec75c3bcd)
+  so 10.5 keeps Xcode's llvm-gcc-4.2 instead of the reviewers'
+  `*gcc-4.2`; full test on cleaned 10.5 i386/ppc and 10.6 passed, and I
+  commented. Waiting on barracuda156. After merge: delete
+  `archivers/libarchive` and the `test/libarchive` branch on origin.
 - [ ] **libevent** — next. Trac [#74414](https://trac.macports.org/ticket/74414);
   blakeports patch guards `#pragma GCC diagnostic` for gcc ≥ 12. Reproduce
   on 10.5 i386 and ppc first (only ppc seen so far).
@@ -87,6 +88,19 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   After merge: delete the `emulators/snowemu-update-1.6.0` branch on the
   fork. Test basic app launch if a reviewer asks.
 
+**Runner coverage:**
+
+- [ ] Build runners for 10.12 Sierra through 14 Sonoma (10.12, 10.13,
+  10.14, 10.15, 11, 12, 13, 14) as x86 VMware VMs on darkstar, like the
+  10.5–10.11 legacy runners. 10.4 is out of scope (MacPorts doesn't
+  support it). Current coverage, 2026-11-04: 10.5 (x86 and ppc),
+  10.6–10.11, 15, 26, 27. Plan and progress log: darkstar
+  `/media/blake/jonesfarm/actions-runners/os_x_runners.md`.
+  2026-11-05: `base/11_bigsur_base` built (11.7.11, `known-good`
+  snapshot, not yet a runner); mist-cli on it lists 10.12–14 and made a
+  10.13.6 ISO. Next: boot-test that ISO as `10.13_highsierra_base`.
+  Installer ISOs (oldest per version) are in far-star `/Volumes/zen/iso`.
+
 **Infrastructure reminders:**
 
 - [ ] Back up the packages.jibb.tv signing key,
@@ -98,8 +112,6 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   machine-cfg `kb/LAUNCHD_PROCESS_TYPE.md`.
 - [ ] Rebuild darkstar's ghrunnerd binary: its actions_runners checkout
   pulled ghrunnerd `netres.go` changes (2026-11-01) that aren't built yet.
-- [ ] machine-cfg: local main has diverged from origin, and `stash@{0}`
-  duplicates a far-star settings edit. Reconcile, then drop the stash.
 
 ## Scripts Reference
 
