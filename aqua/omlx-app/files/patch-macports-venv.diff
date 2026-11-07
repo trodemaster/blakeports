@@ -1,5 +1,5 @@
 diff --git apps/omlx-mac/Sources/Server/PythonRuntime.swift apps/omlx-mac/Sources/Server/PythonRuntime.swift
-index f8bbb43..09667cc 100644
+index f8bbb43..1c777a3 100644
 --- apps/omlx-mac/Sources/Server/PythonRuntime.swift
 +++ apps/omlx-mac/Sources/Server/PythonRuntime.swift
 @@ -3,6 +3,9 @@
@@ -12,7 +12,64 @@ index f8bbb43..09667cc 100644
  //   2. Bundle.main/Contents/Resources/Python/cpython-3.11/bin/python3 — production.
  //      Layout matches the venvstacks export tree, which
  //      apps/omlx-mac/Scripts/build.sh copies verbatim into the Swift .app.
-@@ -67,6 +70,19 @@ struct PythonRuntime {
+@@ -25,6 +28,56 @@
+ //     server after its delayed self-SIGTERM.
+ 
+ import Foundation
++import Security
++
++/// MacPorts: oMLX server secrets live in the login keychain instead of
++/// settings.json. Generic passwords, service "app.omlx.server", accounts
++/// "api-key" and "secret-key". They reach the server as OMLX_API_KEY and
++/// OMLX_SECRET_KEY in its spawn environment, and the server keeps
++/// env-supplied secrets out of settings.json when it saves.
++///
++/// Each item is read once per app run and cached, so a pending keychain
++/// prompt can't repeat on every config reload. Restart the app after
++/// rotating a secret.
++enum ServerSecrets {
++    static let service = "app.omlx.server"
++
++    private final class Cache: @unchecked Sendable {
++        let lock = NSLock()
++        var values: [String: String?] = [:]
++    }
++    private static let cache = Cache()
++
++    static func read(account: String) -> String? {
++        cache.lock.lock()
++        defer { cache.lock.unlock() }
++        if let cached = cache.values[account] { return cached }
++        let value = lookup(account: account)
++        cache.values[account] = .some(value)
++        return value
++    }
++
++    private static func lookup(account: String) -> String? {
++        let query: [String: Any] = [
++            kSecClass as String: kSecClassGenericPassword,
++            kSecAttrService as String: service,
++            kSecAttrAccount as String: account,
++            kSecMatchLimit as String: kSecMatchLimitOne,
++            kSecReturnData as String: true,
++        ]
++        var item: CFTypeRef?
++        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
++              let data = item as? Data,
++              let value = String(data: data, encoding: .utf8)?
++                .trimmingCharacters(in: .whitespacesAndNewlines),
++              !value.isEmpty
++        else { return nil }
++        return value
++    }
++
++    static var apiKey: String? { read(account: "api-key") }
++    static var secretKey: String? { read(account: "secret-key") }
++}
+ 
+ struct PythonRuntime {
+     let executable: URL
+@@ -67,6 +120,19 @@ struct PythonRuntime {
              }
          }
  
@@ -32,7 +89,22 @@ index f8bbb43..09667cc 100644
          let bundleRoot = Bundle.main.bundleURL
          let resources = bundleRoot.appendingPathComponent("Contents/Resources")
          let pythonRoots = [
-@@ -133,6 +149,8 @@ struct PythonRuntime {
+@@ -109,6 +175,14 @@ struct PythonRuntime {
+         // starts; setting it inside omlx.cli is too late for malloc init.
+         env["MallocSpaceEfficient"] = env["MallocSpaceEfficient"] ?? "1"
+ 
++        // MacPorts: hand the keychain secrets to the server via its env.
++        if (env["OMLX_API_KEY"] ?? "").isEmpty, let key = ServerSecrets.apiKey {
++            env["OMLX_API_KEY"] = key
++        }
++        if (env["OMLX_SECRET_KEY"] ?? "").isEmpty, let key = ServerSecrets.secretKey {
++            env["OMLX_SECRET_KEY"] = key
++        }
++
+         var path = env["PATH"] ?? ""
+         for prefix in homebrewPaths.reversed() where !path.contains(prefix) {
+             path = path.isEmpty ? prefix : "\(prefix):\(path)"
+@@ -133,6 +207,8 @@ struct PythonRuntime {
      }
  
      private static let defaultHomebrewPaths = [
@@ -59,3 +131,55 @@ index 4952d91..d76a86d 100644
          do {
              let result = try await ReleasesChecker.check(
                  currentVersion: currentVersion,
+diff --git apps/omlx-mac/Sources/Config/AppConfig.swift apps/omlx-mac/Sources/Config/AppConfig.swift
+index 44ca541..e23d4cd 100644
+--- apps/omlx-mac/Sources/Config/AppConfig.swift
++++ apps/omlx-mac/Sources/Config/AppConfig.swift
+@@ -303,7 +303,12 @@ struct AppConfig: Sendable, Equatable, Codable {
+         let env = ProcessInfo.processInfo.environment
+         if let h = env["OMLX_HOST"], !h.isEmpty { c.bindAddress = h }
+         if let pStr = env["OMLX_PORT"], let p = Int(pStr) { c.port = p }
+-        if let k = env["OMLX_API_KEY"], !k.isEmpty { c.apiKey = k }
++        if let k = env["OMLX_API_KEY"], !k.isEmpty {
++            c.apiKey = k
++        } else if let k = ServerSecrets.apiKey {
++            // MacPorts: the keychain key wins over settings.json.
++            c.apiKey = k
++        }
+         return c
+     }
+ 
+@@ -334,7 +339,17 @@ struct AppConfig: Sendable, Equatable, Codable {
+         json["server"] = server
+ 
+         var auth = (json["auth"] as? [String: Any]) ?? [:]
+-        auth["api_key"] = apiKey ?? ""
++        // MacPorts: a key that came from the environment or the keychain is
++        // never written to settings.json; the file keeps what it had.
++        let externalKeys = [
++            ProcessInfo.processInfo.environment["OMLX_API_KEY"],
++            ServerSecrets.apiKey,
++        ].compactMap { $0 }.filter { !$0.isEmpty }
++        if let key = apiKey, externalKeys.contains(key) {
++            // leave auth["api_key"] untouched
++        } else {
++            auth["api_key"] = apiKey ?? ""
++        }
+         json["auth"] = auth
+ 
+         var model = (json["model"] as? [String: Any]) ?? [:]
+diff --git apps/omlx-mac/Sources/Menubar/MenubarController.swift apps/omlx-mac/Sources/Menubar/MenubarController.swift
+index f5313c8..43c2df8 100644
+--- apps/omlx-mac/Sources/Menubar/MenubarController.swift
++++ apps/omlx-mac/Sources/Menubar/MenubarController.swift
+@@ -1007,7 +1007,9 @@ final class MenubarController: NSObject {
+         guard serverIsRunning else { return }
+         let host = MenubarController.displayHost(server: server, fallback: config.host)
+         let port = MenubarController.displayPort(server: server, fallback: config.port)
+-        guard let url = MenubarController.webAdminURL(host: host, port: port, apiKey: config.apiKey) else { return }
++        // MacPorts: no key in the URL; it would land in browser history.
++        // The dashboard asks for it once and remembers the session.
++        guard let url = MenubarController.webAdminURL(host: host, port: port, apiKey: nil) else { return }
+         NSWorkspace.shared.open(url)
+     }
+ 

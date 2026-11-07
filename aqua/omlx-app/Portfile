@@ -6,7 +6,7 @@ PortGroup           github 1.0
 github.setup        jundot omlx 0.7.0 v
 github.tarball_from archive
 name                omlx-app
-revision            0
+revision            1
 
 categories          aqua llm
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
@@ -39,6 +39,9 @@ depends_run         port:python313 \
 
 # Find the user venv on Finder/login launches, add MacPorts to the server
 # PATH, and disable the in-app updater (it would install the release DMG).
+# Read the server API key and session secret from the login keychain and
+# pass them to the server as OMLX_API_KEY/OMLX_SECRET_KEY instead of
+# keeping them in settings.json; keep the key out of the dashboard URL.
 patchfiles          patch-macports-venv.diff
 
 use_xcode           yes
@@ -95,6 +98,14 @@ Then open ${applications_dir}/oMLX.app (Finder, Dock or a login item). The app\
 starts, stops and restarts the server itself, so stop any other oMLX server\
 on the same port first. To use a different interpreter, set\
 OMLX_PYTHON_OVERRIDE and start the app with ${prefix}/bin/omlx-app.
+
+Server secrets come from the login keychain (generic passwords, service\
+app.omlx.server, accounts api-key and secret-key) and are passed to the\
+server as OMLX_API_KEY and OMLX_SECRET_KEY. Leave auth.api_key and\
+auth.secret_key empty in ~/.omlx/settings.json, and allow the keychain\
+prompt after each install. A stock oMLX server writes env-supplied secrets\
+back to settings.json when it saves settings; use a server that keeps them\
+out (see the oMLX setup notes).
 "
 
 github.livecheck.regex  {([0-9.]+)}
