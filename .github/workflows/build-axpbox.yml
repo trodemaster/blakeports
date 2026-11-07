@@ -29,6 +29,21 @@ on:
         required: false
         default: true
         type: boolean
+      run_macos12:
+        description: 'macOS 12 (Monterey, x86_64)'
+        required: false
+        default: false
+        type: boolean
+      run_macos13:
+        description: 'macOS 13 (Ventura, x86_64)'
+        required: false
+        default: false
+        type: boolean
+      run_macos14:
+        description: 'macOS 14 (Sonoma, x86_64)'
+        required: false
+        default: false
+        type: boolean
 
 defaults:
   run:
@@ -71,6 +86,27 @@ jobs:
             if [[ "${{ inputs.run_macos27 }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
               MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"emulators/axpbox"}'
+              FIRST=false
+            fi
+
+            # macOS 12 x86_64 (runner in the VM, darkstar)
+            if [[ "${{ inputs.run_macos12 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_12","runner":"macOS_12","type":"modern","port":"emulators/axpbox"}'
+              FIRST=false
+            fi
+
+            # macOS 13 x86_64 (runner in the VM, darkstar)
+            if [[ "${{ inputs.run_macos13 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_13","runner":"macOS_13","type":"modern","port":"emulators/axpbox"}'
+              FIRST=false
+            fi
+
+            # macOS 14 x86_64 (runner in the VM, darkstar)
+            if [[ "${{ inputs.run_macos14 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_14","runner":"macOS_14","type":"modern","port":"emulators/axpbox"}'
               FIRST=false
             fi
 

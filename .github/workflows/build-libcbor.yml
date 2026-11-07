@@ -69,6 +69,46 @@ on:
         required: false
         default: false
         type: boolean
+      run_sierra:
+        description: 'macOS 10.12 (Sierra)'
+        required: false
+        default: false
+        type: boolean
+      run_highsierra:
+        description: 'macOS 10.13 (High Sierra)'
+        required: false
+        default: false
+        type: boolean
+      run_mojave:
+        description: 'macOS 10.14 (Mojave)'
+        required: false
+        default: false
+        type: boolean
+      run_catalina:
+        description: 'macOS 10.15 (Catalina)'
+        required: false
+        default: false
+        type: boolean
+      run_bigsur:
+        description: 'macOS 11 (Big Sur)'
+        required: false
+        default: false
+        type: boolean
+      run_macos12:
+        description: 'macOS 12 (Monterey, x86_64)'
+        required: false
+        default: false
+        type: boolean
+      run_macos13:
+        description: 'macOS 13 (Ventura, x86_64)'
+        required: false
+        default: false
+        type: boolean
+      run_macos14:
+        description: 'macOS 14 (Sonoma, x86_64)'
+        required: false
+        default: false
+        type: boolean
 
 defaults:
   run:
@@ -169,6 +209,62 @@ jobs:
             if [[ "${{ inputs.run_elcapitan }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
               MATRIX+='{"platform":"elcapitan","runner":["self-hosted","elcapitan"],"type":"legacy","port":"devel/libcbor","vm_ip":"${{ vars.LEGACY_TENELEVEN_IP }}","vm_username":"${{ vars.LEGACY_USERNAME }}","vm_name":"ElCapitan","os_version":"10.11","timeout":"1440"}'
+              FIRST=false
+            fi
+
+            # macOS 10.12 (partner container, darkstar)
+            if [[ "${{ inputs.run_sierra }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"sierra","runner":["self-hosted","sierra"],"type":"legacy","port":"devel/libcbor","vm_username":"blake","vm_name":"Sierra","os_version":"10.12","timeout":"1440"}'
+              FIRST=false
+            fi
+
+            # macOS 10.13 (partner container, darkstar)
+            if [[ "${{ inputs.run_highsierra }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"highsierra","runner":["self-hosted","highsierra"],"type":"legacy","port":"devel/libcbor","vm_username":"blake","vm_name":"HighSierra","os_version":"10.13","timeout":"1440"}'
+              FIRST=false
+            fi
+
+            # macOS 10.14 (partner container, darkstar)
+            if [[ "${{ inputs.run_mojave }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"mojave","runner":["self-hosted","mojave"],"type":"legacy","port":"devel/libcbor","vm_username":"blake","vm_name":"Mojave","os_version":"10.14","timeout":"1440"}'
+              FIRST=false
+            fi
+
+            # macOS 10.15 (partner container, darkstar)
+            if [[ "${{ inputs.run_catalina }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"catalina","runner":["self-hosted","catalina"],"type":"legacy","port":"devel/libcbor","vm_username":"blake","vm_name":"Catalina","os_version":"10.15","timeout":"1440"}'
+              FIRST=false
+            fi
+
+            # macOS 11 (partner container, darkstar)
+            if [[ "${{ inputs.run_bigsur }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"bigsur","runner":["self-hosted","bigsur"],"type":"legacy","port":"devel/libcbor","vm_username":"blake","vm_name":"BigSur","os_version":"11","timeout":"1440"}'
+              FIRST=false
+            fi
+
+            # macOS 12 x86_64 (runner in the VM, darkstar)
+            if [[ "${{ inputs.run_macos12 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_12","runner":"macOS_12","type":"modern","port":"devel/libcbor"}'
+              FIRST=false
+            fi
+
+            # macOS 13 x86_64 (runner in the VM, darkstar)
+            if [[ "${{ inputs.run_macos13 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_13","runner":"macOS_13","type":"modern","port":"devel/libcbor"}'
+              FIRST=false
+            fi
+
+            # macOS 14 x86_64 (runner in the VM, darkstar)
+            if [[ "${{ inputs.run_macos14 }}" == "true" ]]; then
+              [[ "$FIRST" == "false" ]] && MATRIX+=','
+              MATRIX+='{"platform":"macOS_14","runner":"macOS_14","type":"modern","port":"devel/libcbor"}'
               FIRST=false
             fi
 
