@@ -1,6 +1,8 @@
 name: Build omlx-app
 
-# macOS 15+ only: the app is a SwiftUI menu bar app built with xcodebuild.
+# Current macOS only (27): the app is a SwiftUI menu bar app built with
+# xcodebuild, and it tracks the latest SDK (0.7.0 already needs the macOS 26
+# SDK's Glass API, so the 15 runner can't build it).
 
 on:
   push:
@@ -16,21 +18,6 @@ on:
         required: false
         default: 'main'
         type: string
-      run_macos27:
-        description: 'macOS 27'
-        required: false
-        default: true
-        type: boolean
-      run_macos26:
-        description: 'macOS 26 (Tahoe)'
-        required: false
-        default: true
-        type: boolean
-      run_macos15:
-        description: 'macOS 15 (Sequoia)'
-        required: false
-        default: true
-        type: boolean
 
 defaults:
   run:
@@ -54,17 +41,8 @@ jobs:
             FIRST=false
           }
 
-          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
-            add macOS_15; add macOS_26; add macOS_27
-          else
-            [[ "${{ inputs.run_macos15 }}" == "true" ]] && add macOS_15
-            [[ "${{ inputs.run_macos26 }}" == "true" ]] && add macOS_26
-            [[ "${{ inputs.run_macos27 }}" == "true" ]] && add macOS_27
-            # If no platforms selected, default to all modern platforms
-            if [[ "$FIRST" == "true" ]]; then
-              add macOS_15; add macOS_26; add macOS_27
-            fi
-          fi
+          # Current macOS only, for push, PR and dispatch alike
+          add macOS_27
 
           MATRIX+=']}'
 
