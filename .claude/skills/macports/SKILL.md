@@ -337,6 +337,8 @@ If someone is on neither list and hasn't merged, treat them as read-only, and as
 Old-SDK `scandir` signature; legacy-support macro. Tested on macOS 27, macOS 26, OS X 10.11, 10.10, 10.9, 10.8, 10.7, 10.6.
 ````
 
+**Latest comment first, and a committer's request is the exception to "don't touch the commit".** At the start of any PR work, read the newest comments (`gh pr view <n> --repo macports/macports-ports --json comments,reviews`) and act on the last one addressed to us. When a committer asks for a squash or a reworded commit message, do it: `git fetch upstream master && git rebase upstream/master`, `git reset --soft upstream/master`, one commit with a concise message (subject ≤ 55 chars, short body saying why, Trac URL if any; no blakeports mentions, no GitHub PR links), then `git push --force-with-lease`. Leave the PR title and description alone. The commit-message approval rule still applies: show the message and wait. Review rounds that add fixup commits (like the `Update Portfile` GitHub-UI edits) always end in this squash once a committer approves. Reply with one line ("squashed") and no re-run of the diff; the content didn't change.
+
 **Order of operations — never reorder:**
 1. Fix in blakeports and commit there.
 2. Run CI on every platform the change touches (modern + legacy when relevant). Wait for all green.
