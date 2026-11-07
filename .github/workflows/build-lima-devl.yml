@@ -29,11 +29,6 @@ on:
         required: false
         default: true
         type: boolean
-      run_macos12:
-        description: 'macOS 12 (Monterey, x86_64)'
-        required: false
-        default: false
-        type: boolean
       run_macos13:
         description: 'macOS 13 (Ventura, x86_64)'
         required: false
@@ -86,13 +81,6 @@ jobs:
             if [[ "${{ inputs.run_macos27 }}" == "true" ]]; then
               [[ "$FIRST" == "false" ]] && MATRIX+=','
               MATRIX+='{"platform":"macOS_27","runner":"macOS_27","type":"modern","port":"sysutils/lima-devl"}'
-              FIRST=false
-            fi
-
-            # macOS 12 x86_64 (runner in the VM, darkstar)
-            if [[ "${{ inputs.run_macos12 }}" == "true" ]]; then
-              [[ "$FIRST" == "false" ]] && MATRIX+=','
-              MATRIX+='{"platform":"macOS_12","runner":"macOS_12","type":"modern","port":"sysutils/lima-devl"}'
               FIRST=false
             fi
 
