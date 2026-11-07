@@ -233,3 +233,7 @@ jobs:
           else
             { cat "$RUNNER_TEMP/steps/env.sh" "$RUNNER_TEMP/steps/diag.sh"; } | ssh legacyvm "TREE=~/code/blakeports PORT=$PORT bash -s"
           fi
+
+      - name: Remove the blakeports copy (legacy)
+        if: always() && env.MODERN != 'true'
+        run: ssh legacyvm 'rm -rf ~/code/blakeports ~/code/blakeports.new' || true

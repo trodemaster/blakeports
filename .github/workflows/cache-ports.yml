@@ -126,3 +126,7 @@ jobs:
             echo ""
             echo "Cache: http://packages.jibb.tv"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the blakeports copy (legacy)
+        if: always() && env.MODERN != 'true'
+        run: ssh legacyvm 'rm -rf ~/code/blakeports ~/code/blakeports.new' || true
