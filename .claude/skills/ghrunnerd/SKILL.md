@@ -22,16 +22,23 @@ sees only its own runners. Registered at local scope for this project in
 |---|---|---|---|
 | `ghrunnerd-far-star` | `http://127.0.0.1:18081/mcp` | `macos-26`, `macos-27`, `leopard-ppc` | `macOS_26`, `macOS_27`, `leopard-ppc-runner` |
 | `ghrunnerd-umac` | `http://192.168.234.144:18081/mcp` (LAN IP; not listening on tailscale) | `macos-15` | `macOS_15` |
-| `ghrunnerd-darkstar` | `http://darkstar.jibb.tv:18081/mcp` | `leopard`, `snowleopard`, `lion`, `mountainlion`, `mavericks`, `yosemite`, `elcapitan` | `<id>-runner` |
+| `ghrunnerd-darkstar` | `http://darkstar.jibb.tv:18081/mcp` | legacy: `leopard`, `snowleopard`, `lion`, `mountainlion`, `mavericks`, `yosemite`, `elcapitan`, `sierra`, `highsierra`, `mojave`, `catalina`, `bigsur`; runner in the VM: `monterey`, `ventura`, `sonoma` | legacy: `<id>-runner`; `monterey`/`ventura`/`sonoma` are `macOS_12`/`macOS_13`/`macOS_14` |
 
 Pick the server by the runner: `macOS_15` lives on umac, `macOS_26`/`macOS_27`
-and `leopard-ppc` on far-star, every other legacy runner on darkstar. Tools
-appear as `mcp__ghrunnerd-<host>__<tool>`. They load at session start, so a
-session opened before the registration needs a restart.
+and `leopard-ppc` on far-star, everything else (10.5 i386 through 14) on
+darkstar. Tools appear as `mcp__ghrunnerd-<host>__<tool>`. They load at
+session start, so a session opened before the registration needs a restart.
 
-Modern runners (build on push): `macOS_15`, `macOS_26`, `macOS_27`. Everything
-else, **including `leopard-ppc`**, is legacy and only builds on manual
-dispatch with `run_legacy=true`.
+The darkstar runners come in two kinds. The legacy ones (10.5–10.15 and 11)
+are a VMware VM plus a Linux container that drives it over SSH. `monterey`,
+`ventura` and `sonoma` run the Actions agent inside the VMware VM
+(`vmware-guest` backend, `guest_runner` in `runners_status`), with no
+container. Both kinds have `known-good` snapshots.
+
+Only `macOS_15`, `macOS_26` and `macOS_27` build on push. Every other runner,
+**including `leopard-ppc` and `macOS_12/13/14`**, builds only on manual
+dispatch, through its own `run_<name>` checkbox (`run_leopard`,
+`run_leopard_ppc`, `run_sierra`, `run_bigsur`, `run_macos12`, ...).
 
 ## Tools
 
@@ -59,11 +66,12 @@ done. Jobs live in memory and vanish if the server restarts.
 2. If asked about the whole fleet, also compare against GitHub, which is the
    source of truth for what Actions can schedule:
    `gh api --paginate repos/trodemaster/blakeports/actions/runners --jq '.runners[] | "\(.name)\t\(.status)\tbusy=\(.busy)"'`
-   Expect 11 runners: 7 on darkstar, 3 on far-star, 1 on umac.
+   Expect 19 runners: 15 on darkstar, 3 on far-star, 1 on umac.
 3. Act with the narrowest tool: `runner_up <id>` rather than `all`.
 4. Re-run `runners_status` and confirm GitHub shows the runner `online`.
 5. For queued jobs, check status first; only then re-dispatch
-   (`gh workflow run "Build <Port>"`, adding `-f run_legacy=true` for legacy).
+   (`gh workflow run "Build <Port>"`, adding `-f run_<name>=true` for each
+   older runner, e.g. `-f run_leopard=true -f run_macos12=true`).
 
 ## Rules
 
@@ -76,6 +84,11 @@ done. Jobs live in memory and vanish if the server restarts.
   `macos-26` and `macos-27` together, so a third refuses to start.
 - Lima runners (`macos-*`) have no snapshots; a reset is a `runner_rebuild`
   that takes hours. Do not use it as a retry.
+- darkstar's `monterey`, `ventura` and `sonoma` (`macOS_12/13/14`) are VMware
+  VMs, not Lima: `runners_status` shows `known_good` snapshots for them. The
+  darkstar server's own instructions still group them with the Lima in-VM
+  runners ("no snapshots"); trust `runners_status`/`vm_snapshots`, and look
+  at the snapshot tree before reverting one.
 - `leopard-ppc` is a QEMU G5 whose runner container runs in the Lima `default`
   Docker VM on far-star. If `runner_up` fails with "Cannot connect to the
   Docker daemon", `limactl start default` (sandbox off), then `runner_up`
@@ -90,7 +103,7 @@ Use the same operations from the CLI on the host that owns the runner:
 
 ```bash
 ghrunnerd status | vm-list | up <id> | down <id> | restart <id> | logs <id>   # far-star (this machine)
-ssh darkstar ghrunnerd status                                                  # legacy VMs
+ssh darkstar ghrunnerd status                                                  # 10.5 i386 through 14
 ssh umac '~/Developer/go/bin/ghrunnerd status'                                 # macOS_15
 ```
 

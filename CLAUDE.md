@@ -88,19 +88,6 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   After merge: delete the `emulators/snowemu-update-1.6.0` branch on the
   fork. Test basic app launch if a reviewer asks.
 
-**Runner coverage:**
-
-- [ ] Build runners for 10.12 Sierra through 14 Sonoma (10.12, 10.13,
-  10.14, 10.15, 11, 12, 13, 14) as x86 VMware VMs on darkstar, like the
-  10.5–10.11 legacy runners. 10.4 is out of scope (MacPorts doesn't
-  support it). Current coverage, 2026-11-04: 10.5 (x86 and ppc),
-  10.6–10.11, 15, 26, 27. Plan and progress log: darkstar
-  `/media/blake/jonesfarm/actions-runners/os_x_runners.md`.
-  2026-11-05: `base/11_bigsur_base` built (11.7.11, `known-good`
-  snapshot, not yet a runner); mist-cli on it lists 10.12–14 and made a
-  10.13.6 ISO. Next: boot-test that ISO as `10.13_highsierra_base`.
-  Installer ISOs (oldest per version) are in far-star `/Volumes/zen/iso`.
-
 **Infrastructure reminders:**
 
 - [ ] Back up the packages.jibb.tv signing key,
@@ -131,16 +118,45 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 ## CI/CD Architecture
 
 ### Self-Hosted Runners
-- Modern macOS runners run in Lima VMs (`vz`), started from the
-  [lima_mac](../lima_mac) Makefile and registered with `scripts/ghrunner -lima`
-- Legacy runners (10.5–10.11, PPC) are Linux docker runners that SSH into
-  VMware VMs on darkstar, managed with `scripts/ghrunner -start-group legacy`
 
-| Runner | Lima instance | Host | Start with |
+Every macOS from 10.5 to 27 has a runner, as of 2026-11-07 (10.4 is out of
+scope: MacPorts doesn't support it). There are three kinds:
+
+- **Lima VMs** (`vz`, arm64): 15, 26, 27. Started from the
+  [lima_mac](../lima_mac) Makefile and registered with `scripts/ghrunner -lima`.
+- **Legacy, SSH from a container**: 10.5–10.15 and 11, x86 VMware VMs on
+  darkstar, plus 10.5 PPC (QEMU G5 on far-star). Each is a Linux docker runner
+  (`<id>-runner`) that reaches its VM over legacy SSH. The VMs are disposable
+  and are reverted to their `known-good` snapshots.
+- **Runner inside the VM**: 12, 13, 14, x86 VMware VMs on darkstar
+  (`vmware-guest` backend in ghrunnerd), registered as `macOS_12/13/14`.
+  They also have `known-good` snapshots.
+
+| Runner | macOS | Host | Kind |
 |---|---|---|---|
-| `macOS_26` | `macos-26` | this machine | `make runner-26` in `~/Developer/lima_mac` |
-| `macOS_27` | `macos-27` | this machine | `make runner-27` in `~/Developer/lima_mac` |
-| `macOS_15` | `macos-15` | umac | started manually by the user — don't start it here |
+| `macOS_27` | 27 | far-star (this machine) | Lima `macos-27`, `make runner-27` in `~/Developer/lima_mac` |
+| `macOS_26` | 26 Tahoe | far-star (this machine) | Lima `macos-26`, `make runner-26` |
+| `macOS_15` | 15 Sequoia | umac | Lima `macos-15`, started manually by the user — don't start it here |
+| `macOS_14` | 14 Sonoma | darkstar | runner in the VM (`sonoma`) |
+| `macOS_13` | 13 Ventura | darkstar | runner in the VM (`ventura`) |
+| `macOS_12` | 12 Monterey | darkstar | runner in the VM (`monterey`) |
+| `bigsur-runner` | 11 Big Sur | darkstar | legacy |
+| `catalina-runner` | 10.15 Catalina | darkstar | legacy |
+| `mojave-runner` | 10.14 Mojave | darkstar | legacy |
+| `highsierra-runner` | 10.13 High Sierra | darkstar | legacy |
+| `sierra-runner` | 10.12 Sierra | darkstar | legacy |
+| `elcapitan-runner` | 10.11 El Capitan | darkstar | legacy |
+| `yosemite-runner` | 10.10 Yosemite | darkstar | legacy |
+| `mavericks-runner` | 10.9 Mavericks | darkstar | legacy |
+| `mountainlion-runner` | 10.8 Mountain Lion | darkstar | legacy |
+| `lion-runner` | 10.7 Lion | darkstar | legacy |
+| `snowleopard-runner` | 10.6 Snow Leopard | darkstar | legacy |
+| `leopard-runner` | 10.5 Leopard (i386) | darkstar | legacy |
+| `leopard-ppc-runner` | 10.5 Leopard (ppc) | far-star | legacy, QEMU |
+
+The darkstar VMs' plan and build log is
+`/media/blake/jonesfarm/actions-runners/os_x_runners.md` on darkstar; installer
+ISOs (oldest per version) are in far-star `/Volumes/zen/iso`.
 
 **Manage runners through ghrunnerd first.** Each host (darkstar, far-star, umac)
 runs a `ghrunnerd` MCP server, registered here as `ghrunnerd-darkstar`,
@@ -166,16 +182,16 @@ Queued jobs fail after 24h waiting for a runner. If `macOS_15` is offline,
 dispatch without it: `gh workflow run "Build <Portname>" -f run_macos15=false`.
 
 ### Matrix Build Strategy
-**Modern builds** (automatic on push/PR):
-- **macOS 26 (Tahoe)** - Latest stable
-- **macOS 27** - Latest
+**Automatic on push/PR:** macOS 15, 26 and 27 (most `build-*.yml`; a few
+ports with a minimum OS build fewer).
 
-**Optional modern builds** (manual workflow dispatch only):
-- **macOS 15 (Sequoia)** - Previous stable
-
-**Legacy builds** (manual workflow dispatch only):
-- **Mac OS X 10.5 (Leopard)** - Legacy platform
-- **Mac OS X 10.7 (Lion)** - Legacy platform
+**Manual dispatch only:** every other runner, one checkbox each and all off
+by default: `run_leopard_ppc`, `run_leopard`, `run_snowleopard`, `run_lion`,
+`run_mountainlion`, `run_mavericks`, `run_yosemite`, `run_elcapitan`,
+`run_sierra`, `run_highsierra`, `run_mojave`, `run_catalina`, `run_bigsur`,
+`run_macos12`, `run_macos13`, `run_macos14`. A workflow only lists the ones
+its port supports: `platforms darwin >= 22` ports, and lima and lima-devl
+(Lima needs macOS 13), offer only 13 and 14 of these.
 
 ### Workflow Naming Conventions
 - `build-<portname>.yml` - Consolidated workflow supporting both modern and legacy builds
@@ -222,20 +238,21 @@ dispatch without it: `gh workflow run "Build <Portname>" -f run_macos15=false`.
 
 ### Triggering CI Builds
 
-**Automatic triggers** (push/PR):
-- Only runs modern builds (macOS 15, macOS 26)
-- Legacy builds never run automatically
+**Automatic triggers** (push/PR): macOS 15, 26 and 27. Nothing older
+builds automatically.
 
 **Manual triggers** (workflow_dispatch):
 
 ```bash
-# Trigger modern-only builds (default)
+# Default dispatch: 15, 26 and 27
 gh workflow run "Build libcbor"
-gh workflow run "Build netatalk"
 
-# Trigger with legacy platform builds
-gh workflow run "Build libcbor" -f run_legacy=true
-gh workflow run "Build netatalk" -f run_legacy=true -f branch=main
+# Add older runners with their checkboxes
+gh workflow run "Build libcbor" -f run_leopard=true -f run_leopard_ppc=true
+gh workflow run "Build netatalk" -f run_macos12=true -f run_bigsur=true -f branch=main
+
+# Only macOS 27
+gh workflow run "Build lima-devl" -f run_macos26=false -f run_macos15=false
 
 # Monitor builds
 gh run view -w              # Open in browser
@@ -244,7 +261,8 @@ gh run view --log-failed    # View failed logs
 
 **Workflow inputs**:
 - `branch`: Branch to build from (default: main)
-- `run_legacy`: Run legacy platform builds (10.5, 10.7) - default: false
+- `run_macos27`, `run_macos26`, `run_macos15`: default true
+- `run_<name>` for every older runner (see Matrix Build Strategy): default false
 
 ### Testing a Candidate Fix (`Test port` workflow)
 
