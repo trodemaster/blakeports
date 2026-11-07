@@ -1,8 +1,8 @@
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 8b832bf9..89755b0c 100644
+index 4c3e8db7..69b37f26 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -638,8 +638,21 @@ func GenerateWindowsISO(ctx context.Context, instDir, name string, instConfig *l
+@@ -652,8 +652,21 @@ func GenerateWindowsISO(ctx context.Context, instDir, name string, instConfig *l
  		return "", err
  	}
  
@@ -27,7 +27,7 @@ index 8b832bf9..89755b0c 100644
  	}
  
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index d4a15036..4d438d36 100644
+index 3efd6d03..9d3ff724 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
 @@ -9,17 +9,21 @@ import (
@@ -63,7 +63,7 @@ index d4a15036..4d438d36 100644
  type CACerts struct {
  	RemoveDefaults *bool
  	Trusted        []Cert
-@@ -138,6 +138,7 @@ type TemplateArgs struct {
+@@ -141,6 +141,7 @@ type TemplateArgs struct {
  	WindowsInitialPassword          string
  	LegacyBIOS                      bool
  	IsWindowsServer                 bool
@@ -71,7 +71,7 @@ index d4a15036..4d438d36 100644
  	TPM                             bool
  	SuppressFirstLoginSetup         bool
  	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
-@@ -157,19 +158,151 @@ func (t *TemplateArgs) generateWindowsInitialPassword() error {
+@@ -160,19 +161,151 @@ func (t *TemplateArgs) generateWindowsInitialPassword() error {
  	return nil
  }
  
@@ -229,18 +229,18 @@ index d4a15036..4d438d36 100644
  	if err := identifiers.Validate(args.Name); err != nil {
  		return err
 diff --git pkg/cidata/template_test.go pkg/cidata/template_test.go
-index 12ed5696..cba09ece 100644
+index e16f8e81..caa62af1 100644
 --- pkg/cidata/template_test.go
 +++ pkg/cidata/template_test.go
-@@ -14,6 +14,7 @@ import (
- 
+@@ -16,6 +16,7 @@ import (
+ 	"github.com/lima-vm/lima/v2/pkg/cidata/cloudinittypes"
  	"github.com/lima-vm/lima/v2/pkg/iso9660util"
  	"github.com/lima-vm/lima/v2/pkg/limatype"
 +	"github.com/lima-vm/lima/v2/pkg/wimutil"
  )
  
  var defaultRemoveDefaults = false
-@@ -310,6 +311,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -382,6 +383,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  				WindowsInitialPassword: "dummy-password",
  				TPM:                    true,
  				IsWindowsServer:        true,
@@ -248,7 +248,7 @@ index 12ed5696..cba09ece 100644
  			},
  			expectedAutounattendStrings: []string{
  				`<Path>E:\viostor\2k25\amd64</Path>`,
-@@ -334,6 +336,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -406,6 +408,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  				User:                   "windows-user",
  				WindowsInitialPassword: "dummy-password",
  				TPM:                    true,
@@ -256,7 +256,7 @@ index 12ed5696..cba09ece 100644
  			},
  			expectedAutounattendStrings: []string{
  				`<Path>E:\viostor\w11\amd64</Path>`,
-@@ -360,6 +363,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -432,6 +435,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  				LegacyBIOS:             true,
  				TPM:                    true,
  				IsWindowsServer:        true,
@@ -264,7 +264,7 @@ index 12ed5696..cba09ece 100644
  			},
  			expectedAutounattendStrings: []string{
  				`<Path>E:\viostor\2k25\amd64</Path>`,
-@@ -384,6 +388,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -456,6 +460,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  				User:                   "windows-user",
  				WindowsInitialPassword: "dummy-password",
  				TPM:                    false,
@@ -272,7 +272,7 @@ index 12ed5696..cba09ece 100644
  			},
  			expectedAutounattendStrings: []string{
  				`<Path>E:\viostor\w11\amd64</Path>`,
-@@ -409,6 +414,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -481,6 +486,7 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  				User:                   "windows-user",
  				WindowsInitialPassword: "dummy-password",
  				TPM:                    false,
@@ -280,7 +280,7 @@ index 12ed5696..cba09ece 100644
  			},
  			expectedAutounattendStrings: []string{
  				`<Path>E:\viostor\w11\arm64</Path>`,
-@@ -446,3 +452,70 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
+@@ -518,3 +524,70 @@ func TestExecuteTemplateWindowsISO(t *testing.T) {
  		})
  	}
  }
@@ -364,19 +364,6 @@ index 502937b0..1d95c87c 100644
              </MetaData>
            </InstallFrom>
            <InstallTo>
-diff --git pkg/cidata/wincidata.TEMPLATE.d/install_provision.ps1 pkg/cidata/wincidata.TEMPLATE.d/install_provision.ps1
-index f65fea60..c1dc6c2b 100644
---- pkg/cidata/wincidata.TEMPLATE.d/install_provision.ps1
-+++ pkg/cidata/wincidata.TEMPLATE.d/install_provision.ps1
-@@ -8,7 +8,7 @@ function Copy-Provision {
-     param(
-         [string]$Src,
-         [string]$Dst,
--        [bool]$Extension
-+        [switch]$Extension
-     )
- 
-     if (-not (Test-Path -LiteralPath $Src)) {
 diff --git pkg/cidata/windows_edition_test.go pkg/cidata/windows_edition_test.go
 new file mode 100644
 index 00000000..10b59e0c
@@ -481,10 +468,10 @@ index 00000000..10b59e0c
 +	}
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 6de40836..0c27e633 100644
+index 0e56b125..10ade898 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -358,6 +358,20 @@ type OsOpts map[OS]any
+@@ -363,6 +363,20 @@ type OsOpts map[OS]any
  
  type WindowsOpts struct {
  	VirtioWin []File `yaml:"virtioWin,omitempty" json:"virtioWin,omitempty"`
@@ -1743,10 +1730,10 @@ index 00000000..0b616301
 +	assert.Equal(t, unknown.IsServer(), false)
 +}
 diff --git website/content/en/docs/usage/guests/windows.md website/content/en/docs/usage/guests/windows.md
-index cc0d1f5a..6962a868 100644
+index c628e618..7f1efc72 100644
 --- website/content/en/docs/usage/guests/windows.md
 +++ website/content/en/docs/usage/guests/windows.md
-@@ -28,6 +28,47 @@ By default, Windows 11 enables Trusted Platform Module (TPM) emulation because o
+@@ -32,6 +32,47 @@ By default, Windows 11 enables Trusted Platform Module (TPM) emulation because o
  
  For Windows server 2025, TPM emulation is disabled by default. However, there are some benefits if you enable TPM emulation. For example, you can install [BitLocker disk encryption](https://learn.microsoft.com/en-us/windows/security/operating-system-security/data-protection/bitlocker/install-server) on your VM.
  

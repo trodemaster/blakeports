@@ -12,7 +12,7 @@ Patch revs: see `w1_rev` / `b2_rev` / `p1_rev` in the Portfile (B4 is parked, no
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | ~~macOS 27 fakecloudinit workarounds~~ — **removed from port 2026-10-05** (beta-era; branch `macports/m1-fakecloudinit-macos27` kept in case any SA plist keys are still needed on 27 GA) | dropped |
 | P1 (`patch-10`) | Experimental macOS 27 native guest provisioning via forked vz (`trodemaster/vz` `feat/guest-provisioning`); see upstream issue #5516 | local only — no upstream noise |
-| W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`) | carried in port; not yet submitted upstream |
+| W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`); its `Copy-Provision` switch fix was dropped 2026-11-07 (upstream `7cc8a755`) | carried in port; not yet submitted upstream |
 
 `patch-01-g1-thread-pin.diff` merged upstream in PR #5036 and removed from port.
 `patch-02-g4-window-title.diff` merged upstream in PR #5084 and removed from port.
@@ -85,6 +85,20 @@ entirely (merged upstream, removed from `files/` and `patchfiles`).
 | `upstream-pr/b4-macos-clipboard` | b1-clean tip | 1 | parked (clipboard non-functional from CLI binary); rebased onto b1-clean 2026-07-30 so it no longer depends on the deleted multi-commit B1 branch |
 | `macports/m1-fakecloudinit-macos27` | origin/master + B1 content cherry-picked from b1-clean tip | 8 (1 B1 + 7 M1) | macOS 27 workarounds; rebuilt 2026-08-02, same reason as B2 above |
 | `feat/vz-mac-guest-provisioning` | origin/master | 1 | VZMacGuestProvisioningOptions first-boot provisioning (macOS 27+ native account setup); re-extracted 2026-07-30 with the DFU-workaround dependency it used to sit on top of removed — `createDiskMacOSGuest` now calls `maybeRunGuestProvisioning` straight after the standard installer path, no DFU code involved |
+
+**2026-11-07 sync to master `2f466781` (v2.3.0 released 2026-11-06):** 146 upstream
+commits since `27bf0188`. W1's last commit (`Copy-Provision -Extension` `[bool]` →
+`[switch]`) dropped on rebase: upstream fixed it independently in `7cc8a755`, which also
+renames the `$dst` loop variable. W1 now 3 commits. B2 rebased clean (hunk offsets only).
+P1 conflicted on `go.mod`/`go.sum` (upstream bumped vz v3.7.1 → v3.8.0 and hcsshim/go-winio)
+and on `vz_driver_darwin_test.go` (upstream added hostLoopback tests next to P1's
+`TestGuestProvisioningSkipReason`; kept both). go.mod resolved as upstream's with the
+`vz/v3` → `vz/v4` swap and the `trodemaster/vz` replace re-applied, then `go mod tidy`.
+`go vet ./...` clean on P1. All five patches apply in sequence against a fresh `2f466781`
+archive. `w1_rev` 6→7, `b2_rev` 12→13, `p1_rev` 6→7, `revision` reset to 0.
+Upstream `Code-Hex/vz` main now has its own `NewMacGuestProvisioningOptions` /
+`WithGuestProvisioningOptions` (no tagged release yet, lima still on v3.8.0) — P1 could move
+off the fork onto upstream vz v4 once it's usable. Tested on CI macOS_27 first.
 
 **2026-08-02 review-feedback sync:** PR #5336 got reviewer pushback on
 `suppressFirstLoginSetup: {}` ("why not `true`?") plus a request to keep the custom-plist

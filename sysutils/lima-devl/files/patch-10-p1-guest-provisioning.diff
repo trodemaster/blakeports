@@ -1,39 +1,45 @@
 diff --git go.mod go.mod
-index 44ced086..683d7b81 100644
+index 99489953..02b774f2 100644
 --- go.mod
 +++ go.mod
-@@ -18,7 +18,7 @@ require (
+@@ -19,7 +19,7 @@ require (
  require (
  	al.essio.dev/pkg/shellescape v1.6.1
  	github.com/AlecAivazis/survey/v2 v2.3.7 // gomodjail:unconfined
--	github.com/Code-Hex/vz/v3 v3.7.1 // gomodjail:unconfined
+-	github.com/Code-Hex/vz/v3 v3.8.0 // gomodjail:unconfined
 +	github.com/Code-Hex/vz/v4 v4.0.0 // gomodjail:unconfined
- 	github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29 // gomodjail:unconfined
- 	github.com/Microsoft/hcsshim v0.14.1
+ 	github.com/Microsoft/go-winio v0.6.4 // gomodjail:unconfined
+ 	github.com/Microsoft/hcsshim v0.15.0
  	github.com/apparentlymart/go-cidr v1.1.1
-@@ -155,4 +155,8 @@ require (
- require (
+@@ -155,6 +155,7 @@ require (
  	github.com/apparentlymart/go-textseg/v17 v17.0.1 // indirect
+ 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
  	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 +	github.com/ebitengine/purego v0.10.1 // indirect
+ 	github.com/go-logr/logr v1.4.4 // indirect
+ 	github.com/go-logr/stdr v1.2.2 // indirect
+ 	github.com/google/uuid v1.6.0 // indirect
+@@ -167,3 +168,6 @@ require (
+ 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
+ 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
  )
 +
 +// Local fork of vz with the generated purego bridge and WithGuestProvisioning (macOS 27).
 +replace github.com/Code-Hex/vz/v4 => github.com/trodemaster/vz/v4 v4.0.0-20261005052457-aa193af850b5
 diff --git go.sum go.sum
-index c67e20c9..a2955d1e 100644
+index 3eb0f635..85a0d129 100644
 --- go.sum
 +++ go.sum
-@@ -6,8 +6,6 @@ github.com/AlecAivazis/survey/v2 v2.3.7/go.mod h1:xUTIdE4KCOIjsBAE1JYsUPoCqYdZ1r
- github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+@@ -4,8 +4,6 @@ github.com/AlecAivazis/survey/v2 v2.3.7 h1:6I/u8FvytdGsgonrYsVn2t8t4QiRnh6QSTqkk
+ github.com/AlecAivazis/survey/v2 v2.3.7/go.mod h1:xUTIdE4KCOIjsBAE1JYsUPoCqYdZ1reCfTwbto0Fduo=
  github.com/Code-Hex/go-infinity-channel v1.0.0 h1:M8BWlfDOxq9or9yvF9+YkceoTkDI1pFAqvnP87Zh0Nw=
  github.com/Code-Hex/go-infinity-channel v1.0.0/go.mod h1:5yUVg/Fqao9dAjcpzoQ33WwfdMWmISOrQloDRn3bsvY=
--github.com/Code-Hex/vz/v3 v3.7.1 h1:EN1yNiyrbPq+dl388nne2NySo8I94EnPppvqypA65XM=
--github.com/Code-Hex/vz/v3 v3.7.1/go.mod h1:1LsW0jqW0r0cQ+IeR4hHbjdqOtSidNCVMWhStMHGho8=
- github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29 h1:0kQAzHq8vLs7Pptv+7TxjdETLf/nIqJpIB4oC6Ba4vY=
- github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29/go.mod h1:ZWa7ssZJT30CCDGJ7fk/2SBTq9BIQrrVjrcss0UW2s0=
- github.com/Microsoft/hcsshim v0.14.1 h1:CMuB3fqQVfPdhyXhUqYdUmPUIOhJkmghCx3dJet8Cqs=
-@@ -95,6 +93,8 @@ github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxK
+-github.com/Code-Hex/vz/v3 v3.8.0 h1:wgOH3VY0le5fP3VPQFBf6wls8jSqzK5Haq/qIoO6pb4=
+-github.com/Code-Hex/vz/v3 v3.8.0/go.mod h1:eO4cMfeE9agtnGsC+zrcLFcPDBf1RlPbUcJJF0MIq9w=
+ github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
+ github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
+ github.com/Microsoft/go-winio v0.6.4 h1:kJF2pamtYCWXf0xAT8sAkwKC0pMl2HYBrRPHAqyUc+g=
+@@ -87,6 +85,8 @@ github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxK
  github.com/dlclark/regexp2 v1.11.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
  github.com/docker/go-units v0.5.0 h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4=
  github.com/docker/go-units v0.5.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
@@ -42,8 +48,8 @@ index c67e20c9..a2955d1e 100644
  github.com/elliotchance/orderedmap v1.8.0 h1:TrOREecvh3JbS+NCgwposXG5ZTFHtEsQiCGOhPElnMw=
  github.com/elliotchance/orderedmap v1.8.0/go.mod h1:wsDwEaX5jEoyhbs7x93zk2H/qv0zwuhg4inXhDkYqys=
  github.com/elliotwutingfeng/asciiset v0.0.0-20260129054604-cfde2086bc57 h1:x5yxNrq8XffV/OoNUeFPM6hxHVi5OTspSTBxr/9pemg=
-@@ -294,6 +294,8 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
- github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
+@@ -272,6 +272,8 @@ github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
+ github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
  github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
  github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 +github.com/trodemaster/vz/v4 v4.0.0-20261005052457-aa193af850b5 h1:TvzV4tr3Tq7wEp0RzA4ytq2A5oJ0nuuuEn0BPvYKhKo=
@@ -52,10 +58,10 @@ index c67e20c9..a2955d1e 100644
  github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701/go.mod h1:P3a5rG4X7tI17Nn3aOIAYr5HbIMukwXG0urG0WuL8OA=
  github.com/ulikunitz/xz v0.5.15 h1:9DNdB5s+SgV3bQ2ApL10xRc35ck0DuIX/isZvIk+ubY=
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 8b832bf9..afa3cbba 100644
+index 4c3e8db7..ce483435 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -137,6 +137,12 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+@@ -143,6 +143,12 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
  	if darwinOpts.SuppressFirstLoginSetupPlist != nil {
  		suppressFirstLoginSetupPlist = *darwinOpts.SuppressFirstLoginSetupPlist
  	}
@@ -68,7 +74,7 @@ index 8b832bf9..afa3cbba 100644
  	args := TemplateArgs{
  		Debug:              debugutil.Debug,
  		OS:                 *instConfig.OS,
-@@ -171,6 +177,7 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+@@ -178,6 +184,7 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
  		SuppressFirstLoginSetupPlist: suppressFirstLoginSetupPlist,
  		GuestOSVersion:               guestOSVersion,
  		GuestOSBuildVersion:          guestOSBuildVersion,
@@ -76,7 +82,7 @@ index 8b832bf9..afa3cbba 100644
  	}
  
  	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
-@@ -447,6 +454,15 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+@@ -461,6 +468,15 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
  			Reader: strings.NewReader(args.SuppressFirstLoginSetupPlist),
  		})
  	}
@@ -93,10 +99,10 @@ index 8b832bf9..afa3cbba 100644
  	driverScripts, err := drv.BootScripts(ctx)
  	if err != nil {
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index d4a15036..8fad943b 100644
+index 3efd6d03..1c5dc2cb 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
-@@ -143,6 +143,7 @@ type TemplateArgs struct {
+@@ -146,6 +146,7 @@ type TemplateArgs struct {
  	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
  	GuestOSVersion                  string // macOS guests only: restore-image OS version, e.g. "27.0.0"; empty otherwise
  	GuestOSBuildVersion             string // macOS guests only: restore-image build, e.g. "26A428"; empty otherwise
@@ -144,7 +150,7 @@ index 3b71dec7..293a1fe9 100644
  	"github.com/sirupsen/logrus"
  
 diff --git pkg/driver/vz/vm_darwin.go pkg/driver/vz/vm_darwin.go
-index 7606cf18..76176358 100644
+index 3b910bf2..c817e486 100644
 --- pkg/driver/vz/vm_darwin.go
 +++ pkg/driver/vz/vm_darwin.go
 @@ -19,7 +19,7 @@ import (
@@ -156,7 +162,7 @@ index 7606cf18..76176358 100644
  	"github.com/coreos/go-semver/semver"
  	"github.com/docker/go-units"
  	"github.com/lima-vm/go-qcow2reader"
-@@ -105,11 +105,22 @@ func startVM(ctx context.Context, inst *limatype.Instance, sshLocalPort int, onV
+@@ -129,11 +129,22 @@ func startVM(ctx context.Context, inst *limatype.Instance, sshLocalPort int, onV
  		return nil, nil, nil, err
  	}
  
@@ -179,7 +185,7 @@ index 7606cf18..76176358 100644
 +	}
  
  	wrapper := &virtualMachineWrapper{VirtualMachine: machine, stopped: false}
- 	notifySSHLocalPortAccessible := make(chan any)
+ 	signals := newStartSignals()
 diff --git pkg/driver/vz/vm_darwin_amd64.go pkg/driver/vz/vm_darwin_amd64.go
 index fdd18137..233667b3 100644
 --- pkg/driver/vz/vm_darwin_amd64.go
@@ -254,7 +260,7 @@ index 2d4ff936..023c1842 100644
 +	}, nil
 +}
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index 11df0eb0..2647285f 100644
+index dadb6005..4efe27e0 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -15,9 +15,11 @@ import (
@@ -278,7 +284,7 @@ index 11df0eb0..2647285f 100644
  )
  
  var knownYamlProperties = []string{
-@@ -414,6 +417,13 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+@@ -419,6 +422,13 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
  				return err
  			}
@@ -292,7 +298,7 @@ index 11df0eb0..2647285f 100644
  		}
  	}
  	return driverutil.EnsureDisk(ctx, l.Instance.Dir, *l.Instance.Config.Disk, l.diskImageFormat)
-@@ -477,7 +487,54 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
+@@ -482,7 +492,54 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
  		}
  	}
  
@@ -349,7 +355,7 @@ index 11df0eb0..2647285f 100644
  
  func (l *LimaVzDriver) Start(ctx context.Context) (chan error, error) {
 diff --git pkg/driver/vz/vz_driver_darwin_test.go pkg/driver/vz/vz_driver_darwin_test.go
-index e7519196..0d6bcc05 100644
+index 1677fc62..df61afc7 100644
 --- pkg/driver/vz/vz_driver_darwin_test.go
 +++ pkg/driver/vz/vz_driver_darwin_test.go
 @@ -9,6 +9,7 @@ import (
@@ -360,9 +366,9 @@ index e7519196..0d6bcc05 100644
  	"testing"
  	"time"
  
-@@ -53,3 +54,30 @@ func TestRemovePIDFile(t *testing.T) {
- 	// Removing a PID file that does not exist is not an error.
- 	l.removePIDFile()
+@@ -88,3 +89,30 @@ func TestValidateRejectsHostLoopbackFalseWithUserV2(t *testing.T) {
+ 	l := &LimaVzDriver{Instance: &limatype.Instance{Config: cfg}}
+ 	assert.ErrorContains(t, l.Validate(t.Context()), "not supported with a `user-v2` network")
  }
 +
 +func TestGuestProvisioningSkipReason(t *testing.T) {
@@ -607,10 +613,10 @@ index 00000000..1503f487
 +	return nil
 +}
 diff --git pkg/limatype/filenames/filenames.go pkg/limatype/filenames/filenames.go
-index 70ab9aac..00e7eeb2 100644
+index 3c644745..1b5d561f 100644
 --- pkg/limatype/filenames/filenames.go
 +++ pkg/limatype/filenames/filenames.go
-@@ -73,6 +73,7 @@ const (
+@@ -74,6 +74,7 @@ const (
  	VzGuestOSVersion        = "vz-guest-os-version"       // macOS guests only; restore-image OS version, e.g. "27.0.0"
  	VzGuestOSBuildVersion   = "vz-guest-os-build-version" // macOS guests only; restore-image build, e.g. "26A428"
  	VzAux                   = "vz-aux"                    // macOS guests only
@@ -619,10 +625,10 @@ index 70ab9aac..00e7eeb2 100644
  	QemuEfiCodeFD           = "qemu-efi-code.fd"          // efi code; not always created
  	AnsibleInventoryYAML    = "ansible-inventory.yaml"
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 6de40836..3cf3f22a 100644
+index 0e56b125..27d269f8 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -366,6 +366,21 @@ type DarwinOpts struct {
+@@ -371,6 +371,21 @@ type DarwinOpts struct {
  	// SuppressFirstLoginSetupPlist overrides the built-in com.apple.SetupAssistant.plist content
  	// used by SuppressFirstLoginSetup. Ignored unless SuppressFirstLoginSetup is true.
  	SuppressFirstLoginSetupPlist *string `yaml:"suppressFirstLoginSetupPlist,omitempty" json:"suppressFirstLoginSetupPlist,omitempty" jsonschema:"nullable"`
@@ -645,10 +651,10 @@ index 6de40836..3cf3f22a 100644
  
  func NewOS(osname string) OS {
 diff --git pkg/limayaml/defaults.go pkg/limayaml/defaults.go
-index e5dd13cd..c08b7aee 100644
+index 0bc7bd42..89e57e4f 100644
 --- pkg/limayaml/defaults.go
 +++ pkg/limayaml/defaults.go
-@@ -199,8 +199,17 @@ func FillDefault(ctx context.Context, y, d, o *limatype.LimaYAML, filePath strin
+@@ -205,8 +205,17 @@ func FillDefault(ctx context.Context, y, d, o *limatype.LimaYAML, filePath strin
  	if o.User.PasswordlessSudo != nil {
  		y.User.PasswordlessSudo = o.User.PasswordlessSudo
  	}
@@ -667,7 +673,7 @@ index e5dd13cd..c08b7aee 100644
  		warn = false
  	}
  	if y.User.Comment == nil {
-@@ -208,7 +217,11 @@ func FillDefault(ctx context.Context, y, d, o *limatype.LimaYAML, filePath strin
+@@ -214,7 +223,11 @@ func FillDefault(ctx context.Context, y, d, o *limatype.LimaYAML, filePath strin
  		warn = false
  	}
  	if y.User.Home == nil {
@@ -680,7 +686,7 @@ index e5dd13cd..c08b7aee 100644
  		warn = false
  	}
  	if y.User.Shell == nil {
-@@ -928,6 +941,25 @@ func ExistingLimaVersion(instDir string) string {
+@@ -959,6 +972,25 @@ func ExistingLimaVersion(instDir string) string {
  	}
  }
  
@@ -707,7 +713,7 @@ index e5dd13cd..c08b7aee 100644
  	if !*y.Plain {
  		return
 diff --git pkg/limayaml/defaults_test.go pkg/limayaml/defaults_test.go
-index 68b9e027..f5f9144d 100644
+index 6023aed1..3e3ca21f 100644
 --- pkg/limayaml/defaults_test.go
 +++ pkg/limayaml/defaults_test.go
 @@ -12,6 +12,7 @@ import (
@@ -718,7 +724,7 @@ index 68b9e027..f5f9144d 100644
  	"testing"
  
  	"github.com/google/go-cmp/cmp"
-@@ -785,6 +786,49 @@ func TestFillDefaultMergesBlockDevices(t *testing.T) {
+@@ -815,6 +816,49 @@ func TestFillDefaultMergesBlockDevices(t *testing.T) {
  	assert.DeepEqual(t, y.BlockDevices, []string{"/dev/disk1", "/dev/disk2", "/dev/disk3"})
  }
  
@@ -769,7 +775,7 @@ index 68b9e027..f5f9144d 100644
  	tests := []struct {
  		name     string
 diff --git pkg/limayaml/validate.go pkg/limayaml/validate.go
-index 5eef3358..1855f099 100644
+index f3cd8baa..ef56942f 100644
 --- pkg/limayaml/validate.go
 +++ pkg/limayaml/validate.go
 @@ -76,6 +76,14 @@ func Validate(y *limatype.LimaYAML, warn bool) error {
@@ -788,7 +794,7 @@ index 5eef3358..1855f099 100644
  	if len(y.Images) == 0 {
  		errs = errors.Join(errs, errors.New("field `images` must be set"))
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index c0bb1076..b11705e0 100644
+index 15e50e8a..060c6fad 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -116,6 +116,41 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
