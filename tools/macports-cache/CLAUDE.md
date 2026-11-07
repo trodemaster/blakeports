@@ -158,6 +158,10 @@ The launchd/Makefile flow below is for running a standalone server on a Mac.
 MacPorts 2.x keeps every installed port as a finished archive at
 `software/{portname}/{imagename}.tbz2`, the same file archive_sites clients fetch, so the
 script only copies those (verified on leopard-ppc: `curl-8.23.0_0+ssl.darwin_9.ppc.tbz2`).
+That holds on HFS+ only: on APFS (10.13 and later) MacPorts 2.12 defaults to
+`portimage_mode directory` and keeps no `.tbz2`, so a port built from source leaves
+nothing to submit ("warning: no archive for ..."). `setup-client.sh` sets
+`directory_and_archive`; ports built before that have to be rebuilt to get an archive.
 It skips files already on the share with the same name and size, copies to `*.part`
 then renames, and with no port names submits every installed port. `-a N` skips archives
 modified in the last N seconds: MacPorts writes a freshly built archive in place
@@ -262,6 +266,7 @@ legacy cleanup keeps only curl and git and relies on the cache for the toolchain
    - `cxx_stdlib libc++` or `libstdc++` depending on Darwin major version (threshold: 13)
    - `delete_la_files yes` or `no` depending on Darwin major version (threshold: 13)
 4. Adds `archive_site_local <server URL>/` to `/opt/local/etc/macports/macports.conf` (left alone if already set to another value). Base decides whether to skip a port's build-time dependencies by looking for its archive on `archive_site_local` and the official mirror only (`_eval_archive_available` in `portutil.tcl`); `archive_sites.conf` entries are not consulted until the fetch. Without this a port served only by the cache (all of Leopard) still has its whole build toolchain planned and installed before the cached archive is fetched: `libgcc15` on a clean 10.5 VM planned texinfo, autoconf, `ld64-127` and `llvm-3.3` even though `libgcc15-15.3.0_0+stdlib_flag.darwin_9.i386` was in the cache. The check asks for a `.sig`, so this only works once the server publishes them (see "signify `.sig`" above). Before that it had no effect.
+5. Adds `portimage_mode directory_and_archive` to `macports.conf` (left alone if set to anything else). On APFS the default keeps installed images as directories only, so there would be no archive to publish (seen 2026-11-07: Big Sur, Catalina, macOS 12 and the Lima runners submitted nothing).
 
 ## Common tasks
 

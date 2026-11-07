@@ -115,6 +115,19 @@ else
     echo "    Added."
 fi
 
+# ── macports.conf: portimage_mode ────────────────────────────────────────────
+# On a filesystem that supports cloning (APFS: 10.13 and later) MacPorts 2.12
+# keeps each installed image as a directory only, so there is no .tbz2 for
+# submit-archive.sh to publish. directory_and_archive keeps both.
+if grep -qE "^portimage_mode[[:space:]]+directory_and_archive([[:space:]]|\$)" "$MACPORTS_CONF" 2>/dev/null; then
+    echo "    portimage_mode already directory_and_archive."
+elif grep -qE "^portimage_mode[[:space:]]" "$MACPORTS_CONF" 2>/dev/null; then
+    echo "    warning: portimage_mode is already set to something else; left alone." >&2
+else
+    printf '\n# Keep a .tbz2 archive of each image so it can be published to the cache.\nportimage_mode      directory_and_archive\n' >> "$MACPORTS_CONF"
+    echo "    Added portimage_mode directory_and_archive."
+fi
+
 echo ""
 echo "Done. MacPorts will now try ${CACHE_URL} before building from source."
 echo ""
