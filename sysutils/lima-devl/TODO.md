@@ -11,7 +11,7 @@ Patch revs: see `w1_rev` / `b2_rev` / `p1_rev` in the Portfile (B4 is parked, no
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | ~~macOS 27 fakecloudinit workarounds~~ — **removed from port 2026-10-05** (beta-era; branch `macports/m1-fakecloudinit-macos27` kept in case any SA plist keys are still needed on 27 GA) | dropped |
-| P1 (`patch-10`) | Experimental macOS 27 native guest provisioning via forked vz (`trodemaster/vz` `feat/guest-provisioning`); see upstream issue #5516 | **parked 2026-11-07** — patch removed from port; branch `macports/p1-guest-provisioning` kept (rebased onto `2f466781`). To be rebuilt on Z1's upstream vz API |
+| P1 (`patch-12`) | macOS 27 native guest provisioning (`osOpts.darwin.guestProvisioning`) on upstream vz v4's API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); stacks on Z1; see upstream issue #5516. Branch `macports/p1-on-z1` (one commit on `macports/vz4-upstream`); the old fork-based branch `macports/p1-guest-provisioning` is kept for history | **prototype 2026-11-07** — re-enabled on Z1; local only until lima moves to vz v4 |
 | Z1 (`patch-11`) | Move to `github.com/Code-Hex/vz/v4` main (`64cc34b`, pseudo-version), which has the macOS 27 guest provisioning API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); adapts to v4's channel-taking `StateChangedNotify`. Branch `macports/vz4-upstream` | local only — drop once lima moves to a tagged vz v4 |
 | W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`); its `Copy-Provision` switch fix was dropped 2026-11-07 (upstream `7cc8a755`) | carried in port; not yet submitted upstream |
 
@@ -42,7 +42,8 @@ patch-usrlocalgo.diff
 patch-03-w1-windows-edition-detection.diff  ← carried in port
 patch-04-v1-guest-os-version.diff    ← "PR 1" precursor, log-only
 patch-06-b2-tcc.diff                 ← upstream candidate (B1 dependency merged)
-patch-11-z1-vz-v4-upstream.diff      ← Code-Hex/vz v4 main, local only (P1 parked)
+patch-11-z1-vz-v4-upstream.diff      ← Code-Hex/vz v4 main, local only
+patch-12-p1-guest-provisioning.diff  ← macOS 27 guest provisioning on Z1, local only
 ```
 
 `patch-04-v1-guest-os-version.diff` — the full "PR 1". Branch
