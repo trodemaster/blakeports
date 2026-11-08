@@ -11,7 +11,7 @@ Patch revs: see `w1_rev` / `b2_rev` / `p1_rev` in the Portfile (B4 is parked, no
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | ~~macOS 27 fakecloudinit workarounds~~ — **removed from port 2026-10-05** (beta-era; branch `macports/m1-fakecloudinit-macos27` kept in case any SA plist keys are still needed on 27 GA) | dropped |
-| P1 (`patch-12`) | macOS 27 native guest provisioning (`osOpts.darwin.guestProvisioning`) on upstream vz v4's API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); stacks on Z1; see upstream issue #5516. Branch `macports/p1-on-z1` (one commit on `macports/vz4-upstream`); the old fork-based branch `macports/p1-guest-provisioning` is kept for history | **prototype 2026-11-07** — re-enabled on Z1; local only until lima moves to vz v4 |
+| P1 (`patch-12`) | macOS 27 native guest provisioning (`osOpts.darwin.guestProvisioning`) on upstream vz v4's API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); stacks on Z1; see upstream issue #5516. Branch `macports/p1-on-z1` (one commit on `macports/vz4-upstream`); the old fork-based branch `macports/p1-guest-provisioning` is kept for history | **prototype 2026-11-07, working**: on main, macOS_27 runner rebuilt with it and verified (see 2026-11-07 P1 note); local only until lima moves to vz v4 |
 | Z1 (`patch-11`) | Move to `github.com/Code-Hex/vz/v4` main (`64cc34b`, pseudo-version), which has the macOS 27 guest provisioning API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); adapts to v4's channel-taking `StateChangedNotify`. Branch `macports/vz4-upstream` | local only — drop once lima moves to a tagged vz v4 |
 | W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`); its `Copy-Provision` switch fix was dropped 2026-11-07 (upstream `7cc8a755`) | carried in port; not yet submitted upstream |
 
@@ -108,6 +108,39 @@ provisioning API but no tagged v4 release, and lima master is still on v3.8.0, s
 `hack/tools/go.mod` instead of a hand-bumped pin: v2.13.2 failed on the macOS_27 runner
 ("export data version 5 is greater than maximum supported version 4", newer go-1.27).
 Tested on CI macOS_27 first.
+
+**2026-11-07 P1 rebuilt on Z1 and verified on both far-star runners:**
+
+- **The port.** P1 was ported from the `trodemaster/vz` fork API to upstream vz v4 as one
+  commit, `f0387c56` on branch `macports/p1-on-z1`, stacked on `macports/vz4-upstream`.
+  - `vz.WithGuestProvisioning(vz.MacGuestProvisioningOptions{...})` became
+    `vz.WithGuestProvisioningOptions(vz.NewMacGuestProvisioningOptions(...,
+    vz.WithGuestAutomaticLogin, vz.WithGuestRemoteLogin))`.
+  - The start options are now built before the `StateChangedNotify` registration.
+- **The patch.** `patch-12-p1-guest-provisioning.diff` is the diff
+  `macports/vz4-upstream..macports/p1-on-z1`; `p1_rev` is 7.
+  - The full stack applies to `2f466781` without fuzz.
+  - `go vet` is clean for arm64 and amd64 (amd64 needs `CGO_ENABLED=1`).
+  - The provisioning, cidata and limayaml tests pass.
+- **CI and merge.** Green on macOS_27 (run 42429288709), then macOS_26 and macOS_15 (run
+  42430665815). Merged to main as `09f010b`; the push run 42431370386 was green on all three.
+- **macOS_27 runner rebuilt with it** (`make rebuild-27`, 16:30–16:38, macOS 27.2 host and
+  27.2 `26B123` guest):
+  - Setup Assistant created the only regular account, `blake` (uid 501, admin,
+    `/Users/blake`, full name from the host), and fakecloudinit adopted it.
+  - The guest has auto-login, Remote Login on, `authorized_keys`, `~/password` and
+    passwordless sudo.
+  - Setup Assistant wrote `.AppleSetupDone` itself, and the `vz-guest-provisioning`
+    marker was removed after the first boot.
+  - netatalk CI on the new runner passed (run 42430668244).
+- **macOS_26 runner rebuilt** (`make rebuild-26`, 17:41–17:56, 26.6.2 `25G83` guest). This
+  checks the skip path for a 27 host with a pre-27 guest:
+  - no provisioning marker, and Setup Assistant didn't run;
+  - the classic `sysadminctl` account `blake` with home `/Users/blake.guest`.
+  - netatalk CI passed (run 42436357149).
+  - The two runners now have different home paths by design.
+- **Watching the console.** `limactl screenshot` gave only black frames on macOS 27.2; use
+  Screen Sharing to far-star instead.
 
 **2026-08-02 review-feedback sync:** PR #5336 got reviewer pushback on
 `suppressFirstLoginSetup: {}` ("why not `true`?") plus a request to keep the custom-plist
@@ -365,7 +398,9 @@ sync), regenerate patch-05 against whatever `go.setup` points to, not a live
       no branch.
 
 ### Verification
-- [ ] Rebuild a VM using the new patch set to confirm behavior: B1+B2+M1 patching.
+- [x] Rebuild VMs with the current patch set (W1, B2, Z1, P1): macOS_27 (native
+      provisioning) and macOS_26 (classic path) rebuilt and green 2026-11-07, see the
+      2026-11-07 P1 note above.
 
 ### CI maintenance
 - [ ] Verify golangci/golangci-lint-action works under Node 24 (GitHub forced it 2026-06-16).
