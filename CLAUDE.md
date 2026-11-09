@@ -81,13 +81,6 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   upstream 3.14.10; [#73578](https://trac.macports.org/ticket/73578) is
   closed (`_blake2`).
 
-**Port updates:**
-
-- [ ] **snowemu 1.6.0** — upstream PR [#36318](https://github.com/macports/macports-ports/pull/36318)
-  open; blakeports main already has it (CI passed on 27, 26 and 15).
-  After merge: delete the `emulators/snowemu-update-1.6.0` branch on the
-  fork. Test basic app launch if a reviewer asks.
-
 **Infrastructure reminders:**
 
 - [ ] Back up the packages.jibb.tv signing key,
