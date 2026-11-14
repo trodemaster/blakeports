@@ -304,20 +304,18 @@ index 1677fc62..df61afc7 100644
 +	}
 +}
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-index 5a0dd403..c4f6d081 100644
+index 5a0dd403..44003c35 100644
 --- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 +++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-@@ -16,7 +16,9 @@ import (
- 	"path/filepath"
+@@ -17,6 +17,7 @@ import (
  	"strconv"
  	"strings"
-+	"syscall"
  	"text/template"
 +	"time"
  
  	"github.com/goccy/go-yaml"
  	"github.com/sethvargo/go-password/password"
-@@ -337,10 +339,20 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -337,10 +338,20 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  	if homedir == "" {
  		return fmt.Errorf("homedir is required for user %#q", u.Name)
  	}
@@ -338,7 +336,7 @@ index 5a0dd403..c4f6d081 100644
  	if u.UID == "" {
  		return fmt.Errorf("uid is required for user %#q", u.Name)
  	}
-@@ -411,23 +423,212 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -411,23 +422,216 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  		return fmt.Errorf("failed to execute command %v: %w (output=%#q)", cmd.Args, err, output)
  	}
  
@@ -367,7 +365,11 @@ index 5a0dd403..c4f6d081 100644
 +	}
 +	if homedir != u.Homedir {
 +		if err := moveProvisionedHome(ctx, u.Name, uid, homedir, u.Homedir); err != nil {
-+			logrus.WithError(err).Warnf("Keeping home %#q created by Setup Assistant instead of %#q", homedir, u.Homedir)
++			// The boot scripts use user.home, so make it lead to the account's home.
++			logrus.WithError(err).Warnf("Keeping home %#q created by Setup Assistant; linking %#q to it", homedir, u.Homedir)
++			if err := os.Symlink(homedir, u.Homedir); err != nil && !errors.Is(err, os.ErrExist) {
++				return fmt.Errorf("failed to link %#q to %#q: %w", u.Homedir, homedir, err)
++			}
 +		} else {
 +			homedir = u.Homedir
 +		}
@@ -409,6 +411,15 @@ index 5a0dd403..c4f6d081 100644
 +	}); err != nil {
 +		return err
 +	}
++	// Setup Assistant leaves a background launchd session running for the new
++	// user (cfprefsd, secd, lsd, trustd, distnoted, ...) although nobody has
++	// logged in; those processes keep the old home open. End that session.
++	userDomain := "user/" + strconv.Itoa(uid)
++	cmd := exec.CommandContext(ctx, "launchctl", "bootout", userDomain)
++	logrus.Infof("Executing command: %v", cmd.Args)
++	if output, err := cmd.CombinedOutput(); err != nil {
++		logrus.WithError(err).Warnf("Failed to end the launchd session of uid %d (output=%#q)", uid, output)
++	}
 +	if err := waitFor(ctx, time.Minute, func() error {
 +		// pgrep exits 1 when no process matches.
 +		out, err := exec.CommandContext(ctx, "pgrep", "-l", "-U", strconv.Itoa(uid)).Output()
@@ -429,7 +440,7 @@ index 5a0dd403..c4f6d081 100644
 +	if err := os.Rename(src, dst); err != nil {
 +		return err
 +	}
-+	cmd := exec.CommandContext(ctx, "dscl", ".", "-create", "/Users/"+name, "NFSHomeDirectory", dst)
++	cmd = exec.CommandContext(ctx, "dscl", ".", "-create", "/Users/"+name, "NFSHomeDirectory", dst)
 +	if output, err := cmd.CombinedOutput(); err != nil {
 +		if rerr := os.Rename(dst, src); rerr != nil {
 +			logrus.WithError(rerr).Errorf("Failed to move %#q back to %#q", dst, src)
@@ -481,8 +492,9 @@ index 5a0dd403..c4f6d081 100644
 +}
 +
 +// enableAutoLogin turns on automatic login for the user, as
-+// VZMacGuestProvisioningOptions would have, and restarts loginwindow if no one
-+// is logged in so that it takes effect on this boot.
++// VZMacGuestProvisioningOptions would have. loginwindow only reads it at boot,
++// so it takes effect from the next boot; restarting loginwindow on macOS 27.2
++// does not log the user in.
 +func enableAutoLogin(ctx context.Context, name, pw string) error {
 +	if err := os.WriteFile("/etc/kcpassword", encodeKCPassword(pw), 0o600); err != nil {
 +		return err
@@ -491,17 +503,7 @@ index 5a0dd403..c4f6d081 100644
 +	if output, err := cmd.CombinedOutput(); err != nil {
 +		return fmt.Errorf("failed to execute command %v: %w (output=%#q)", cmd.Args, err, output)
 +	}
-+	logrus.Infof("Enabled automatic login for user %#q", name)
-+	// /dev/console belongs to root at the login window and to the user after login.
-+	var st syscall.Stat_t
-+	if err := syscall.Stat("/dev/console", &st); err != nil || st.Uid != 0 {
-+		return err
-+	}
-+	cmd = exec.CommandContext(ctx, "killall", "loginwindow")
-+	logrus.Infof("Executing command: %v", cmd.Args)
-+	if output, err := cmd.CombinedOutput(); err != nil {
-+		return fmt.Errorf("failed to execute command %v: %w (output=%#q)", cmd.Args, err, output)
-+	}
++	logrus.Infof("Enabled automatic login for user %#q from the next boot", name)
 +	return nil
 +}
 +
@@ -677,10 +679,10 @@ index 3c644745..1b5d561f 100644
  	QemuEfiCodeFD           = "qemu-efi-code.fd"          // efi code; not always created
  	AnsibleInventoryYAML    = "ansible-inventory.yaml"
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 0e56b125..88c5f047 100644
+index 0e56b125..820f2c13 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -371,6 +371,22 @@ type DarwinOpts struct {
+@@ -371,6 +371,23 @@ type DarwinOpts struct {
  	// SuppressFirstLoginSetupPlist overrides the built-in com.apple.SetupAssistant.plist content
  	// used by SuppressFirstLoginSetup. Ignored unless SuppressFirstLoginSetup is true.
  	SuppressFirstLoginSetupPlist *string `yaml:"suppressFirstLoginSetupPlist,omitempty" json:"suppressFirstLoginSetupPlist,omitempty" jsonschema:"nullable"`
@@ -695,7 +697,8 @@ index 0e56b125..88c5f047 100644
 +// The account's username and full name are the Lima user's `user.name` and
 +// `user.comment`. Setup Assistant creates the home at "/Users/<user.name>"; the
 +// guest then moves it to `user.home` (default "/Users/<user.name>.guest") before
-+// the user logs in, and turns on automatic login itself in that case.
++// the user logs in. In that case it turns on automatic login itself, which
++// takes effect from the second boot.
 +type DarwinGuestProvisioning struct {
 +	Password            string `yaml:"password,omitempty" json:"password,omitempty"`
 +	LogsInAutomatically bool   `yaml:"logsInAutomatically,omitempty" json:"logsInAutomatically,omitempty"`
@@ -772,10 +775,10 @@ index 00000000..b30d934d
 +	})
 +}
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 15e50e8a..b663e989 100644
+index 15e50e8a..ed701381 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -116,6 +116,43 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
+@@ -116,6 +116,44 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
  template above, then supply the actual build and version strings for your
  target OS release if needed.
  
@@ -804,7 +807,8 @@ index 15e50e8a..b663e989 100644
 +when that is mounted in the guest, so on the first boot the guest moves the home
 +to `user.home` before the user logs in. When it does, the guest turns on
 +automatic login itself (if `logsInAutomatically` is set) after the move, rather
-+than having Setup Assistant log the user in with the old home.
++than having Setup Assistant log the user in with the old home, so the first
++boot stops at the login window and automatic login starts from the second boot.
 +
 +macOS only reads these settings on the first boot after installation, so they
 +have no effect on an existing instance. Guests older than macOS 27 ignore them,
