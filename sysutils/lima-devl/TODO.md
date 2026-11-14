@@ -11,7 +11,7 @@ Patch revs: see `w1_rev` / `b2_rev` / `p1_rev` in the Portfile (B4 is parked, no
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | ~~macOS 27 fakecloudinit workarounds~~ — **removed from port 2026-10-05** (beta-era; branch `macports/m1-fakecloudinit-macos27` kept in case any SA plist keys are still needed on 27 GA) | dropped |
-| P1 (`patch-12`) | macOS 27 native guest provisioning (`osOpts.darwin.guestProvisioning`) on upstream vz v4's API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); stacks on Z1; see upstream issue #5516. Branch `macports/p1-on-z1` (one commit on `macports/vz4-upstream`); the old fork-based branch `macports/p1-guest-provisioning` is kept for history | **prototype 2026-11-07, working**: on main, macOS_27 runner rebuilt with it and verified (see 2026-11-07 P1 note); local only until lima moves to vz v4 |
+| P1 (`patch-12`) | macOS 27 native guest provisioning (`osOpts.darwin.guestProvisioning`) on upstream vz v4's API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); stacks on Z1; see upstream issue #5516. Branch `macports/p1-on-z1` (one commit on `macports/vz4-upstream`); the old fork-based branch `macports/p1-guest-provisioning` is kept for history | **prototype 2026-11-07, working; r8 (home move) 2026-11-13 untested in a guest**: on main, macOS_27 runner rebuilt with it and verified (see 2026-11-07 P1 note); local only until lima moves to vz v4 |
 | Z1 (`patch-11`) | Move to `github.com/Code-Hex/vz/v4` main (`64cc34b`, pseudo-version), which has the macOS 27 guest provisioning API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); adapts to v4's channel-taking `StateChangedNotify`. Branch `macports/vz4-upstream` | local only — drop once lima moves to a tagged vz v4 |
 | W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`); its `Copy-Provision` switch fix was dropped 2026-11-07 (upstream `7cc8a755`) | carried in port; not yet submitted upstream |
 
@@ -108,6 +108,26 @@ provisioning API but no tagged v4 release, and lima master is still on v3.8.0, s
 `hack/tools/go.mod` instead of a hand-bumped pin: v2.13.2 failed on the macOS_27 runner
 ("export data version 5 is greater than maximum supported version 4", newer go-1.27).
 Tested on CI macOS_27 first.
+
+**2026-11-13 P1 r8, move the home instead of renaming the account (untested in a guest):**
+second local commit `5f77b1ec` on `macports/p1-on-z1`. The goal is to keep Lima's normal
+macOS guest defaults (account `<host user>`, home `/Users/<user>.guest`) so the upstream PR
+doesn't have to change the default username.
+- Reverted r5/r6: no `.guest` username suffix, no `user.home` validation.
+- `limayaml.GuestProvisioningMovesHome`: `user.home` != `/Users/<user.name>`. When true, the
+  vz driver passes automatic login **off** to Apple, and cidata adds an empty
+  `guest-provisioning-autologin` file (only while the provisioning marker exists).
+- fakecloudinit `moveProvisionedHome`, after adopting the account: wait for
+  `/var/db/.AppleSetupDone` (10 min), then for no processes running as the uid
+  (`pgrep -U`, 1 min), then `mv` the home, `dscl . -create /Users/<name> NFSHomeDirectory`,
+  `dscacheutil -flushcache`, and re-read the record to check. On any failure it moves the
+  home back if needed and keeps Apple's home, with a warning.
+- `enableAutoLogin`: writes `/etc/kcpassword` (tested against lima_mac configure.sh's
+  encoding) and `autoLoginUser`, then `killall loginwindow` if `/dev/console` is owned by
+  root, i.e. nobody is logged in yet.
+- What the guest test has to confirm: whether the `pgrep` wait finds Setup Assistant
+  processes running as the user; whether relaunching loginwindow auto-logs in; and
+  SecureToken, login keychain and no stale `/Users/<name>` paths in the moved home.
 
 **2026-11-07 P1 rebuilt on Z1 and verified on both far-star runners:**
 
