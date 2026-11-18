@@ -1,68 +1,62 @@
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 4c3e8db7..93ebbd13 100644
+index 08923ba4..6642383b 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -143,6 +143,18 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
- 	if darwinOpts.SuppressFirstLoginSetupPlist != nil {
- 		suppressFirstLoginSetupPlist = *darwinOpts.SuppressFirstLoginSetupPlist
+@@ -132,12 +132,20 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
  	}
-+	// The vz driver leaves this marker while the first boot is to apply
-+	// VZMacGuestProvisioningOptions; Setup Assistant then creates the user.
-+	var (
-+		guestProvisioningPassword  string
-+		guestProvisioningAutoLogin bool
-+	)
-+	if darwinOpts.GuestProvisioning != nil && osutil.FileExists(filepath.Join(instDir, filenames.VzGuestProvisioning)) {
-+		guestProvisioningPassword = darwinOpts.GuestProvisioning.Password
-+		// When the home has to move, the vz driver leaves automatic login off for
-+		// Setup Assistant and the guest turns it on after moving the home.
-+		guestProvisioningAutoLogin = darwinOpts.GuestProvisioning.LogsInAutomatically && limayaml.GuestProvisioningMovesHome(instConfig)
-+	}
- 	args := TemplateArgs{
- 		Debug:              debugutil.Debug,
- 		OS:                 *instConfig.OS,
-@@ -178,6 +190,8 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
- 		SuppressFirstLoginSetupPlist: suppressFirstLoginSetupPlist,
+ 	archive := "nerdctl-full.tgz"
+ 	var darwinOpts limatype.DarwinOpts
+-	var guestOSVersion, guestOSBuildVersion string
++	var guestOSVersion, guestOSBuildVersion, guestProvisioningPassword string
+ 	if *instConfig.OS == limatype.DARWIN {
+ 		if err := limayaml.Convert(instConfig.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.Darwin"); err != nil {
+ 			return nil, err
+ 		}
+ 		guestOSVersion, guestOSBuildVersion = store.ReadGuestOSVersion(instDir)
++		// The vz driver leaves this marker, holding the initial password, until the
++		// first boot, on which Setup Assistant creates the user from
++		// VZMacGuestProvisioningOptions (macOS 27 or later).
++		if b, err := os.ReadFile(filepath.Join(instDir, filenames.VzGuestProvisioning)); err == nil {
++			guestProvisioningPassword = string(b)
++		} else if !errors.Is(err, os.ErrNotExist) {
++			return nil, err
++		}
+ 	}
+ 	var suppressFirstLoginSetupPlist string
+ 	if darwinOpts.SuppressFirstLoginSetupPlist != nil {
+@@ -179,6 +187,7 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+ 		AutoLogin:                    darwinOpts.AutoLogin != nil && *darwinOpts.AutoLogin,
  		GuestOSVersion:               guestOSVersion,
  		GuestOSBuildVersion:          guestOSBuildVersion,
 +		GuestProvisioningPassword:    guestProvisioningPassword,
-+		GuestProvisioningAutoLogin:   guestProvisioningAutoLogin,
  	}
  
  	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
-@@ -461,6 +475,22 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
- 			Reader: strings.NewReader(args.SuppressFirstLoginSetupPlist),
+@@ -470,6 +479,15 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+ 			Reader: strings.NewReader(""),
  		})
  	}
 +	if args.GuestProvisioningPassword != "" {
-+		// Presence of this file tells the guest-side fakecloudinit that Setup Assistant
-+		// creates the user from VZMacGuestProvisioningOptions on this boot, so it must
-+		// adopt that account instead of creating one.
++		// Presence of this file (not any cloud-config key) tells the guest agent that
++		// Setup Assistant creates the user from VZMacGuestProvisioningOptions on this
++		// boot, so it must adopt that account instead of creating one.
 +		layout = append(layout, iso9660util.Entry{
 +			Path:   "guest-provisioning-password",
 +			Reader: strings.NewReader(args.GuestProvisioningPassword),
 +		})
-+		if args.GuestProvisioningAutoLogin {
-+			// Tells fakecloudinit to turn on automatic login after moving the home.
-+			layout = append(layout, iso9660util.Entry{
-+				Path:   "guest-provisioning-autologin",
-+				Reader: strings.NewReader(""),
-+			})
-+		}
 +	}
  
  	driverScripts, err := drv.BootScripts(ctx)
  	if err != nil {
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index 3efd6d03..ca694dd3 100644
+index 623d2acc..19541e78 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
-@@ -146,6 +146,8 @@ type TemplateArgs struct {
- 	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
+@@ -147,6 +147,7 @@ type TemplateArgs struct {
+ 	AutoLogin                       bool   // macOS guests only
  	GuestOSVersion                  string // macOS guests only: restore-image OS version, e.g. "27.0.0"; empty otherwise
  	GuestOSBuildVersion             string // macOS guests only: restore-image build, e.g. "26A428"; empty otherwise
-+	GuestProvisioningPassword       string // macOS guests only: set while Setup Assistant provisions the user on first boot
-+	GuestProvisioningAutoLogin      bool   // macOS guests only: the guest turns on automatic login after moving the provisioned home
++	GuestProvisioningPassword       string // macOS guests only: initial password while Setup Assistant provisions the user on first boot
  }
  
  func (t *TemplateArgs) generateWindowsInitialPassword() error {
@@ -116,61 +110,49 @@ index b11a4ae5..233667b3 100644
 +	return nil, nil
 +}
 diff --git pkg/driver/vz/vm_darwin_arm64.go pkg/driver/vz/vm_darwin_arm64.go
-index 98946b56..bdf38eda 100644
+index 98946b56..588db39e 100644
 --- pkg/driver/vz/vm_darwin_arm64.go
 +++ pkg/driver/vz/vm_darwin_arm64.go
-@@ -19,6 +19,7 @@ import (
- 
- 	"github.com/lima-vm/lima/v2/pkg/limatype"
- 	"github.com/lima-vm/lima/v2/pkg/limatype/filenames"
-+	"github.com/lima-vm/lima/v2/pkg/limayaml"
- 	"github.com/lima-vm/lima/v2/pkg/osutil"
- 	"github.com/lima-vm/lima/v2/pkg/progressbar"
- )
-@@ -186,3 +187,41 @@ func installMacOS(ctx context.Context, vm *vz.VirtualMachine, ipsw string) error
+@@ -186,3 +186,37 @@ func installMacOS(ctx context.Context, vm *vz.VirtualMachine, ipsw string) error
  	}
  	return nil
  }
 +
-+// guestProvisioningStartOptions returns the start options that apply
-+// osOpts.Darwin.guestProvisioning if prepareGuestProvisioning marked the
-+// instance for provisioning on this boot.
++// guestProvisioningStartOptions returns the start options that make Setup
++// Assistant create the Lima user on this boot, if prepareGuestProvisioning marked
++// the instance for guest provisioning. The marker holds the initial password.
 +func guestProvisioningStartOptions(inst *limatype.Instance) ([]vz.VirtualMachineStartOption, error) {
-+	if _, err := os.Stat(filepath.Join(inst.Dir, filenames.VzGuestProvisioning)); err != nil {
++	pw, err := os.ReadFile(filepath.Join(inst.Dir, filenames.VzGuestProvisioning))
++	if err != nil {
 +		if errors.Is(err, fs.ErrNotExist) {
 +			return nil, nil
 +		}
 +		return nil, err
 +	}
-+	var darwinOpts limatype.DarwinOpts
-+	if err := limayaml.Convert(inst.Config.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.Darwin"); err != nil {
-+		return nil, err
++	username := *inst.Config.User.Name
++	fullName := *inst.Config.User.Comment
++	if fullName == "" {
++		// Setup Assistant requires a full name.
++		fullName = username
 +	}
-+	gp := darwinOpts.GuestProvisioning
-+	if gp == nil {
-+		return nil, nil
-+	}
-+	// The guest moves the home from /Users/<user.name> to user.home, which is only
-+	// safe while the user is logged out. In that case the guest turns on automatic
-+	// login itself once the home has moved.
-+	autoLogin := gp.LogsInAutomatically && !limayaml.GuestProvisioningMovesHome(inst.Config)
-+	opts, err := vz.NewMacGuestProvisioningOptions(
-+		*inst.Config.User.Comment,
-+		*inst.Config.User.Name,
-+		gp.Password,
-+		vz.WithGuestAutomaticLogin(autoLogin),
-+		vz.WithGuestRemoteLogin(gp.EnablesRemoteLogin),
++	opts, err := vz.NewMacGuestProvisioningOptions(fullName, username, string(pw),
++		// The guest agent moves the home to user.home after Setup Assistant has
++		// created the account, which is only safe while the user is logged out.
++		// It turns automatic login on afterwards if osOpts.Darwin.autoLogin is set.
++		vz.WithGuestAutomaticLogin(false),
++		// The guest agent enables sshd itself, as for older guests.
++		vz.WithGuestRemoteLogin(false),
 +	)
 +	if err != nil {
 +		// vz returns ErrUnsupportedOSVersion on hosts older than macOS 27;
 +		// prepareGuestProvisioning should already have skipped those.
 +		return nil, fmt.Errorf("failed to create guest provisioning options: %w", err)
 +	}
-+	logrus.Infof("Provisioning guest user %#q on first boot", *inst.Config.User.Name)
++	logrus.Infof("Provisioning guest user %#q on first boot", username)
 +	return []vz.VirtualMachineStartOption{vz.WithGuestProvisioningOptions(opts)}, nil
 +}
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index c929106a..4efe27e0 100644
+index b93b681f..b2f5eaff 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -15,6 +15,8 @@ import (
@@ -182,7 +164,15 @@ index c929106a..4efe27e0 100644
  	"time"
  
  	"github.com/Code-Hex/vz/v4"
-@@ -38,6 +40,7 @@ import (
+@@ -23,6 +25,7 @@ import (
+ 	"github.com/lima-vm/go-qcow2reader/image"
+ 	"github.com/lima-vm/go-qcow2reader/image/asif"
+ 	"github.com/lima-vm/go-qcow2reader/image/raw"
++	"github.com/sethvargo/go-password/password"
+ 	"github.com/sirupsen/logrus"
+ 
+ 	"github.com/lima-vm/lima/v2/pkg/blockdevice"
+@@ -38,6 +41,7 @@ import (
  	"github.com/lima-vm/lima/v2/pkg/osutil"
  	"github.com/lima-vm/lima/v2/pkg/reflectutil"
  	"github.com/lima-vm/lima/v2/pkg/sshutil"
@@ -190,89 +180,95 @@ index c929106a..4efe27e0 100644
  )
  
  var knownYamlProperties = []string{
-@@ -419,6 +422,13 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
- 			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
+@@ -415,7 +419,10 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+ 		patchedMarker := disk + ".patched" // empty file
+ 		if !osutil.FileExists(patchedMarker) {
+ 			logrus.Infof("Patching macOS disk %#q", disk)
+-			if err := macos.Patch(ctx, disk, l.guestPatch.TCCPermissions); err != nil {
++			opts := macos.PatchOptions{
++				GuestProvisioning: osutil.FileExists(filepath.Join(l.Instance.Dir, filenames.VzGuestProvisioning)),
++			}
++			if err := macos.Patch(ctx, disk, l.guestPatch.TCCPermissions, opts); err != nil {
  				return err
  			}
-+			// Guest provisioning is expected to be applied by Setup Assistant, which Patch skips.
-+			if osutil.FileExists(filepath.Join(l.Instance.Dir, filenames.VzGuestProvisioning)) {
-+				logrus.Info("Letting Setup Assistant run on first boot for guest provisioning")
-+				if err := macos.RemoveSetupAssistantMarkers(ctx, disk); err != nil {
-+					return err
-+				}
-+			}
- 		}
- 	}
- 	return driverutil.EnsureDisk(ctx, l.Instance.Dir, *l.Instance.Config.Disk, l.diskImageFormat)
-@@ -482,7 +492,54 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
+ 			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
+@@ -432,6 +439,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+ // The function creates the following files:
+ // - `image.ipsw`: hardlink to `image` (".ipsw" suffix is required by VZMacOSInstaller)
+ // - `disk`: raw or ASIF disk (ASIF requires macOS 26+)
++// - `vz-guest-provisioning`: only for a macOS 27+ guest on a macOS 27+ host, see prepareGuestProvisioning
+ //
+ // After successful installation, `image.ipsw` and `image` are removed.
+ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
+@@ -484,6 +492,63 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
  		}
  	}
  
--	return nil
 +	return l.prepareGuestProvisioning()
 +}
 +
-+// prepareGuestProvisioning marks the freshly installed macOS guest for
-+// provisioning on its first boot if osOpts.Darwin.guestProvisioning is
-+// configured and both host and guest are macOS 27 or later.
-+// Otherwise it logs a warning and does nothing.
++// prepareGuestProvisioning marks a freshly installed macOS guest for guest
++// provisioning on its first boot when both host and guest are macOS 27 or later.
++// Setup Assistant then creates the user account from VZMacGuestProvisioningOptions
++// instead of the guest agent creating it with sysadminctl.
++// The marker file holds the account's initial password; it is removed after the
++// first start.
 +func (l *LimaVzDriver) prepareGuestProvisioning() error {
-+	var darwinOpts limatype.DarwinOpts
-+	if err := limayaml.Convert(l.Instance.Config.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.Darwin"); err != nil {
-+		return err
-+	}
-+	if darwinOpts.GuestProvisioning == nil {
-+		return nil
-+	}
 +	hostVersion, err := osutil.ProductVersion()
 +	if err != nil {
 +		return err
 +	}
 +	guestVersion, _ := store.ReadGuestOSVersion(l.Instance.Dir)
-+	if reason := guestProvisioningSkipReason(hostVersion.Major, guestVersion); reason != "" {
-+		logrus.Warnf("Ignoring osOpts.Darwin.guestProvisioning: %s", reason)
++	if reason := guestProvisioningSkipReason(hostVersion.Major, guestVersion); reason != nil {
++		// Only a host that is too old for the guest is worth a warning; older
++		// guests use the guest agent as before.
++		if errors.Is(reason, errGuestProvisioningNeedsNewerHost) {
++			logrus.WithError(reason).Warn("Not using guest provisioning; the guest agent creates the user instead")
++		} else {
++			logrus.WithError(reason).Debug("Not using guest provisioning")
++		}
 +		return nil
 +	}
-+	return os.WriteFile(filepath.Join(l.Instance.Dir, filenames.VzGuestProvisioning), nil, 0o644)
++	const pwLen = 16
++	// Avoid special characters to minimize potential keyboard layout issue in GUI,
++	// as for the password the guest agent generates.
++	pw, err := password.Generate(pwLen, pwLen/4, 0, false, false)
++	if err != nil {
++		return fmt.Errorf("failed to generate password: %w", err)
++	}
++	return os.WriteFile(filepath.Join(l.Instance.Dir, filenames.VzGuestProvisioning), []byte(pw), 0o600)
 +}
++
++var errGuestProvisioningNeedsNewerHost = errors.New("the host must be macOS 27 or later to provision a macOS 27 or later guest")
 +
 +// guestProvisioningSkipReason returns why guest provisioning cannot be used
 +// with the given host macOS major version and guest macOS version (as read by
-+// store.ReadGuestOSVersion), or "" if it can.
++// store.ReadGuestOSVersion), or nil if it can.
 +// Guests before macOS 27 silently ignore VZMacGuestProvisioningOptions, so the
 +// guest version has to be checked up front rather than relying on an error.
-+func guestProvisioningSkipReason(hostMajor int64, guestVersion string) string {
++func guestProvisioningSkipReason(hostMajor int64, guestVersion string) error {
 +	if guestVersion == "" {
-+		return "the guest macOS version is unknown"
++		return errors.New("the guest macOS version is unknown")
 +	}
 +	majorStr, _, _ := strings.Cut(guestVersion, ".")
 +	guestMajor, err := strconv.Atoi(majorStr)
 +	if err != nil {
-+		return fmt.Sprintf("cannot parse the guest macOS version %q", guestVersion)
++		return fmt.Errorf("cannot parse the guest macOS version %#q: %w", guestVersion, err)
 +	}
 +	switch {
 +	case guestMajor < 27:
-+		return fmt.Sprintf("it requires a macOS 27 or later guest, got macOS %s", guestVersion)
++		return fmt.Errorf("the guest is macOS %s, guest provisioning needs macOS 27 or later", guestVersion)
 +	case hostMajor < 27:
-+		return fmt.Sprintf("the host must be upgraded to macOS 27 or later to provision a macOS %s guest", guestVersion)
++		return fmt.Errorf("%w (guest macOS %s)", errGuestProvisioningNeedsNewerHost, guestVersion)
 +	}
-+	return ""
+ 	return nil
  }
  
- func (l *LimaVzDriver) Start(ctx context.Context) (chan error, error) {
 diff --git pkg/driver/vz/vz_driver_darwin_test.go pkg/driver/vz/vz_driver_darwin_test.go
-index 1677fc62..df61afc7 100644
+index 1677fc62..ee7e9849 100644
 --- pkg/driver/vz/vz_driver_darwin_test.go
 +++ pkg/driver/vz/vz_driver_darwin_test.go
-@@ -9,6 +9,7 @@ import (
- 	"errors"
- 	"os"
- 	"path/filepath"
-+	"strings"
- 	"testing"
- 	"time"
- 
-@@ -88,3 +89,30 @@ func TestValidateRejectsHostLoopbackFalseWithUserV2(t *testing.T) {
+@@ -88,3 +88,31 @@ func TestValidateRejectsHostLoopbackFalseWithUserV2(t *testing.T) {
  	l := &LimaVzDriver{Instance: &limatype.Instance{Config: cfg}}
  	assert.ErrorContains(t, l.Validate(t.Context()), "not supported with a `user-v2` network")
  }
@@ -282,29 +278,30 @@ index 1677fc62..df61afc7 100644
 +		name         string
 +		hostMajor    int64
 +		guestVersion string
-+		wantReason   string // substring; "" means provisioning runs
++		wantErr      string // substring; "" means provisioning runs
 +	}{
 +		{"27 host, 27 guest", 27, "27.0.0", ""},
 +		{"28 host, 27 guest", 28, "27.1.0", ""},
-+		{"27 host, 26 guest", 27, "26.6.0", "requires a macOS 27 or later guest"},
-+		{"26 host, 26 guest", 26, "26.6.0", "requires a macOS 27 or later guest"},
-+		{"26 host, 27 guest", 26, "27.0.0", "host must be upgraded"},
++		{"27 host, 26 guest", 27, "26.6.0", "needs macOS 27 or later"},
++		{"26 host, 26 guest", 26, "26.6.0", "needs macOS 27 or later"},
++		{"26 host, 27 guest", 26, "27.0.0", "host must be macOS 27 or later"},
 +		{"unknown guest", 27, "", "unknown"},
 +		{"unparsable guest", 27, "x.y", "cannot parse"},
 +	}
 +	for _, tc := range cases {
 +		t.Run(tc.name, func(t *testing.T) {
-+			got := guestProvisioningSkipReason(tc.hostMajor, tc.guestVersion)
-+			if tc.wantReason == "" {
-+				assert.Equal(t, got, "")
++			err := guestProvisioningSkipReason(tc.hostMajor, tc.guestVersion)
++			if tc.wantErr == "" {
++				assert.NilError(t, err)
 +			} else {
-+				assert.Assert(t, strings.Contains(got, tc.wantReason), "got %q", got)
++				assert.ErrorContains(t, err, tc.wantErr)
 +			}
 +		})
 +	}
++	assert.Assert(t, errors.Is(guestProvisioningSkipReason(26, "27.0.0"), errGuestProvisioningNeedsNewerHost))
 +}
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-index 5a0dd403..fc92d21f 100644
+index 61fef209..d2c407dd 100644
 --- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 +++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 @@ -17,6 +17,7 @@ import (
@@ -315,28 +312,52 @@ index 5a0dd403..fc92d21f 100644
  
  	"github.com/goccy/go-yaml"
  	"github.com/sethvargo/go-password/password"
-@@ -337,10 +338,20 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -107,21 +108,25 @@ func processUserData(ctx context.Context, mnt string) error {
+ 	if userData.PackageRebootIfRequired {
+ 		logrus.Warn("package_reboot_if_required is not implemented")
+ 	}
+-	for _, m := range userData.Mounts {
+-		if err = mountFSTabEntry(m); err != nil {
+-			errs = append(errs, fmt.Errorf("failed to mount fstab entry %v: %w", m, err))
+-		}
+-	}
+ 	if userData.Timezone != "" {
+ 		if err = setTimezone(ctx, userData.Timezone); err != nil {
+ 			errs = append(errs, fmt.Errorf("failed to set timezone: %w", err))
+ 		}
+ 	}
++	// Create the users before mounting: on macOS 27 and later, Setup Assistant
++	// creates the home at /Users/<user>, which is where the host home is mounted
++	// by default, and the guest agent must move it to user.home before that path
++	// becomes a mount.
+ 	for _, u := range userData.Users {
+ 		if err := createUser(ctx, &u, mnt); err != nil {
+ 			errs = append(errs, fmt.Errorf("failed to create user %#q: %w", u.Name, err))
+ 		}
+ 	}
++	for _, m := range userData.Mounts {
++		if err = mountFSTabEntry(m); err != nil {
++			errs = append(errs, fmt.Errorf("failed to mount fstab entry %v: %w", m, err))
++		}
++	}
+ 	for _, entry := range userData.WriteFiles {
+ 		if err := writeFiles(ctx, entry); err != nil {
+ 			errs = append(errs, fmt.Errorf("failed to write file for path %#q: %w", entry.Path, err))
+@@ -337,6 +342,13 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  	if homedir == "" {
  		return fmt.Errorf("homedir is required for user %#q", u.Name)
  	}
 +	// With VZMacGuestProvisioningOptions (macOS 27+), Setup Assistant creates the
 +	// user on the first boot, so adopt that account instead of creating one.
++	// Presence of guest-provisioning-password on the cidata volume is what signals
++	// this; see GenerateISO9660.
 +	if pw, err := os.ReadFile(filepath.Join(mnt, "guest-provisioning-password")); err == nil {
 +		return adoptProvisionedUser(ctx, u, mnt, string(pw))
 +	}
  	if osutil.FileExists(homedir) {
  		logrus.Debugf("homedir %#q already exists, skipping user creation for user %#q", homedir, u.Name)
  		return nil
- 	}
-+	if _, _, err := lookupDSUser(ctx, u.Name); err == nil {
-+		// Created by Setup Assistant via guest provisioning on an earlier boot.
-+		logrus.Debugf("user %#q already exists in directory services, skipping user creation", u.Name)
-+		return nil
-+	}
- 	if u.UID == "" {
- 		return fmt.Errorf("uid is required for user %#q", u.Name)
- 	}
-@@ -411,23 +422,216 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -411,23 +423,216 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  		return fmt.Errorf("failed to execute command %v: %w (output=%#q)", cmd.Args, err, output)
  	}
  
@@ -344,6 +365,7 @@ index 5a0dd403..fc92d21f 100644
 +		return err
 +	}
 +	logrus.Infof("Created user %#q. The password is stored in %#q", u.Name, filepath.Join(homedir, "password"))
++	maybeEnableAutoLogin(ctx, mnt, u.Name, pw)
 +	return nil
 +}
 +
@@ -363,7 +385,10 @@ index 5a0dd403..fc92d21f 100644
 +	}); err != nil {
 +		return fmt.Errorf("user %#q was not created by Setup Assistant: %w", u.Name, err)
 +	}
-+	if homedir != u.Homedir {
++	if u.UID != "" && u.UID != strconv.Itoa(uid) {
++		logrus.Warnf("Requested UID %s for user %#q, but Setup Assistant assigned UID %d; using the actual UID", u.UID, u.Name, uid)
++	}
++	if filepath.Clean(homedir) != filepath.Clean(u.Homedir) {
 +		if err := moveProvisionedHome(ctx, u.Name, uid, homedir, u.Homedir); err != nil {
 +			// The boot scripts use user.home, so make it lead to the account's home.
 +			logrus.WithError(err).Warnf("Keeping home %#q created by Setup Assistant; linking %#q to it", homedir, u.Homedir)
@@ -384,15 +409,18 @@ index 5a0dd403..fc92d21f 100644
 +			logrus.WithError(err).Warnf("Failed to suppress first-login screens for user %#q", u.Name)
 +		}
 +	}
++	// As for a user created with sysadminctl.
++	if err := os.Chmod(homedir, 0o700); err != nil {
++		return fmt.Errorf("failed to chmod %#q: %w", homedir, err)
++	}
 +	if err := installUserFiles(u, uid, homedir, pw); err != nil {
 +		return err
 +	}
-+	logrus.Infof("Adopted user %#q created by Setup Assistant (uid %d, home %#q)", u.Name, uid, homedir)
-+	if osutil.FileExists(filepath.Join(mnt, "guest-provisioning-autologin")) {
-+		if err := enableAutoLogin(ctx, u.Name, pw); err != nil {
-+			logrus.WithError(err).Warnf("Failed to enable automatic login for user %#q", u.Name)
-+		}
-+	}
++	logrus.Infof("Adopted user %#q created by Setup Assistant (uid %d, home %#q). The password is stored in %#q",
++		u.Name, uid, homedir, filepath.Join(homedir, "password"))
++	// The provisioning options leave automatic login off (see moveProvisionedHome),
++	// so turn it on here, after the home has moved, as for a sysadminctl-created user.
++	maybeEnableAutoLogin(ctx, mnt, u.Name, pw)
 +	return nil
 +}
 +
@@ -400,7 +428,8 @@ index 5a0dd403..fc92d21f 100644
 +// /Users/<name>; VZMacGuestProvisioningOptions cannot choose it) to the Lima home.
 +// It only does so after Setup Assistant has finished and while nothing runs as
 +// the user, since a logged-in session keeps using the old path. The vz driver
-+// leaves automatic login off for Setup Assistant so the user stays logged out.
++// turns automatic login off in the provisioning options so the user stays
++// logged out.
 +func moveProvisionedHome(ctx context.Context, name string, uid int, src, dst string) error {
 +	// Setup Assistant writes .AppleSetupDone when it finishes.
 +	if err := waitFor(ctx, 10*time.Minute, func() error {
@@ -433,6 +462,11 @@ index 5a0dd403..fc92d21f 100644
 +	}); err != nil {
 +		return err
 +	}
++	if fi, err := os.Lstat(src); err != nil {
++		return err
++	} else if !fi.IsDir() {
++		return fmt.Errorf("%#q is not a directory (mode %v)", src, fi.Mode().Type())
++	}
 +	if _, err := os.Lstat(dst); !errors.Is(err, os.ErrNotExist) {
 +		return fmt.Errorf("%#q already exists", dst)
 +	}
@@ -450,8 +484,12 @@ index 5a0dd403..fc92d21f 100644
 +	if output, err := exec.CommandContext(ctx, "dscacheutil", "-flushcache").CombinedOutput(); err != nil {
 +		logrus.WithError(err).Warnf("Failed to flush the directory services cache (output=%#q)", output)
 +	}
-+	if _, got, err := lookupDSUser(ctx, name); err != nil || got != dst {
-+		return fmt.Errorf("directory services still reports home %#q for user %#q: %w", got, name, err)
++	_, got, err := lookupDSUser(ctx, name)
++	if err != nil {
++		return err
++	}
++	if got != dst {
++		return fmt.Errorf("directory services still reports home %#q for user %#q", got, name)
 +	}
 +	return nil
 +}
@@ -475,60 +513,43 @@ index 5a0dd403..fc92d21f 100644
 +	}
 +}
 +
-+// kcpasswordKey is the fixed XOR key macOS loginwindow uses to obfuscate the
-+// automatic login password in /etc/kcpassword.
-+var kcpasswordKey = []byte{0x7D, 0x89, 0x52, 0x23, 0xD2, 0xBC, 0xDD, 0xEA, 0xA3, 0xB9, 0x1F}
-+
-+// encodeKCPassword returns pw in /etc/kcpassword format: XORed with
-+// kcpasswordKey and zero-padded to the next multiple of 12 bytes, always
-+// adding at least one byte so loginwindow finds the terminator.
-+func encodeKCPassword(pw string) []byte {
-+	b := make([]byte, (len(pw)/12+1)*12)
-+	copy(b, pw)
-+	for i := range b {
-+		b[i] ^= kcpasswordKey[i%len(kcpasswordKey)]
-+	}
-+	return b
-+}
-+
-+// enableAutoLogin turns on automatic login for the user, as
-+// VZMacGuestProvisioningOptions would have. loginwindow only reads it at boot,
-+// so it takes effect from the next boot; restarting loginwindow on macOS 27.2
-+// does not log the user in.
-+func enableAutoLogin(ctx context.Context, name, pw string) error {
-+	if err := os.WriteFile("/etc/kcpassword", encodeKCPassword(pw), 0o600); err != nil {
-+		return err
-+	}
-+	cmd := exec.CommandContext(ctx, "defaults", "write", "/Library/Preferences/com.apple.loginwindow", "autoLoginUser", "-string", name)
-+	if output, err := cmd.CombinedOutput(); err != nil {
-+		return fmt.Errorf("failed to execute command %v: %w (output=%#q)", cmd.Args, err, output)
-+	}
-+	logrus.Infof("Enabled automatic login for user %#q from the next boot", name)
-+	return nil
-+}
-+
 +// lookupDSUser returns the UID and home directory of a local directory services user.
 +func lookupDSUser(ctx context.Context, name string) (uid int, homedir string, err error) {
 +	out, err := exec.CommandContext(ctx, "dscl", ".", "-read", "/Users/"+name, "UniqueID", "NFSHomeDirectory").Output()
 +	if err != nil {
 +		return 0, "", fmt.Errorf("user %#q not found in directory services: %w", name, err)
 +	}
-+	for line := range strings.Lines(string(out)) {
-+		k, v, ok := strings.Cut(strings.TrimSpace(line), ":")
-+		if !ok {
-+			continue
-+		}
-+		switch strings.TrimSpace(k) {
-+		case "UniqueID":
-+			uid, err = strconv.Atoi(strings.TrimSpace(v))
-+		case "NFSHomeDirectory":
-+			homedir = strings.TrimSpace(v)
-+		}
-+	}
-+	if err != nil || homedir == "" {
++	attrs := parseDSCLRead(string(out))
++	uid, err = strconv.Atoi(attrs["UniqueID"])
++	if err != nil || attrs["NFSHomeDirectory"] == "" {
 +		return 0, "", fmt.Errorf("failed to parse directory services record for user %#q (output=%#q)", name, out)
 +	}
-+	return uid, homedir, nil
++	return uid, attrs["NFSHomeDirectory"], nil
++}
++
++// parseDSCLRead parses the output of `dscl . -read <path> <attr>...` for
++// single-valued attributes. dscl prints "Key: value", or "Key:" followed by
++// the value on an indented line when the value contains a space.
++func parseDSCLRead(out string) map[string]string {
++	attrs := make(map[string]string)
++	var key string
++	for line := range strings.Lines(out) {
++		line = strings.TrimRight(line, "\n")
++		if strings.HasPrefix(line, " ") {
++			if key != "" {
++				attrs[key] = strings.TrimSpace(line)
++			}
++			continue
++		}
++		k, v, ok := strings.Cut(line, ":")
++		if !ok {
++			key = ""
++			continue
++		}
++		key = k
++		attrs[key] = strings.TrimSpace(v)
++	}
++	return attrs
 +}
 +
 +// installUserFiles writes the password file, SSH authorized keys and sudoers
@@ -558,267 +579,248 @@ index 5a0dd403..fc92d21f 100644
  			return fmt.Errorf("failed to chown %#q for user %#q: %w", f, u.Name, err)
  		}
  	}
+@@ -436,17 +641,22 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+ 			return fmt.Errorf("failed to write sudoers file for user %#q: %w", u.Name, err)
+ 		}
+ 	}
+-	// Presence of auto-login on the cidata volume (not any cloud-config key) is what
+-	// signals this feature is enabled -- see GenerateISO9660.
+-	if _, statErr := os.Stat(filepath.Join(mnt, "auto-login")); statErr == nil {
+-		if err := enableAutoLogin(ctx, u.Name, pw); err != nil {
+-			// Non-fatal: the guest is still reachable over SSH.
+-			logrus.WithError(err).Warnf("Failed to enable automatic login for user %#q", u.Name)
+-		}
+-	}
+ 	return nil
+ }
+ 
++// maybeEnableAutoLogin turns on automatic login for the user if osOpts.Darwin.autoLogin
++// is set. Presence of auto-login on the cidata volume (not any cloud-config key) is what
++// signals this feature is enabled -- see GenerateISO9660.
++func maybeEnableAutoLogin(ctx context.Context, mnt, name, pw string) {
++	if _, statErr := os.Stat(filepath.Join(mnt, "auto-login")); statErr != nil {
++		return
++	}
++	if err := enableAutoLogin(ctx, name, pw); err != nil {
++		// Non-fatal: the guest is still reachable over SSH.
++		logrus.WithError(err).Warnf("Failed to enable automatic login for user %#q", name)
++	}
++}
++
+ // kcpasswordKey is the fixed key that loginwindow uses to obfuscate the automatic
+ // login password in /etc/kcpassword. The format is not documented by Apple; it has
+ // been unchanged since at least OS X 10.7.
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin_test.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin_test.go
-new file mode 100644
-index 00000000..d59bd418
---- /dev/null
+index d59bd418..b9eba1b0 100644
+--- pkg/guestagent/fakecloudinit/fakecloudinit_darwin_test.go
 +++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin_test.go
-@@ -0,0 +1,28 @@
-+// SPDX-FileCopyrightText: Copyright The Lima Authors
-+// SPDX-License-Identifier: Apache-2.0
+@@ -26,3 +26,37 @@ func TestEncodeKCPassword(t *testing.T) {
+ 		})
+ 	}
+ }
 +
-+package fakecloudinit
-+
-+import (
-+	"encoding/hex"
-+	"testing"
-+
-+	"gotest.tools/v3/assert"
-+)
-+
-+func TestEncodeKCPassword(t *testing.T) {
++func TestParseDSCLRead(t *testing.T) {
 +	cases := []struct {
-+		pw   string
-+		want string // hex
++		name string
++		out  string
++		want map[string]string
 +	}{
-+		// Shorter than 12 bytes: padded to 12.
-+		{"password", "0de82150a5d3af8ea3b91f7d"},
-+		// Exactly 12 bytes: a full block of padding is added for the terminator.
-+		{"abcdefghijkl", "1ceb3147b7daba82cad37411895223d2bcddeaa3b91f7d89"},
++		{
++			name: "single-line values",
++			out:  "NFSHomeDirectory: /Users/lima\nUniqueID: 501\n",
++			want: map[string]string{"NFSHomeDirectory": "/Users/lima", "UniqueID": "501"},
++		},
++		{
++			name: "value on the next line",
++			out:  "NFSHomeDirectory:\n /Users/Lima User\nUniqueID: 502\n",
++			want: map[string]string{"NFSHomeDirectory": "/Users/Lima User", "UniqueID": "502"},
++		},
++		{
++			name: "missing attribute",
++			out:  "NFSHomeDirectory: /Users/lima\n",
++			want: map[string]string{"NFSHomeDirectory": "/Users/lima"},
++		},
++		{
++			name: "no trailing newline",
++			out:  "UniqueID: 501",
++			want: map[string]string{"UniqueID": "501"},
++		},
 +	}
 +	for _, tc := range cases {
-+		t.Run(tc.pw, func(t *testing.T) {
-+			assert.Equal(t, hex.EncodeToString(encodeKCPassword(tc.pw)), tc.want)
++		t.Run(tc.name, func(t *testing.T) {
++			assert.DeepEqual(t, parseDSCLRead(tc.out), tc.want)
 +		})
 +	}
 +}
-diff --git pkg/guestpatch/macos/provisioning_darwin.go pkg/guestpatch/macos/provisioning_darwin.go
-new file mode 100644
-index 00000000..1503f487
---- /dev/null
-+++ pkg/guestpatch/macos/provisioning_darwin.go
-@@ -0,0 +1,68 @@
-+// SPDX-FileCopyrightText: Copyright The Lima Authors
-+// SPDX-License-Identifier: Apache-2.0
+diff --git pkg/guestpatch/macos/macos_darwin.go pkg/guestpatch/macos/macos_darwin.go
+index 4c596734..98cdafb7 100644
+--- pkg/guestpatch/macos/macos_darwin.go
++++ pkg/guestpatch/macos/macos_darwin.go
+@@ -9,6 +9,7 @@ import (
+ 	"fmt"
+ 	"os"
+ 	"path/filepath"
++	"slices"
+ 	"time"
+ 
+ 	"github.com/sirupsen/logrus"
+@@ -37,23 +38,53 @@ func attachImageWithRetry(ctx context.Context, disk string, retry int) (*asifuti
+ 	return attached, err
+ }
+ 
++// PatchOptions configures Patch.
++type PatchOptions struct {
++	// GuestProvisioning prepares the disk for a macOS 27 or later guest whose user
++	// account Setup Assistant creates from the VZMacGuestProvisioningOptions passed
++	// at start. It leaves out the markers that skip Setup Assistant, so that it runs
++	// on the first boot, and grants the guest agent Full Disk Access, which macOS
++	// requires to move the home directory Setup Assistant creates (both renaming it
++	// and changing NFSHomeDirectory fail with EPERM without it).
++	GuestProvisioning bool
++}
 +
-+package macos
++// guestProvisioningTCCPermissions are added to the TCC permissions when
++// PatchOptions.GuestProvisioning is set.
++var guestProvisioningTCCPermissions = []limatype.TCCPermission{
++	{Preset: "lima-guestagent-full-disk-access"},
++}
 +
-+import (
-+	"context"
-+	"errors"
-+	"fmt"
-+	"os"
-+	"path/filepath"
-+
-+	"github.com/sirupsen/logrus"
-+
-+	"github.com/lima-vm/lima/v2/pkg/imgutil/nativeimgutil/asifutil"
-+	"github.com/lima-vm/lima/v2/pkg/limatype/filenames"
-+	"github.com/lima-vm/lima/v2/pkg/osutil"
-+)
-+
-+// setupAssistantMarkers are the files Patch writes to skip Setup Assistant.
++// setupAssistantMarkers are the files that make macOS skip Setup Assistant,
++// relative to the Data volume root.
 +var setupAssistantMarkers = []string{
 +	"private/var/db/.AppleSetupDone",
 +	"Library/User Template/.skipbuddy",
 +}
 +
-+// RemoveSetupAssistantMarkers removes the Setup Assistant skip markers written
-+// by Patch, so that the first boot runs Setup Assistant, which is expected to
-+// apply VZMacGuestProvisioningOptions (macOS 27 or later).
-+func RemoveSetupAssistantMarkers(ctx context.Context, disk string) error {
-+	attached, err := attachImageWithRetry(ctx, disk, 3)
-+	if err != nil {
-+		return fmt.Errorf("failed to attach disk: %w", err)
+ // Patch prepares a macOS guest disk for first boot. It writes the
+ // LaunchDaemon plist, init script, setup markers, and optional TCC
+ // permission entries via a noowners mount, then fixes file ownership
+ // by patching APFS inode records directly on the raw disk image.
+ // No sudo required.
+-func Patch(ctx context.Context, disk string, tccPerms []limatype.TCCPermission) error {
+-	tccPaths, err := patchWriteGuestFiles(ctx, disk, tccPerms)
++func Patch(ctx context.Context, disk string, tccPerms []limatype.TCCPermission, opts PatchOptions) error {
++	var markers []string
++	if opts.GuestProvisioning {
++		tccPerms = append(slices.Clone(tccPerms), guestProvisioningTCCPermissions...)
++	} else {
++		markers = setupAssistantMarkers
 +	}
-+	if attached == nil || attached.Data == "" {
-+		return errors.New("failed to find data slice in attached disk")
-+	}
-+	dataDevPath := "/dev/" + attached.Data
-+	defer func() {
-+		if err := asifutil.DetachASIF(dataDevPath); err != nil {
-+			logrus.WithError(err).Warnf("failed to detach %#q (%#q)", dataDevPath, disk)
-+		}
-+	}()
-+
-+	mnt := filepath.Join(filepath.Dir(disk), filenames.MntDir)
-+	if err := os.MkdirAll(mnt, 0o755); err != nil {
-+		return fmt.Errorf("failed to create mount point %#q: %w", mnt, err)
-+	}
-+	defer func() {
-+		if err := os.Remove(mnt); err != nil {
-+			logrus.WithError(err).Warnf("failed to remove mount point %#q", mnt)
-+		}
-+	}()
-+	if err := osutil.Mount(ctx, "apfs", dataDevPath, mnt, []string{"noowners"}); err != nil {
-+		return err
-+	}
-+	defer func() {
-+		if err := osutil.Umount(ctx, mnt); err != nil {
-+			logrus.WithError(err).Warnf("failed to unmount %#q", mnt)
-+		}
-+	}()
-+
-+	for _, f := range setupAssistantMarkers {
-+		if err := os.Remove(filepath.Join(mnt, f)); err != nil && !errors.Is(err, os.ErrNotExist) {
-+			return fmt.Errorf("failed to remove %#q: %w", f, err)
-+		}
-+	}
-+	return nil
-+}
++	tccPaths, err := patchWriteGuestFiles(ctx, disk, markers, tccPerms)
+ 	if err != nil {
+ 		return err
+ 	}
+-	return patchFixOwnership(ctx, disk, tccPaths)
++	return patchFixOwnership(ctx, disk, append(slices.Clone(markers), tccPaths...))
+ }
+ 
+ // patchWriteGuestFiles attaches the disk image, mounts the Data
+ // volume with noowners, writes guest files, then detaches.
+ // Returns the relative paths of any new filesystem entries created for TCC.
+-func patchWriteGuestFiles(ctx context.Context, disk string, tccPerms []limatype.TCCPermission) ([]string, error) {
++func patchWriteGuestFiles(ctx context.Context, disk string, markers []string, tccPerms []limatype.TCCPermission) ([]string, error) {
+ 	attached, err := attachImageWithRetry(ctx, disk, 3)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("failed to attach disk: %w", err)
+@@ -79,7 +110,7 @@ func patchWriteGuestFiles(ctx context.Context, disk string, tccPerms []limatype.
+ 			logrus.WithError(err).Warnf("failed to remove mount point %#q", mnt)
+ 		}
+ 	}()
+-	return writeGuestFiles(ctx, dataDevPath, mnt, tccPerms)
++	return writeGuestFiles(ctx, dataDevPath, mnt, markers, tccPerms)
+ }
+ 
+ // patchFixOwnership attaches the disk image and patches APFS inode
+@@ -111,8 +142,6 @@ func patchFixOwnership(ctx context.Context, disk string, extraPaths []string) er
+ 	// to load them, so we patch them to UID 0 / GID 0 directly.
+ 	containerDev := "/dev/r" + attached.Container
+ 	paths := []string{
+-		"private/var/db/.AppleSetupDone",
+-		"Library/User Template/.skipbuddy",
+ 		"usr/local/sbin",
+ 		"usr/local/sbin/lima-macos-init.sh",
+ 		"Library/LaunchDaemons/io.lima-vm.lima-macos-init.plist",
+@@ -126,9 +155,9 @@ func patchFixOwnership(ctx context.Context, disk string, extraPaths []string) er
+ }
+ 
+ // writeGuestFiles mounts the data volume with noowners and writes the
+-// LaunchDaemon plist, init script, setup markers, and optional TCC entries.
++// LaunchDaemon plist, init script, the given setup markers, and optional TCC entries.
+ // Returns relative paths of any newly created TCC filesystem entries.
+-func writeGuestFiles(ctx context.Context, dataSliceDevice, mnt string, tccPerms []limatype.TCCPermission) ([]string, error) {
++func writeGuestFiles(ctx context.Context, dataSliceDevice, mnt string, markers []string, tccPerms []limatype.TCCPermission) ([]string, error) {
+ 	// Mount with "noowners" so non-root users can write to the volume.
+ 	if err := osutil.Mount(ctx, "apfs", dataSliceDevice, mnt, []string{"noowners"}); err != nil {
+ 		return nil, err
+@@ -139,11 +168,8 @@ func writeGuestFiles(ctx context.Context, dataSliceDevice, mnt string, tccPerms
+ 		}
+ 	}()
+ 
+-	filesToTouch := []string{
+-		filepath.Join(mnt, "private/var/db/.AppleSetupDone"),
+-		filepath.Join(mnt, "Library/User Template/.skipbuddy"),
+-	}
+-	for _, file := range filesToTouch {
++	for _, marker := range markers {
++		file := filepath.Join(mnt, marker)
+ 		if err := osutil.Touch(file); err != nil {
+ 			return nil, fmt.Errorf("failed to touch %#q: %w", file, err)
+ 		}
 diff --git pkg/limatype/filenames/filenames.go pkg/limatype/filenames/filenames.go
-index 3c644745..1b5d561f 100644
+index 3c644745..325ba981 100644
 --- pkg/limatype/filenames/filenames.go
 +++ pkg/limatype/filenames/filenames.go
 @@ -74,6 +74,7 @@ const (
  	VzGuestOSVersion        = "vz-guest-os-version"       // macOS guests only; restore-image OS version, e.g. "27.0.0"
  	VzGuestOSBuildVersion   = "vz-guest-os-build-version" // macOS guests only; restore-image build, e.g. "26A428"
  	VzAux                   = "vz-aux"                    // macOS guests only
-+	VzGuestProvisioning     = "vz-guest-provisioning"     // macOS guests only; present until the first boot applies osOpts.Darwin.guestProvisioning
++	VzGuestProvisioning     = "vz-guest-provisioning"     // macOS 27+ guests only; initial password, present until the first boot applies guest provisioning
  	VzEfi                   = "vz-efi"                    // efi variable store
  	QemuEfiCodeFD           = "qemu-efi-code.fd"          // efi code; not always created
  	AnsibleInventoryYAML    = "ansible-inventory.yaml"
-diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 0e56b125..820f2c13 100644
---- pkg/limatype/lima_yaml.go
-+++ pkg/limatype/lima_yaml.go
-@@ -371,6 +371,23 @@ type DarwinOpts struct {
- 	// SuppressFirstLoginSetupPlist overrides the built-in com.apple.SetupAssistant.plist content
- 	// used by SuppressFirstLoginSetup. Ignored unless SuppressFirstLoginSetup is true.
- 	SuppressFirstLoginSetupPlist *string `yaml:"suppressFirstLoginSetupPlist,omitempty" json:"suppressFirstLoginSetupPlist,omitempty" jsonschema:"nullable"`
-+	// GuestProvisioning creates the guest user account on first boot via the
-+	// Virtualization framework (vz driver, macOS 27 or later on host and guest).
-+	GuestProvisioning *DarwinGuestProvisioning `yaml:"guestProvisioning,omitempty" json:"guestProvisioning,omitempty" jsonschema:"nullable"`
-+}
-+
-+// DarwinGuestProvisioning maps to VZMacGuestProvisioningOptions.
-+// macOS evaluates these only on the first boot after the OS is installed;
-+// changing them on an existing instance has no effect.
-+// The account's username and full name are the Lima user's `user.name` and
-+// `user.comment`. Setup Assistant creates the home at "/Users/<user.name>"; the
-+// guest then moves it to `user.home` (default "/Users/<user.name>.guest") before
-+// the user logs in. In that case it turns on automatic login itself, which
-+// takes effect from the second boot.
-+type DarwinGuestProvisioning struct {
-+	Password            string `yaml:"password,omitempty" json:"password,omitempty"`
-+	LogsInAutomatically bool   `yaml:"logsInAutomatically,omitempty" json:"logsInAutomatically,omitempty"`
-+	EnablesRemoteLogin  bool   `yaml:"enablesRemoteLogin,omitempty" json:"enablesRemoteLogin,omitempty"`
- }
+diff --git website/content/en/docs/dev/internals.md website/content/en/docs/dev/internals.md
+index a1e49911..57ec61e6 100644
+--- website/content/en/docs/dev/internals.md
++++ website/content/en/docs/dev/internals.md
+@@ -76,6 +76,7 @@ VZ:
+ - `vz-guest-os-version`: macOS version of the restore image a Mac VM was created from, e.g. `27.0.0` (written once, at create time)
+ - `vz-guest-os-build-version`: build number of that restore image, e.g. `26A428`
+ - `vz-aux`: Auxiliary storage for a Mac VM
++- `vz-guest-provisioning`: initial password of a macOS 27+ guest's user, present from create time until the first start applies guest provisioning
+ - `vz-efi`: EFIVariable store file for a VM
  
- func NewOS(osname string) OS {
-diff --git pkg/limayaml/guestprovisioning.go pkg/limayaml/guestprovisioning.go
-new file mode 100644
-index 00000000..c9399282
---- /dev/null
-+++ pkg/limayaml/guestprovisioning.go
-@@ -0,0 +1,20 @@
-+// SPDX-FileCopyrightText: Copyright The Lima Authors
-+// SPDX-License-Identifier: Apache-2.0
-+
-+package limayaml
-+
-+import "github.com/lima-vm/lima/v2/pkg/limatype"
-+
-+// GuestProvisioningHome returns the home directory that Setup Assistant gives the
-+// account it creates from osOpts.Darwin.guestProvisioning. macOS has no option to
-+// choose it, so the guest moves it to `user.home` afterwards when the two differ.
-+func GuestProvisioningHome(y *limatype.LimaYAML) string {
-+	return "/Users/" + *y.User.Name
-+}
-+
-+// GuestProvisioningMovesHome reports whether the guest has to move the provisioned
-+// account's home to `user.home`. Lima's default home for macOS guests,
-+// /Users/<user>.guest, always differs from Setup Assistant's /Users/<user>.
-+func GuestProvisioningMovesHome(y *limatype.LimaYAML) bool {
-+	return *y.User.Home != GuestProvisioningHome(y)
-+}
-diff --git pkg/limayaml/guestprovisioning_test.go pkg/limayaml/guestprovisioning_test.go
-new file mode 100644
-index 00000000..b30d934d
---- /dev/null
-+++ pkg/limayaml/guestprovisioning_test.go
-@@ -0,0 +1,36 @@
-+// SPDX-FileCopyrightText: Copyright The Lima Authors
-+// SPDX-License-Identifier: Apache-2.0
-+
-+package limayaml
-+
-+import (
-+	"path/filepath"
-+	"testing"
-+
-+	"gotest.tools/v3/assert"
-+
-+	"github.com/lima-vm/lima/v2/pkg/limatype"
-+)
-+
-+func TestGuestProvisioningMovesHome(t *testing.T) {
-+	provisioning := limatype.OsOpts{limatype.DARWIN: limatype.DarwinOpts{
-+		GuestProvisioning: &limatype.DarwinGuestProvisioning{Password: "secret"},
-+	}}
-+	fill := func(y limatype.LimaYAML) limatype.LimaYAML {
-+		FillDefault(t.Context(), &y, &limatype.LimaYAML{}, &limatype.LimaYAML{}, filepath.Join(t.TempDir(), "lima.yaml"), false)
-+		return y
-+	}
-+	darwin := new(limatype.DARWIN)
-+
-+	t.Run("the default home is moved", func(t *testing.T) {
-+		y := fill(limatype.LimaYAML{OS: darwin, OsOpts: provisioning})
-+		assert.Equal(t, *y.User.Home, "/Users/"+*y.User.Name+".guest")
-+		assert.Equal(t, GuestProvisioningHome(&y), "/Users/"+*y.User.Name)
-+		assert.Assert(t, GuestProvisioningMovesHome(&y))
-+	})
-+
-+	t.Run("a home at Setup Assistant's path is kept", func(t *testing.T) {
-+		y := fill(limatype.LimaYAML{OS: darwin, OsOpts: provisioning, User: limatype.User{Name: new("custom"), Home: new("/Users/custom")}})
-+		assert.Assert(t, !GuestProvisioningMovesHome(&y))
-+	})
-+}
+ Serial:
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 15e50e8a..ed701381 100644
+index c3ebbfb8..e7ea40c1 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -116,6 +116,44 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
- template above, then supply the actual build and version strings for your
- target OS release if needed.
+@@ -202,6 +202,30 @@ login is not available while FileVault is on.
+ 
+ **Default:** `false`
  
 +### Guest provisioning
-+| ⚡ Requirement | Lima >= 2.3, macOS >= 27.0 on both host and guest, ARM |
++| ⚡ Requirement | Lima >= 2.4, macOS >= 27.0 on both host and guest |
 +|-------------------|-----------------------------|
 +
-+On macOS 27 and later, the Virtualization framework can create the guest user
-+account on the first boot after the OS is installed. Set
-+`osOpts.Darwin.guestProvisioning` to have Lima pass these settings to that
-+first boot:
++When both the host and the guest run macOS 27 or later, Lima creates the guest
++user with the Virtualization framework's guest provisioning
++([`VZMacGuestProvisioningOptions`](https://developer.apple.com/documentation/virtualization/vzmacguestprovisioningoptions))
++instead of `sysadminctl`: on the first boot after installation, Setup Assistant
++creates the account from the Lima user (`user.name`, with `user.comment` as the
++full name), and Lima then sets it up as usual (SSH keys, `~/password`, sudo).
++Nothing needs to be configured, and older guests are set up as before.
 +
-+```yaml
-+osOpts:
-+  Darwin:
-+    guestProvisioning:
-+      password: "..."
-+      logsInAutomatically: true
-+      enablesRemoteLogin: true
-+```
++Setup Assistant always creates the home directory at `/Users/<user.name>`, so on
++the first boot the guest moves it to `user.home` (`/Users/<user.name>.guest` by
++default, which cannot clash with the host home directory mounted in the guest)
++before anyone logs in. macOS only lets a process with Full Disk Access move a
++home directory, so Lima adds the
++[`lima-guestagent-full-disk-access`](#built-in-presets) TCC permission for these
++guests. [`osOpts.Darwin.autoLogin`](#automatic-login) is turned on after the move,
++as for older guests.
 +
-+The account is the Lima user: `user.name` is its username and `user.comment` its
-+full name. Setup Assistant always creates the home directory at
-+`/Users/<user.name>`. Lima's usual home for macOS guests is
-+`/Users/<user.name>.guest`, which cannot clash with your host home directory
-+when that is mounted in the guest, so on the first boot the guest moves the home
-+to `user.home` before the user logs in. When it does, the guest turns on
-+automatic login itself (if `logsInAutomatically` is set) after the move, rather
-+than having Setup Assistant log the user in with the old home, so the first
-+boot stops at the login window and automatic login starts from the second boot.
-+
-+macOS only reads these settings on the first boot after installation, so they
-+have no effect on an existing instance. Guests older than macOS 27 ignore them,
-+so Lima checks the guest version recorded at install time and skips
-+provisioning with a warning when the guest is older than macOS 27, or when the
-+host is older than macOS 27.
-+
-+The password is stored in plain text in the instance's `lima.yaml`.
-+
-+**Default:** unset — no guest provisioning.
++macOS only applies guest provisioning on the first boot after installation, so it
++has no effect on existing instances.
 +
  ## Caveats
  - No support for turning off the video display.

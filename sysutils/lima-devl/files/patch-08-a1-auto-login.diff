@@ -1,0 +1,173 @@
+diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
+index 4c3e8db7..08923ba4 100644
+--- pkg/cidata/cidata.go
++++ pkg/cidata/cidata.go
+@@ -176,6 +176,7 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+ 
+ 		SuppressFirstLoginSetup:      darwinOpts.SuppressFirstLoginSetup != nil && *darwinOpts.SuppressFirstLoginSetup,
+ 		SuppressFirstLoginSetupPlist: suppressFirstLoginSetupPlist,
++		AutoLogin:                    darwinOpts.AutoLogin != nil && *darwinOpts.AutoLogin,
+ 		GuestOSVersion:               guestOSVersion,
+ 		GuestOSBuildVersion:          guestOSBuildVersion,
+ 	}
+@@ -461,6 +462,14 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+ 			Reader: strings.NewReader(args.SuppressFirstLoginSetupPlist),
+ 		})
+ 	}
++	if args.AutoLogin {
++		// Presence of this empty file (not any cloud-config key) tells the guest-side
++		// fakecloudinit to turn on automatic login for the user it creates.
++		layout = append(layout, iso9660util.Entry{
++			Path:   "auto-login",
++			Reader: strings.NewReader(""),
++		})
++	}
+ 
+ 	driverScripts, err := drv.BootScripts(ctx)
+ 	if err != nil {
+diff --git pkg/cidata/template.go pkg/cidata/template.go
+index 3efd6d03..623d2acc 100644
+--- pkg/cidata/template.go
++++ pkg/cidata/template.go
+@@ -144,6 +144,7 @@ type TemplateArgs struct {
+ 	TPM                             bool
+ 	SuppressFirstLoginSetup         bool
+ 	SuppressFirstLoginSetupPlist    string // empty = use built-in plist
++	AutoLogin                       bool   // macOS guests only
+ 	GuestOSVersion                  string // macOS guests only: restore-image OS version, e.g. "27.0.0"; empty otherwise
+ 	GuestOSBuildVersion             string // macOS guests only: restore-image build, e.g. "26A428"; empty otherwise
+ }
+diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+index 5a0dd403..61fef209 100644
+--- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
++++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
+@@ -436,6 +436,47 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+ 			return fmt.Errorf("failed to write sudoers file for user %#q: %w", u.Name, err)
+ 		}
+ 	}
++	// Presence of auto-login on the cidata volume (not any cloud-config key) is what
++	// signals this feature is enabled -- see GenerateISO9660.
++	if _, statErr := os.Stat(filepath.Join(mnt, "auto-login")); statErr == nil {
++		if err := enableAutoLogin(ctx, u.Name, pw); err != nil {
++			// Non-fatal: the guest is still reachable over SSH.
++			logrus.WithError(err).Warnf("Failed to enable automatic login for user %#q", u.Name)
++		}
++	}
++	return nil
++}
++
++// kcpasswordKey is the fixed key that loginwindow uses to obfuscate the automatic
++// login password in /etc/kcpassword. The format is not documented by Apple; it has
++// been unchanged since at least OS X 10.7.
++var kcpasswordKey = []byte{0x7D, 0x89, 0x52, 0x23, 0xD2, 0xBC, 0xDD, 0xEA, 0xA3, 0xB9, 0x1F}
++
++// encodeKCPassword returns pw in /etc/kcpassword format: XORed with kcpasswordKey
++// and zero-padded to the next multiple of 12 bytes, always adding at least one byte
++// so that loginwindow finds the terminator.
++func encodeKCPassword(pw string) []byte {
++	b := make([]byte, (len(pw)/12+1)*12)
++	copy(b, pw)
++	for i := range b {
++		b[i] ^= kcpasswordKey[i%len(kcpasswordKey)]
++	}
++	return b
++}
++
++// enableAutoLogin turns on automatic login for the user. `sysadminctl -autologin set`
++// cannot be used here: it needs the Security Agent, which a LaunchDaemon at boot does
++// not have, and then fails without an error. loginwindow reads the setting when it
++// starts, so it takes effect from the next boot.
++func enableAutoLogin(ctx context.Context, name, pw string) error {
++	if err := os.WriteFile("/etc/kcpassword", encodeKCPassword(pw), 0o600); err != nil {
++		return err
++	}
++	cmd := exec.CommandContext(ctx, "defaults", "write", "/Library/Preferences/com.apple.loginwindow", "autoLoginUser", "-string", name)
++	if output, err := cmd.CombinedOutput(); err != nil {
++		return fmt.Errorf("failed to execute command %v: %w (output=%#q)", cmd.Args, err, output)
++	}
++	logrus.Infof("Enabled automatic login for user %#q from the next boot", name)
+ 	return nil
+ }
+ 
+diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin_test.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin_test.go
+new file mode 100644
+index 00000000..d59bd418
+--- /dev/null
++++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin_test.go
+@@ -0,0 +1,28 @@
++// SPDX-FileCopyrightText: Copyright The Lima Authors
++// SPDX-License-Identifier: Apache-2.0
++
++package fakecloudinit
++
++import (
++	"encoding/hex"
++	"testing"
++
++	"gotest.tools/v3/assert"
++)
++
++func TestEncodeKCPassword(t *testing.T) {
++	cases := []struct {
++		pw   string
++		want string // hex
++	}{
++		// Shorter than 12 bytes: padded to 12.
++		{"password", "0de82150a5d3af8ea3b91f7d"},
++		// Exactly 12 bytes: a full block of padding is added for the terminator.
++		{"abcdefghijkl", "1ceb3147b7daba82cad37411895223d2bcddeaa3b91f7d89"},
++	}
++	for _, tc := range cases {
++		t.Run(tc.pw, func(t *testing.T) {
++			assert.Equal(t, hex.EncodeToString(encodeKCPassword(tc.pw)), tc.want)
++		})
++	}
++}
+diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
+index 531040f4..06e9beae 100644
+--- pkg/limatype/lima_yaml.go
++++ pkg/limatype/lima_yaml.go
+@@ -386,6 +386,9 @@ type DarwinOpts struct {
+ 	// SuppressFirstLoginSetupPlist overrides the built-in com.apple.SetupAssistant.plist content
+ 	// used by SuppressFirstLoginSetup. Ignored unless SuppressFirstLoginSetup is true.
+ 	SuppressFirstLoginSetupPlist *string `yaml:"suppressFirstLoginSetupPlist,omitempty" json:"suppressFirstLoginSetupPlist,omitempty" jsonschema:"nullable"`
++	// AutoLogin logs the Lima user in automatically when the guest boots (Darwin guests only).
++	// It is turned on when the user is created, so it takes effect from the second boot.
++	AutoLogin *bool `yaml:"autoLogin,omitempty" json:"autoLogin,omitempty" jsonschema:"nullable"`
+ }
+ 
+ func NewOS(osname string) OS {
+diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
+index a695a59c..c3ebbfb8 100644
+--- website/content/en/docs/usage/guests/macos.md
++++ website/content/en/docs/usage/guests/macos.md
+@@ -179,6 +179,29 @@ as the preset includes the correct csreq blob that macOS records for
+ | `clientType` | `bundle` or `path` | |
+ | `authValue` | `allow` (default) or `deny` | |
+ 
++### Automatic login
++| ⚡ Requirement | Lima >= 2.4, macOS >= 13.0 |
++|-------------------|-----------------------------|
++
++By default the guest boots to the login window. Set `osOpts.Darwin.autoLogin` to
++have Lima turn on automatic login for the Lima user when it creates the account,
++so that GUI sessions (for example a CI runner that needs the window server) start
++without anyone logging in:
++
++```yaml
++osOpts:
++  Darwin:
++    autoLogin: true
++```
++
++macOS reads the setting when the login window starts, so automatic login takes
++effect from the second boot of a new instance. It stores a copy of the password
++Lima generated (`~/password`), so changing the account password breaks automatic
++login; turn it on again in System Settings > Users & Groups afterwards. Automatic
++login is not available while FileVault is on.
++
++**Default:** `false`
++
+ ## Caveats
+ - No support for turning off the video display.
+ - No support for automatic port forwarding.

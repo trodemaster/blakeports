@@ -11,7 +11,8 @@ Patch revs: see `w1_rev` / `b2_rev` / `p1_rev` in the Portfile (B4 is parked, no
 | B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | ~~macOS 27 fakecloudinit workarounds~~ — **removed from port 2026-10-05** (beta-era; branch `macports/m1-fakecloudinit-macos27` kept in case any SA plist keys are still needed on 27 GA) | dropped |
-| P1 (`patch-12`) | macOS 27 native guest provisioning (`osOpts.darwin.guestProvisioning`) on upstream vz v4's API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); stacks on Z1; see upstream issue #5516. Branch `macports/p1-on-z1` (one commit on `macports/vz4-upstream`); the old fork-based branch `macports/p1-guest-provisioning` is kept for history | **prototype 2026-11-07, working; r9 (home move) 2026-11-13 working in a guest**: on main, macOS_27 runner rebuilt with it and verified (see 2026-11-07 P1 note); local only until lima moves to vz v4; flow in [P1-FLOW.md](P1-FLOW.md) |
+| A1 (`patch-08`) | `osOpts.Darwin.autoLogin` (opt-in bool): fakecloudinit writes `/etc/kcpassword` + loginwindow `autoLoginUser` for the user it creates (classic and P1 paths), from the second boot; signalled by an empty `auto-login` cidata file. Not in upstream (no auto-login code, no issue); independent of vz v4, so it can go upstream before P1. Branch `feat/darwin-auto-login` (one commit on master) | **r2 2026-11-17**: E2E on a stock config (no lima_mac) auto-logs in from the 2nd boot; a password change breaks it (confirmed), docs say so |
+| P1 (`patch-12`) | macOS 27 native guest provisioning, **automatic since r10** (no config): when host and guest are both 27+, Setup Assistant creates the user from `VZMacGuestProvisioningOptions` with a host-generated random password; the guest agent moves the home to `user.home` and sets the user up as for `sysadminctl`. Upstream issue #5516 (refactoring). PR branch `upstream-pr/p1-guest-provisioning` = port branch `macports/p1-port` (Z1 -> B2 -> A1 -> P1; P1 needs B2 for the guest agent's Full Disk Access; patch-12 = its P1 commit); r9 and earlier on `macports/p1-on-z1` | **r11 2026-11-17**: E2E on a stock config (host home mounted, no TCC presets) passes; still needs a tagged vz v4 (Z1); flow in [P1-FLOW.md](P1-FLOW.md) (r11) |
 | Z1 (`patch-11`) | Move to `github.com/Code-Hex/vz/v4` main (`64cc34b`, pseudo-version; r2 2026-11-17 on `fd6cf105`), which has the macOS 27 guest provisioning API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); adapts to v4's channel-taking `StateChangedNotify`. Branch `macports/vz4-upstream` | local only — drop once lima moves to a tagged vz v4 |
 | W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`); its `Copy-Provision` switch fix was dropped 2026-11-07 (upstream `7cc8a755`) | carried in port; not yet submitted upstream |
 
@@ -121,6 +122,45 @@ fakecloudinit, guestpatch and limatype packages. In the patched tree, W1's
 `pkg/udfutil/testdata/*.iso` fixtures; it passes on the W1 branch itself (the port
 doesn't run `go test`). Lima PR #5790 (USB passthrough) moves lima to the same vz v4
 pseudo-version as Z1; it's needs-design-consensus.
+
+**2026-11-17 P1 r10, review against upstream conventions:** Issue #5516 is a
+`kind/refactoring` issue asking to use `VZMacGuestProvisioningOptions` for 27+ guests in
+place of part of `guestpatch/macos.Patch`, so Blake chose automatic provisioning with no
+config. Removed: `osOpts.Darwin.guestProvisioning` (password, `logsInAutomatically`,
+`enablesRemoteLogin`), the `limayaml` home helpers, `RemoveSetupAssistantMarkers` (second
+disk mount) and Lima's own auto-login (`/etc/kcpassword`, reverse engineered).
+`enablesRemoteLogin` was a no-op (fakecloudinit `enableSSHD` always runs). Now:
+`prepareGuestProvisioning` writes a random password (same generator as Windows and the
+classic path) to the `0600` `vz-guest-provisioning` marker; `macos.Patch` takes
+`PatchOptions{RunSetupAssistant}` and doesn't write the markers; start options use
+`user.comment` (falls back to `user.name`, since Setup Assistant needs a full name), auto
+and remote login off. Guest: home compared as cleaned paths, `chmod 700` like
+`sysadminctl` users, UID-mismatch warning, `dscl` output parsed by a tested
+`parseDSCLRead` (missing `UniqueID` used to give uid 0; values with spaces wrap), no
+silent "already in directory services" skip, no `%w` of a nil error. Only a host older
+than a 27 guest warns; older guests log at debug. Docs: macos.md section rewritten
+(Lima >= 2.4), `vz-guest-provisioning` added to dev/internals.md. golangci-lint v2.15.0
+0 issues; darwin/amd64 cgo build and vet clean; tests pass. P1 now conflicts with B2 in
+`macos.Patch` (both add a parameter), so the port's P1 comes from `macports/p1-port`
+(Z1 + B2 + P1); upstream, whichever PR merges second rebases. lima_mac `macos-27`
+no longer sets `guestProvisioning` or `PROVISION_PASSWORD`.
+Blake: auto-login is needed, so it came back as its own upstreamable feature A1
+(`osOpts.Darwin.autoLogin`, patch-08) rather than a P1 knob: P1 keeps Apple's
+`logsInAutomatically` off (the home move needs the user logged out) and calls A1's
+guest-side step after the move. P1 PR branch is now Z1 -> A1 -> P1; port branch
+`macports/p1-port` is Z1 -> B2 -> A1 -> P1. lima_mac `macos-27` sets `autoLogin: true`.
+
+**2026-11-17 P1 r11, found by E2E on a stock config** (throwaway VM, no lima_mac
+provisioning, `mounts: ["~"]` as in upstream's `template:macos-27`): (1) without Full
+Disk Access macOS refuses both the home rename and `dscl -create NFSHomeDirectory`
+(`ODErrorRecordPermissionError`, even with `-u/-P`); r9 only worked because lima_mac
+sets B2's `lima-guestagent-full-disk-access`. Blake chose to grant it: `PatchOptions` is
+now `GuestProvisioning`, which also adds that preset, so **P1 now builds on B2 upstream
+too** (PR order Z1 -> B2 -> A1 -> P1; `upstream-pr/p1-guest-provisioning` ==
+`macports/p1-port`). (2) fakecloudinit set up mounts before users, so the host-home
+symlink took `/Users/<user>` before Setup Assistant made the home there and the agent
+renamed the symlink; users are now created first, and the move refuses a non-directory.
+A1 patch-08 is now generated from the port branch (after B2) so it applies without fuzz.
 
 **2026-11-13 P1 r8/r9, move the home instead of renaming the account (working, r9):**
 The end-to-end flow (host and guest steps, files, failure handling, what didn't work)
