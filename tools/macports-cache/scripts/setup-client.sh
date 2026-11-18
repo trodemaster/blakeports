@@ -116,16 +116,42 @@ else
 fi
 
 # ── macports.conf: portimage_mode ────────────────────────────────────────────
-# On a filesystem that supports cloning (APFS: 10.13 and later) MacPorts 2.12
-# keeps each installed image as a directory only, so there is no .tbz2 for
-# submit-archive.sh to publish. directory_and_archive keeps both.
-if grep -qE "^portimage_mode[[:space:]]+directory_and_archive([[:space:]]|\$)" "$MACPORTS_CONF" 2>/dev/null; then
-    echo "    portimage_mode already directory_and_archive."
-elif grep -qE "^portimage_mode[[:space:]]" "$MACPORTS_CONF" 2>/dev/null; then
-    echo "    warning: portimage_mode is already set to something else; left alone." >&2
+# Where fs_clone_capable says the software dir can clone, MacPorts 2.12
+# defaults to keeping each installed image as a directory only, so there is
+# no .tbz2 for submit-archive.sh to publish; directory_and_archive keeps both.
+# Ask Pextlib the same way base does (macports.tcl): on 10.12-10.14
+# fs_clone_capable throws, base falls back to archive (which already keeps
+# the .tbz2), and forcing a directory mode there makes every activation fail,
+# because _activate_files calls fs_clone_capable without a catch.
+PORT_TCLSH="${PORT_TCLSH:-/opt/local/bin/port-tclsh}"
+SOFTWARE_DIR="${SOFTWARE_DIR:-/opt/local/var/macports/software}"
+PIM_COMMENT="# Keep a .tbz2 archive of each image so it can be published to the cache."
+PIM_LINE="portimage_mode      directory_and_archive"
+clone_capable=unknown
+if [ -x "$PORT_TCLSH" ]; then
+    tclfile=$(mktemp /tmp/setup-client.XXXXXX)
+    printf 'package require Pextlib 1.0\nif {[catch {fs_clone_capable {%s}} r] || !$r} {puts no} else {puts yes}\n' "$SOFTWARE_DIR" > "$tclfile"
+    clone_capable=$("$PORT_TCLSH" "$tclfile" 2>/dev/null || echo unknown)
+    rm -f "$tclfile"
+fi
+if [ "$clone_capable" = yes ]; then
+    if grep -qE "^portimage_mode[[:space:]]+directory_and_archive([[:space:]]|\$)" "$MACPORTS_CONF" 2>/dev/null; then
+        echo "    portimage_mode already directory_and_archive."
+    elif grep -qE "^portimage_mode[[:space:]]" "$MACPORTS_CONF" 2>/dev/null; then
+        echo "    warning: portimage_mode is already set to something else; left alone." >&2
+    else
+        printf '\n%s\n%s\n' "$PIM_COMMENT" "$PIM_LINE" >> "$MACPORTS_CONF"
+        echo "    Added portimage_mode directory_and_archive."
+    fi
+elif grep -qxF "$PIM_LINE" "$MACPORTS_CONF" 2>/dev/null; then
+    # Added by an earlier run of this script; remove it so activation works.
+    conf_tmp=$(mktemp /tmp/setup-client.XXXXXX)
+    grep -vxF -e "$PIM_COMMENT" -e "$PIM_LINE" "$MACPORTS_CONF" > "$conf_tmp"
+    cat "$conf_tmp" > "$MACPORTS_CONF"
+    rm -f "$conf_tmp"
+    echo "    Removed portimage_mode directory_and_archive (fs_clone_capable: ${clone_capable}; base defaults to archive here)."
 else
-    printf '\n# Keep a .tbz2 archive of each image so it can be published to the cache.\nportimage_mode      directory_and_archive\n' >> "$MACPORTS_CONF"
-    echo "    Added portimage_mode directory_and_archive."
+    echo "    portimage_mode left at base default (fs_clone_capable: ${clone_capable})."
 fi
 
 echo ""
