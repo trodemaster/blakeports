@@ -1,5 +1,5 @@
 diff --git go.mod go.mod
-index 99489953..86d693b3 100644
+index 4d3b575e..55a44d38 100644
 --- go.mod
 +++ go.mod
 @@ -19,7 +19,7 @@ require (
@@ -11,15 +11,6 @@ index 99489953..86d693b3 100644
  	github.com/Microsoft/go-winio v0.6.4 // gomodjail:unconfined
  	github.com/Microsoft/hcsshim v0.15.0
  	github.com/apparentlymart/go-cidr v1.1.1
-@@ -70,7 +70,7 @@ require (
- 
- //gosocialcheck:trusted
- require (
--	golang.org/x/mod v0.41.0 // indirect
-+	golang.org/x/mod v0.42.0 // indirect
- 	// gomodjail:unconfined
- 	golang.org/x/oauth2 v0.36.0 // indirect
- 	// gomodjail:unconfined
 @@ -80,7 +80,6 @@ require (
  )
  
@@ -28,7 +19,7 @@ index 99489953..86d693b3 100644
  	github.com/VividCortex/ewma v1.2.0 // indirect
  	github.com/a8m/envsubst v1.4.3 // indirect
  	github.com/agext/levenshtein v1.2.1 // indirect
-@@ -155,6 +154,7 @@ require (
+@@ -156,6 +155,7 @@ require (
  	github.com/apparentlymart/go-textseg/v17 v17.0.1 // indirect
  	github.com/cespare/xxhash/v2 v2.3.0 // indirect
  	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
@@ -37,7 +28,7 @@ index 99489953..86d693b3 100644
  	github.com/go-logr/stdr v1.2.2 // indirect
  	github.com/google/uuid v1.6.0 // indirect
 diff --git go.sum go.sum
-index 3eb0f635..01a78597 100644
+index 854edfd4..206bdf78 100644
 --- go.sum
 +++ go.sum
 @@ -2,10 +2,8 @@ al.essio.dev/pkg/shellescape v1.6.1 h1:ki/kUs/D3dDbZpyKbNRhwY/ajgAEIJFagVKDWKnof
@@ -62,17 +53,6 @@ index 3eb0f635..01a78597 100644
  github.com/elliotchance/orderedmap v1.8.0 h1:TrOREecvh3JbS+NCgwposXG5ZTFHtEsQiCGOhPElnMw=
  github.com/elliotchance/orderedmap v1.8.0/go.mod h1:wsDwEaX5jEoyhbs7x93zk2H/qv0zwuhg4inXhDkYqys=
  github.com/elliotwutingfeng/asciiset v0.0.0-20260129054604-cfde2086bc57 h1:x5yxNrq8XffV/OoNUeFPM6hxHVi5OTspSTBxr/9pemg=
-@@ -326,8 +326,8 @@ golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4/go.mod h1:jJ57K6gSWd91
- golang.org/x/mod v0.8.0/go.mod h1:iBbtSCu2XBx23ZKBPSOrRkjjQPZFPuis4dIYUhu/chs=
- golang.org/x/mod v0.12.0/go.mod h1:iBbtSCu2XBx23ZKBPSOrRkjjQPZFPuis4dIYUhu/chs=
- golang.org/x/mod v0.14.0/go.mod h1:hTbmBsO62+eylJbnUtE2MGJUyE7QWk4xUqPFrRgJ+7c=
--golang.org/x/mod v0.41.0 h1:qJmnOUb4YB+FsEuM3HcWucdZASCPGhsX6uljO6pog0c=
--golang.org/x/mod v0.41.0/go.mod h1:Ek9pY8RKWXwsWvd3rQiHYtMqkjSUV+s1Rj7j4H5Ur6o=
-+golang.org/x/mod v0.42.0 h1:ICeL3t2L30ljSPHHxDnR4fqVcBt/zR2zJAb9juavmQg=
-+golang.org/x/mod v0.42.0/go.mod h1:u5fzIrRInkL8MaO1cbRkUHT64v303YIT5KEqpNr7jRs=
- golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
- golang.org/x/net v0.0.0-20190620200207-3b0461eec859/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
- golang.org/x/net v0.0.0-20210226172049-e18ecbb05110/go.mod h1:m0MpNAwzfU5UDzcl9v0D8zg8gWTRqZa9RBIspLL5mdg=
 diff --git pkg/driver/vz/block_device_darwin.go pkg/driver/vz/block_device_darwin.go
 index 90f79ada..44f0ceb5 100644
 --- pkg/driver/vz/block_device_darwin.go
