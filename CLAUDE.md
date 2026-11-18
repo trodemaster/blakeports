@@ -81,6 +81,26 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   upstream 3.14.10; [#73578](https://trac.macports.org/ticket/73578) is
   closed (`_blake2`).
 
+**Upstream PRs by others:**
+
+- [ ] **libfido2** — McDaMastR's PR [#36783](https://github.com/macports/macports-ports/pull/36783)
+  (Trac [#74655](https://trac.macports.org/ticket/74655)): tests fail with
+  `@rpath/libfido2.1.dylib`; fix sets `CMAKE_BUILD_WITH_INSTALL_RPATH=OFF`
+  and drops the dead `DYLD_LIBRARY_PATH`. 2026-11-17: verified 8/8 tests
+  and unchanged installed files; commented asking for the libcbor-style
+  `configure.pre_args-replace`. After merge: port the change into
+  blakeports' libfido2, whose Portfile differs from upstream's
+  (`darwin >= 10`, no 10.5/ppc patches).
+
+- [ ] **libcbor 0.15.0 on hold** — it returns NULL handles for empty
+  arrays/maps/strings and libfido2 1.17.0 rejects them (`set_attstmt({})`
+  → `FIDO_ERR_INVALID_ARGUMENT`, reproduced 2026-11-17; libfido2's own
+  tests still pass). Fix is libfido2 PR [#1018](https://github.com/Yubico/libfido2/pull/1018),
+  unreviewed. 0.14.1 (security only) committed 10392db, built on all 19
+  runners; upstream PR [#36855](https://github.com/macports/macports-ports/pull/36855)
+  open. Trac [#74715](https://trac.macports.org/ticket/74715) filed. Bump 0.15 once libfido2
+  releases the fix; that also needs a libfido2 revision bump upstream.
+
 **Infrastructure reminders:**
 
 - [ ] Back up the packages.jibb.tv signing key,
