@@ -1,0 +1,213 @@
+name: Fetch speed
+
+# Time MacPorts mirror downloads on each runner the way base fetches them
+# (scripts/fetchspeed.tcl: base's mirror ranking, Pextlib curl), for
+# https://trac.macports.org/ticket/65160. Each runner picks random ports so
+# the CDN is unlikely to have their files cached, then fetches each file from
+# packages.macports.org (or distfiles.) twice, cold then warm, from the
+# origin, and from mirror.fcix.net.
+#
+#   gh workflow run "Fetch speed"                       # every runner
+#   gh workflow run "Fetch speed" -f runners="macOS_26, leopard" -f kind=distfile
+#
+# Jobs run one at a time by default: most runners share darkstar's uplink,
+# and parallel downloads would measure each other. List only online runners:
+# a job queued for an offline one holds the only slot until it times out (24h).
+
+on:
+  workflow_dispatch:
+    inputs:
+      runners:
+        description: 'Comma-separated runner labels'
+        required: true
+        default: 'macOS_27, macOS_26, macOS_15, macOS_14, macOS_13, macOS_12, bigsur, catalina, mojave, highsierra, sierra, elcapitan, yosemite, mavericks, mountainlion, lion, snowleopard, leopard, leopard-ppc'
+        type: string
+      kind:
+        description: 'What to fetch (10.5 has no archives on the mirrors, so only distfiles run there)'
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - archive
+          - distfile
+      count:
+        description: 'Random ports per kind on each runner'
+        required: false
+        default: '1'
+        type: string
+      ports:
+        description: 'Ports to fetch instead of random ones (space-separated)'
+        required: false
+        default: ''
+        type: string
+      min_mb:
+        description: 'Smallest file for random ports, MB'
+        required: false
+        default: '20'
+        type: string
+      max_mb:
+        description: 'Largest file for random ports, MB'
+        required: false
+        default: '150'
+        type: string
+      max_parallel:
+        description: 'Runners measuring at once'
+        required: false
+        default: '1'
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      runners: ${{ steps.set.outputs.runners }}
+    steps:
+      - id: set
+        env:
+          RUNNERS: ${{ inputs.runners }}
+        run: |
+          echo "runners=$(echo "$RUNNERS" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | grep -v '^$' | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+  fetch-speed:
+    needs: matrix
+    name: fetch-speed (${{ matrix.runner }})
+    runs-on: [self-hosted, "${{ matrix.runner }}"]
+    timeout-minutes: 90
+    strategy:
+      matrix:
+        runner: ${{ fromJSON(needs.matrix.outputs.runners) }}
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.max_parallel) }}
+    env:
+      MODERN: ${{ startsWith(matrix.runner, 'macOS_') }}
+      RUNNER_LABEL: ${{ matrix.runner }}
+      KIND: ${{ inputs.kind }}
+      COUNT: ${{ inputs.count }}
+      PORTS: ${{ inputs.ports }}
+      MIN_MB: ${{ inputs.min_mb }}
+      MAX_MB: ${{ inputs.max_mb }}
+      # Different random ports on each runner and each run.
+      SEED: ${{ github.run_id }}${{ strategy.job-index }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # The runner container's entrypoint defines the `legacyvm` ssh alias.
+      - name: Copy the script to the VM (legacy)
+        if: env.MODERN != 'true'
+        run: ssh legacyvm 'mkdir -p ~/code && rm -f ~/code/fetchspeed.tsv && cat > ~/code/fetchspeed.tcl' < scripts/fetchspeed.tcl
+
+      - name: Measure
+        run: |
+          set -o pipefail
+          kinds=$KIND
+          [ "$KIND" = both ] && kinds="archive distfile"
+          rm -f fetchspeed.tsv
+          rc=0
+          for k in $kinds; do
+            args="-kind $k -count $COUNT -min-mb $MIN_MB -max-mb $MAX_MB -seed $((SEED % 2000000000))"
+            echo "::group::$k"
+            if [ "$MODERN" = true ]; then
+              PATH=/opt/local/bin:$PATH port-tclsh scripts/fetchspeed.tcl $args -tsv "$PWD/fetchspeed.tsv" $PORTS || rc=1
+            else
+              ssh legacyvm "PATH=/opt/local/bin:\$PATH port-tclsh ~/code/fetchspeed.tcl $args -tsv ~/code/fetchspeed.tsv $PORTS" || rc=1
+            fi
+            echo "::endgroup::"
+          done
+          if [ "$MODERN" != true ]; then
+            ssh legacyvm 'cat ~/code/fetchspeed.tsv 2>/dev/null' > fetchspeed.tsv || true
+          fi
+          # Prefix every row with the runner.
+          touch fetchspeed.tsv
+          awk -v r="$RUNNER_LABEL" '{ print r "\t" $0 }' fetchspeed.tsv > "fetchspeed-$RUNNER_LABEL.tsv"
+          cat "fetchspeed-$RUNNER_LABEL.tsv"
+          exit $rc
+
+      - name: Remove the script (legacy)
+        if: always() && env.MODERN != 'true'
+        run: ssh legacyvm 'rm -f ~/code/fetchspeed.tcl ~/code/fetchspeed.tsv' || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fetchspeed-${{ matrix.runner }}
+          path: fetchspeed-${{ matrix.runner }}.tsv
+          if-no-files-found: ignore
+
+  summary:
+    needs: fetch-speed
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fetchspeed-*
+          merge-multiple: true
+          path: results
+
+      - name: Summarize
+        run: |
+          cat results/*.tsv > fetchspeed.tsv 2>/dev/null || true
+          python3 - fetchspeed.tsv >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import sys, statistics
+          cols = ("runner first_conf first_stock kind port file size label url bytes secs "
+                  "mbps ttfb slow5 below1 getsize xcache age servedby cache error").split()
+          rows = []
+          for line in open(sys.argv[1]):
+              f = line.rstrip("\n").split("\t")
+              if len(f) == len(cols):
+                  rows.append(dict(zip(cols, f)))
+          print("## Fetch speed\n")
+          if not rows:
+              print("No results.")
+              sys.exit()
+          print("MB/s per fetch. fastly-1 is the first fetch from the CDN, normally a cache miss "
+                "(cold/warm from the CDN's Age header afterwards); fastly-2 is the same URL again.\n")
+          print("| runner | kind | file | MB | base tries first (stock) | fastly-1 | fastly-2 | origin | fcix |")
+          print("|---|---|---|---:|---|---:|---:|---:|---:|")
+          files = {}
+          for r in rows:
+              files.setdefault((r["runner"], r["kind"], r["file"]), {})[r["label"]] = r
+          for (runner, kind, file), by in files.items():
+              any_r = next(iter(by.values()))
+              def cell(label):
+                  r = by.get(label)
+                  if not r:
+                      return ""
+                  s = r["mbps"]
+                  if r["cache"] in ("cold", "warm"):
+                      s += f" ({r['cache']})"
+                  if r["error"]:
+                      s += " ⚠️"
+                  return s
+              mb = f"{int(any_r['size']) / 1048576:.0f}"
+              print(f"| {runner} | {kind} | `{file}` | {mb} | {any_r['first_stock']} | "
+                    f"{cell('fastly-1')} | {cell('fastly-2')} | {cell('origin')} | {cell('fcix')} |")
+          print("\n### Medians, MB/s\n")
+          print("| fetch | n | median | min | under 1 MB/s |")
+          print("|---|---:|---:|---:|---:|")
+          groups = {}
+          for r in rows:
+              label = r["label"]
+              if label.startswith("fastly") and r["cache"] in ("cold", "warm"):
+                  label = f"fastly {r['cache']}"
+              if not r["error"]:
+                  groups.setdefault(label, []).append(float(r["mbps"]))
+          for label in sorted(groups):
+              v = groups[label]
+              print(f"| {label} | {len(v)} | {statistics.median(v):.2f} | {min(v):.2f} | "
+                    f"{sum(x < 1 for x in v)} |")
+          EOF
+          cat "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fetchspeed-all
+          path: fetchspeed.tsv

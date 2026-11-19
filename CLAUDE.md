@@ -101,6 +101,13 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   open. Trac [#74715](https://trac.macports.org/ticket/74715) filed. Bump 0.15 once libfido2
   releases the fix; that also needs a libfido2 revision bump upstream.
 
+**MacPorts CDN speed** — Trac [#65160](https://trac.macports.org/ticket/65160)
+(slow Fastly cache misses). ryandesign enabled `beresp.do_stream` on
+2026-11-13 and asked whether it helps.
+
+- [ ] Run `Fetch speed` on every runner, write up in findings/, and post
+  the numbers on the ticket (draft shown before posting).
+
 **Infrastructure reminders:**
 
 - [ ] Back up the packages.jibb.tv signing key,
@@ -131,6 +138,7 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 | `scripts/fulltest` | Comprehensive test - recreates runners and triggers all builds |
 | `scripts/ghrunner` | GitHub runner management script |
 | `scripts/portcompiler.tcl` | Prints the compiler (and blacklist) each Portfile picks on this machine, without building: `port-tclsh scripts/portcompiler.tcl <dir>...` |
+| `scripts/fetchspeed.tcl` | Times mirror downloads as base does them (sortsites ranking, Pextlib curl): CDN cold and warm, origin, fcix. Run on every runner by the `Fetch speed` workflow, for [#65160](https://trac.macports.org/ticket/65160) |
 
 ## CI/CD Architecture
 
