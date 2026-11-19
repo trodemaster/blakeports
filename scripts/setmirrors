@@ -1,13 +1,16 @@
 #!/bin/bash
-# setmirrors — have MacPorts fetch from mirror.fcix.net first, and fall back
-# to packages.macports.org / distfiles.macports.org (Fastly, which pulls from
-# the origin) when fcix doesn't have a file yet.
+# setmirrors — have MacPorts fetch from mirror.fcix.net and packages.jibb.tv
+# first, and fall back to packages.macports.org / distfiles.macports.org
+# (Fastly, which pulls from the origin) when they don't have a file yet.
 #
 # Base orders mirrors by ping time (portfetch::sortsites). Fastly's edge
 # always answers fastest, but serves a file it hasn't cached at ~4 MB/s,
 # while fcix serves ~20 MB/s (Trac #65160). preferred_hosts gives fcix ping 0,
 # so it is tried first; Fastly stays in the list as the next choice, and has
 # every file the origin has, including ones fcix hasn't copied yet.
+# packages.jibb.tv (the blakeports binary cache, on the LAN) is preferred too:
+# its ping fails from some VMs, which would put it behind every official
+# mirror, and it is the only source for Leopard and non-default variants.
 #
 # It also removes archive_sites.conf entries the runner images used to add:
 # an empty `name macports_archives` (which disables the official archive
@@ -23,7 +26,7 @@ set -u
 PREFIX="${PREFIX:-/opt/local}"
 CONF="$PREFIX/etc/macports/macports.conf"
 SITES="$PREFIX/etc/macports/archive_sites.conf"
-PREFERRED="mirror.fcix.net"
+PREFERRED="mirror.fcix.net packages.jibb.tv"
 BLACKLIST="rsync.macports.org"
 MARK="# Mirror order, set by blakeports scripts/setmirrors"
 

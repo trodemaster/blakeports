@@ -132,7 +132,7 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 |--------|---------|
 | `scripts/installmacports` | Installs MacPorts and configures BlakePorts as default source |
 | `scripts/preparemacports` | Run by every CI job: regenerates PortIndex, runs syncports, sets the mirror order (setmirrors), configures the packages.jibb.tv binary cache |
-| `scripts/setmirrors` | Mirror order for MacPorts: `preferred_hosts mirror.fcix.net`, Fastly as the fallback (it has every file the origin has); removes old `archive_sites.conf` overrides that disabled the official archive mirrors. Idempotent, `sudo`, 10.5+ |
+| `scripts/setmirrors` | Mirror order for MacPorts: `preferred_hosts mirror.fcix.net packages.jibb.tv`, Fastly as the fallback (it has every file the origin has); removes old `archive_sites.conf` overrides that disabled the official archive mirrors. Idempotent, `sudo`, 10.5+ |
 | `scripts/cleanupmacports` | Uninstalls every port except curl and git (MacPorts Cleanup workflow, modern and legacy) |
 | `scripts/syncports` | Syncs the official ports tree when it is more than a day old |
 | `scripts/install-deps` | Installs dependencies for a port (build + runtime or runtime-only) |
