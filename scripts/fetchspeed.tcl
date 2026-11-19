@@ -5,7 +5,7 @@
 #   -kind archive|distfile  what to fetch (default archive)
 #   -count N                random ports to test when none are named (default 2)
 #   -min-mb M, -max-mb M    file size range for random ports (default 10, 150)
-#   -tries N                random ports to look at before giving up (default 150)
+#   -tries N                random ports to look at before giving up (default 400)
 #   -seed S                 random seed (default: from the clock)
 #   -tsv FILE               append one row per fetch to FILE, tab-separated:
 #       first_configured first_stock kind port file size label url bytes secs
@@ -36,7 +36,7 @@ set kind archive
 set count 2
 set min_mb 10
 set max_mb 150
-set tries 150
+set tries 400
 set seed [clock clicks]
 set tsv ""
 set ports [list]
@@ -271,8 +271,9 @@ foreach pf $files {
     puts "  [dict get $pf port]: [dict get $pf file] ([mb [dict get $pf size]] MB)"
 }
 if {[llength $files] == 0} {
-    puts "no file found; try more -tries or a wider -min-mb/-max-mb"
-    exit 1
+    # Not a fetch failure: most ports' files are small. Don't fail the job.
+    puts "no file found in $looked ports; try more -tries or a wider -min-mb/-max-mb"
+    exit 0
 }
 
 # --- timed fetches ----------------------------------------------------------
