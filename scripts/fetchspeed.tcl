@@ -10,7 +10,7 @@
 #   -tsv FILE               append one row per fetch to FILE, tab-separated:
 #       first_configured first_stock kind port file size label url bytes secs
 #       MBps ttfb slowest5s_MBps below1MBps_secs getsize_secs x_cache age
-#       x_served_by cache(cold|warm|-) error
+#       x_served_by cache(cold|cached|-) error
 #
 # Everything MacPorts decides is asked of base itself: the archive or
 # distfile name and mirror list come from the port's own interpreter
@@ -361,10 +361,13 @@ proc timed_fetch {label pf url} {
     set h [expr {[string match *macports.org* [host_of $url]] && ![string match *-origin.* [host_of $url]]
         ? [cache_headers $url] : [dict create x-cache - x-served-by - age -]}]
     # cold: the CDN's copy is no older than this fetch, so this fetch filled
-    # it (a cache miss); warm: it was already cached.
+    # it (a cache miss). cached: the CDN already had the object, as far as
+    # a HEAD afterwards shows. That HEAD may reach another node in the POP,
+    # and the CDN caches large files in 20 MB segments, so a cached file's
+    # later segments can still have been misses.
     set cache -
     if {[string is integer -strict [dict get $h age]]} {
-        set cache [expr {[dict get $h age] <= ([clock milliseconds] - $t0) / 1000 + 2 ? "cold" : "warm"}]
+        set cache [expr {[dict get $h age] <= ([clock milliseconds] - $t0) / 1000 + 2 ? "cold" : "cached"}]
     }
     set mbs [format %.2f [expr {$bytes / $secs / 1048576.0}]]
     set slow5 [expr {$slowest eq "" ? "-" : [format %.2f [expr {$slowest / 1048576.0}]]}]

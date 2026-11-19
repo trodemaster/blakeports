@@ -169,7 +169,8 @@ jobs:
               print("No results.")
               sys.exit()
           print("MB/s per fetch. fastly-1 is the first fetch from the CDN, normally a cache miss "
-                "(cold/warm from the CDN's Age header afterwards); fastly-2 is the same URL again.\n")
+                "(cold: this fetch filled the CDN's cache; cached: the CDN already had at least its first "
+                "20 MB segment, per its Age header afterwards); fastly-2 is the same URL again.\n")
           print("| runner | kind | file | MB | base tries first (stock) | fastly-1 | fastly-2 | origin | fcix |")
           print("|---|---|---|---:|---|---:|---:|---:|---:|")
           files = {}
@@ -182,7 +183,7 @@ jobs:
                   if not r:
                       return ""
                   s = r["mbps"]
-                  if r["cache"] in ("cold", "warm"):
+                  if r["cache"] in ("cold", "cached"):
                       s += f" ({r['cache']})"
                   if r["error"]:
                       s += " ⚠️"
@@ -196,7 +197,7 @@ jobs:
           groups = {}
           for r in rows:
               label = r["label"]
-              if label.startswith("fastly") and r["cache"] in ("cold", "warm"):
+              if label.startswith("fastly") and r["cache"] in ("cold", "cached"):
                   label = f"fastly {r['cache']}"
               if not r["error"]:
                   groups.setdefault(label, []).append(float(r["mbps"]))
