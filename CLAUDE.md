@@ -105,8 +105,10 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 (slow Fastly cache misses). ryandesign enabled `beresp.do_stream` on
 2026-11-13 and asked whether it helps.
 
-- [ ] Run `Fetch speed` on every runner, write up in findings/, and post
-  the numbers on the ticket (draft shown before posting).
+- [ ] 2026-11-18: posted far-star numbers (Fastly first fetch ~4 MB/s,
+  fcix ~22, second fetch ~18; ping ranks Fastly first). Waiting on
+  ryandesign. Runner data from `Fetch speed` runs 44440298079 and
+  44453169662; findings/ write-up not done.
 
 **Infrastructure reminders:**
 
@@ -129,7 +131,8 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 | Script | Purpose |
 |--------|---------|
 | `scripts/installmacports` | Installs MacPorts and configures BlakePorts as default source |
-| `scripts/preparemacports` | Run by every CI job: regenerates PortIndex, runs syncports, configures the packages.jibb.tv binary cache |
+| `scripts/preparemacports` | Run by every CI job: regenerates PortIndex, runs syncports, sets the mirror order (setmirrors), configures the packages.jibb.tv binary cache |
+| `scripts/setmirrors` | Mirror order for MacPorts: `preferred_hosts mirror.fcix.net`, Fastly as the fallback (it has every file the origin has); removes old `archive_sites.conf` overrides that disabled the official archive mirrors. Idempotent, `sudo`, 10.5+ |
 | `scripts/cleanupmacports` | Uninstalls every port except curl and git (MacPorts Cleanup workflow, modern and legacy) |
 | `scripts/syncports` | Syncs the official ports tree when it is more than a day old |
 | `scripts/install-deps` | Installs dependencies for a port (build + runtime or runtime-only) |

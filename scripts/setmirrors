@@ -1,0 +1,75 @@
+#!/bin/bash
+# setmirrors — have MacPorts fetch from mirror.fcix.net first, and fall back
+# to packages.macports.org / distfiles.macports.org (Fastly, which pulls from
+# the origin) when fcix doesn't have a file yet.
+#
+# Base orders mirrors by ping time (portfetch::sortsites). Fastly's edge
+# always answers fastest, but serves a file it hasn't cached at ~4 MB/s,
+# while fcix serves ~20 MB/s (Trac #65160). preferred_hosts gives fcix ping 0,
+# so it is tried first; Fastly stays in the list as the next choice, and has
+# every file the origin has, including ones fcix hasn't copied yet.
+#
+# It also removes archive_sites.conf entries the runner images used to add:
+# an empty `name macports_archives` (which disables the official archive
+# mirrors, Fastly and the origin included) and separate `fcix`/`mit` entries
+# (already in the official list). Other entries (jibb_archives) are kept.
+#
+# Usage: sudo setmirrors     (PREFIX=/opt/local by default)
+# Idempotent; files are rewritten only when they change.
+# Runs on Mac OS X 10.5 and later (bash 3.2, BSD awk).
+
+set -u
+
+PREFIX="${PREFIX:-/opt/local}"
+CONF="$PREFIX/etc/macports/macports.conf"
+SITES="$PREFIX/etc/macports/archive_sites.conf"
+PREFERRED="mirror.fcix.net"
+BLACKLIST="rsync.macports.org"
+MARK="# Mirror order, set by blakeports scripts/setmirrors"
+
+if [ ! -w "$CONF" ]; then
+    echo "setmirrors: can't write $CONF (run with sudo)" >&2
+    exit 1
+fi
+
+tmp=$(mktemp /tmp/setmirrors.XXXXXX) || exit 1
+trap 'rm -f "$tmp"' EXIT
+
+# Replace the file's contents (keeping its owner and mode) if they changed.
+update() {
+    if cmp -s "$tmp" "$1"; then
+        echo "    $1 unchanged"
+    else
+        cat "$tmp" > "$1" && echo "    $1 updated"
+    fi
+}
+
+echo "==> Mirror order: $PREFERRED first, then by ping"
+
+# macports.conf: drop every preferred_hosts/host_blacklist line and our
+# marker, trim trailing blank lines, then append ours.
+awk -v mark="$MARK" '
+    $0 == mark { next }
+    /^[ \t]*(preferred_hosts|host_blacklist)([ \t]|$)/ { next }
+    { line[++n] = $0 }
+    END {
+        while (n > 0 && line[n] ~ /^[ \t]*$/) n--
+        for (i = 1; i <= n; i++) print line[i]
+    }' "$CONF" > "$tmp" || exit 1
+printf '\n%s\npreferred_hosts     %s\nhost_blacklist      %s\n' \
+    "$MARK" "$PREFERRED" "$BLACKLIST" >> "$tmp"
+update "$CONF"
+
+# archive_sites.conf: drop the macports_archives, fcix and mit entries.
+if [ -f "$SITES" ]; then
+    awk '
+        /^name[ \t]/ { skip = ($2 == "macports_archives" || $2 == "fcix" || $2 == "mit") }
+        skip { next }
+        { line[++n] = $0 }
+        END {
+            while (n > 0 && line[n] ~ /^[ \t]*$/) n--
+            for (i = 1; i <= n; i++) print line[i]
+        }' "$SITES" > "$tmp" || exit 1
+    update "$SITES"
+fi
+exit 0

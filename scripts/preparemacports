@@ -1,8 +1,8 @@
 #!/bin/bash
 # Prepare MacPorts on a CI runner before a build: index this checkout, sync
-# the official ports tree when it is stale, and use the packages.jibb.tv
-# binary cache. Shared by modern jobs (through installmacports) and legacy
-# jobs (run over ssh on the VM).
+# the official ports tree when it is stale, set the mirror order (setmirrors)
+# and use the packages.jibb.tv binary cache. Shared by modern jobs (through
+# installmacports) and legacy jobs (run over ssh on the VM).
 #
 # Usage: preparemacports [--force-sync]
 #   --force-sync  sync the official tree regardless of age, and fail if the
@@ -28,6 +28,12 @@ if [ "${1:-}" = "--force-sync" ]; then
     "$REPO_ROOT/scripts/syncports" --force || exit 1
 else
     "$REPO_ROOT/scripts/syncports"
+fi
+
+# fcix first, Fastly (which has everything the origin has) as the fallback.
+# A failure leaves the previous mirror settings, so it doesn't fail the build.
+if ! sudo "$REPO_ROOT/scripts/setmirrors" </dev/null; then
+    echo "⚠️  Could not set the mirror order - using the existing settings" >&2
 fi
 
 # Dependencies come from the cache when it has them (blakeports' own ports
