@@ -106,8 +106,9 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 2026-11-13 and asked whether it helps.
 
 - [ ] 2026-11-18: posted far-star numbers (Fastly first fetch ~4 MB/s,
-  fcix ~22, second fetch ~18; ping ranks Fastly first). Waiting on
-  ryandesign. Runner data from `Fetch speed` runs 44440298079 and
+  fcix ~22, second fetch ~18; ping ranks Fastly first). 2026-11-19:
+  saagarjha confirmed the same (uses fcix for a year); posted the
+  `preferred_hosts mirror.fcix.net` workaround. Waiting on ryandesign. Runner data from `Fetch speed` runs 44440298079 and
   44453169662; findings/ write-up not done.
 
 **Infrastructure reminders:**
