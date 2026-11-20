@@ -59,18 +59,13 @@ one port at a time (reproduce with upstream's Portfile on cleaned 10.5 i386
 and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 
 - [ ] **icu** — upstream PR [#36312](https://github.com/macports/macports-ports/pull/36312)
-  open (icu and icu-devel), changes requested. 2026-11-03: switched to
-  `path:share/doc/libgcc/README:libgcc` (0e7f8be7138), re-tested and
-  commented; waiting on barracuda156 and mohd-akram. Test branch
-  `test/icu-libgcc` on origin. After merge: delete `devel/icu` and that
-  branch, then cache
-  upstream icu on packages.jibb.tv (left out until then by choice).
-- [ ] **libarchive** — upstream PR [#36316](https://github.com/macports/macports-ports/pull/36316)
-  open. 2026-11-05: pushed `*gcc-4.0 apple-gcc-4.2 gcc-4.2` (54ec75c3bcd)
-  so 10.5 keeps Xcode's llvm-gcc-4.2 instead of the reviewers'
-  `*gcc-4.2`; full test on cleaned 10.5 i386/ppc and 10.6 passed, and I
-  commented. Waiting on barracuda156. After merge: delete
-  `archivers/libarchive` and the `test/libarchive` branch on origin.
+  (icu and icu-devel, `path:share/doc/libgcc/README:libgcc`) closed
+  2026-11-03 after barracuda156 argued the libgcc dependency belongs in
+  whatever implements `macports-libstdc++`, not in each port; opened Trac
+  [#74656](https://trac.macports.org/ticket/74656) for guidance. Kept:
+  blakeports `devel/icu`, test branch `test/icu-libgcc` on origin and the
+  fork branch `devel/icu-libgcc-dep`. Once fixed upstream: delete all
+  three, then cache upstream icu on packages.jibb.tv.
 - [ ] **libevent** — next. Trac [#74414](https://trac.macports.org/ticket/74414);
   blakeports patch guards `#pragma GCC diagnostic` for gcc ≥ 12. Reproduce
   on 10.5 i386 and ppc first (only ppc seen so far).
@@ -81,16 +76,15 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   upstream 3.14.10; [#73578](https://trac.macports.org/ticket/73578) is
   closed (`_blake2`).
 
-**Upstream PRs by others:**
+**Behind upstream master** (2026-11-20 check; all carry blakeports
+changes, so syncing is a real update, not a copy):
 
-- [ ] **libfido2** — McDaMastR's PR [#36783](https://github.com/macports/macports-ports/pull/36783)
-  (Trac [#74655](https://trac.macports.org/ticket/74655)): tests fail with
-  `@rpath/libfido2.1.dylib`; fix sets `CMAKE_BUILD_WITH_INSTALL_RPATH=OFF`
-  and drops the dead `DYLD_LIBRARY_PATH`. 2026-11-17: verified 8/8 tests
-  and unchanged installed files; commented asking for the libcbor-style
-  `configure.pre_args-replace`. After merge: port the change into
-  blakeports' libfido2, whose Portfile differs from upstream's
-  (`darwin >= 10`, no 10.5/ppc patches).
+- [ ] **qemu** 11.1.1 → 11.1.3 (local build changes, revision 10)
+- [ ] **vault** 1.21.0 → 2.2.2
+- [ ] **libgcrypt** 1.12.3 → 1.12.4, **python314** 3.14.7 → 3.14.10:
+  tied to the Leopard items above (re-prove on the upstream version)
+
+**Upstream PRs by others:**
 
 - [ ] **libcbor 0.15.0 on hold** — it returns NULL handles for empty
   arrays/maps/strings and libfido2 1.17.0 rejects them (`set_attstmt({})`
@@ -98,7 +92,7 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
   tests still pass). Fix is libfido2 PR [#1018](https://github.com/Yubico/libfido2/pull/1018),
   unreviewed. 0.14.1 (security only) committed 10392db, built on all 19
   runners; upstream PR [#36855](https://github.com/macports/macports-ports/pull/36855)
-  open. Trac [#74715](https://trac.macports.org/ticket/74715) filed. Bump 0.15 once libfido2
+  merged 2026-11-18 (blakeports matches it). Trac [#74715](https://trac.macports.org/ticket/74715) filed. Bump 0.15 once libfido2
   releases the fix; that also needs a libfido2 revision bump upstream.
 
 **MacPorts CDN speed** — Trac [#65160](https://trac.macports.org/ticket/65160)
