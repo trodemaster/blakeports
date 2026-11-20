@@ -179,7 +179,7 @@ a CI build is meant to test. The denylist is the tree's `PortIndex` (`-x`, defau
 blakeports checkout the script lives in; `cache-ports.sh` runs `portindex` first and
 passes its own). With no `PortIndex` the script refuses to submit anything rather than
 risk publishing blakeports ports. This also covers blakeports overrides of common
-deps (`icu`, `libarchive`, `libevent`, `libgcrypt`, `libomp`, `python314`), so those
+deps (`icu`, `libevent`, `libgcrypt`, `libomp`, `python314`), so those
 always build from source on the legacy VMs.
 
 ## cache-ports.sh behavior

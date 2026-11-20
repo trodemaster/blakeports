@@ -41,8 +41,8 @@ Tooling:
 
 | # | Port | blakeports fix | Arch (as found) | Trac | Maintainer | Status |
 |---|---|---|---|---|---|---|
-| 0 | icu | depend on libgcc under `macports-libstdc++` | i386 | none | mohd-akram | PR [#36312](https://github.com/macports/macports-ports/pull/36312) open |
-| 1 | libarchive | `compiler.blacklist-append gcc-4.2 apple-gcc-4.2` (ICE in `archive_write_pax_header`; was `*gcc-4.2`) | ppc, i386 | [#74145](https://trac.macports.org/ticket/74145), [#74268](https://trac.macports.org/ticket/74268) open | tobypeterson | PR [#36316](https://github.com/macports/macports-ports/pull/36316) open ([findings](libarchive-gcc42-ice.md)) |
+| 0 | icu | depend on libgcc under `macports-libstdc++` | i386 | none | mohd-akram | PR [#36312](https://github.com/macports/macports-ports/pull/36312) closed 2026-11-03 for Trac [#74656](https://trac.macports.org/ticket/74656) |
+| 1 | libarchive | `compiler.blacklist-append gcc-4.2 apple-gcc-4.2` (ICE in `archive_write_pax_header`; was `*gcc-4.2`) | ppc, i386 | [#74145](https://trac.macports.org/ticket/74145), [#74268](https://trac.macports.org/ticket/74268) open | tobypeterson | **Done**: PR [#36316](https://github.com/macports/macports-ports/pull/36316) merged 2026-11-07; blakeports copy removed 2026-11-20 ([findings](libarchive-gcc42-ice.md)) |
 | 2 | libevent | patch: `#pragma GCC diagnostic` only for gcc ≥ 12 | ppc (i386 untested) | [#74414](https://trac.macports.org/ticket/74414) open | jerryyhom | to do |
 | 3 | libgcrypt | widen `gcc-4.2` blacklist to `*gcc-4.2` (llvm-gcc-4.2 fails on McEliece asm) | i386 | none | Schamschula | to do |
 | 4 | python314 | preset `-msse`/`-mavx2` checks to no on 10.5 (`_hmac` needs `posix_memalign`) | 10.5 | [#73578](https://trac.macports.org/ticket/73578) closed (`_blake2`, same family) | jmroot | to do |
