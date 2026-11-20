@@ -183,6 +183,13 @@ scope: MacPorts doesn't support it). There are three kinds:
 | `leopard-runner` | 10.5 Leopard (i386) | darkstar | legacy |
 | `leopard-ppc-runner` | 10.5 Leopard (ppc) | far-star | legacy, QEMU |
 
+The 15 darkstar VMs are sized so all of them can build at once: 4 vCPUs
+(one socket x 4 cores; 10.5–10.7 report `hw.ncpu 4` too) and 8 GB each,
+60 vCPUs / 120 GB on darkstar's 16C/32T, 251 GB. At 8 vCPUs / 16 GB a
+19-runner dispatch hung the guests (host soft lockups, SSH health checks
+failed, 2026-11-19). Each has one snapshot, `known-good`, on its base
+disk plus one delta.
+
 The darkstar VMs' plan and build log is
 `/media/blake/jonesfarm/actions-runners/os_x_runners.md` on darkstar; installer
 ISOs (oldest per version) are in far-star `/Volumes/zen/iso`.
