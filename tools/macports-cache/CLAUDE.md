@@ -199,8 +199,12 @@ permitted`: macOS's Network Volumes privacy setting (TCC) denies the runner's
 `externals/node24/bin/node` on sonoma, and denies every write on ventura, even over ssh
 and with sudo. Samba is fine. SIP is on, so a script can't grant it; it would take System
 Settings in each guest plus a `known-good` re-snapshot, or submitting without a guest
-mount. macOS_12 works because it uses AFP; the Lima runners (15, 26, 27) write over SMB
+mount. macOS_12 works because it uses AFP; the Lima runners (26, 27) write over SMB
 fine. Found 2026-11-20.
+
+**Not on macOS_15** either (since 2026-11-20): the official buildbots cover its
+dependencies, so the workflow leaves it out too.
+
 The install's output goes to a log (followed on stdout with `tail -f`); if it failed with
 "X cannot be built while Y is active" (gcc vs libunwind-headers on Leopard), it deactivates
 Y, retries up to 3 times, and reactivates Y afterwards, as `scripts/install-deps` does.
