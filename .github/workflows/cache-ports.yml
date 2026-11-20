@@ -33,8 +33,9 @@ on:
           - catalina
           - bigsur
           - macOS_12
-          - macOS_13
-          - macOS_14
+          # macOS_13 and macOS_14 left out: the guests can't write to the
+          # share (macOS Network Volumes privacy denies the runner), see
+          # tools/macports-cache/CLAUDE.md.
       ports:
         description: 'Comma-separated ports, variants allowed (e.g. "netatalk, curl +ssl -http2")'
         required: true

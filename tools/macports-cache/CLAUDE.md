@@ -192,6 +192,15 @@ spec runs `port install` in the background and calls `submit-archive.sh -a 120 -
 `PUBLISH_INTERVAL` (60s) until it exits, then flushes. Each dependency reaches the cache
 about a minute after it finishes, so failed, timed-out or cancelled runs keep their work.
 `mount` reports the share under `/private/tmp`, so `MNT` is built from the physical path.
+
+**Not on macOS_13 and macOS_14** (darkstar VMware guests with the runner in the guest): the
+workflow doesn't offer them. The share mounts, but writes fail with `Operation not
+permitted`: macOS's Network Volumes privacy setting (TCC) denies the runner's
+`externals/node24/bin/node` on sonoma, and denies every write on ventura, even over ssh
+and with sudo. Samba is fine. SIP is on, so a script can't grant it; it would take System
+Settings in each guest plus a `known-good` re-snapshot, or submitting without a guest
+mount. macOS_12 works because it uses AFP; the Lima runners (15, 26, 27) write over SMB
+fine. Found 2026-11-20.
 The install's output goes to a log (followed on stdout with `tail -f`); if it failed with
 "X cannot be built while Y is active" (gcc vs libunwind-headers on Leopard), it deactivates
 Y, retries up to 3 times, and reactivates Y afterwards, as `scripts/install-deps` does.
