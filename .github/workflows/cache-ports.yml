@@ -18,7 +18,7 @@ on:
         options:
           - macOS_27
           - macOS_26
-          - macOS_15
+          # macOS_15 left out: the official buildbots cover its dependencies.
           - leopard-ppc
           - leopard
           - snowleopard
