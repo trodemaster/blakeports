@@ -1,0 +1,86 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+
+name                herdr-core
+version             0.1.21
+revision            0
+
+categories          sysutils
+maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+license             Apache-2
+installs_libs       no
+
+homepage            https://herdr.dev/core
+description         Terminal runtime for coding agents (hc)
+
+long_description    {*}{
+    herdr-core (hc) runs programs in terminals that stay alive after the
+    window or client that started them is gone, lets agents start and steer
+    other agents, and is the runtime under the Herdr app and its phone apps.
+    This port installs the upstream prebuilt, Developer ID signed release
+    from releases.herdr.dev; it does not build from source.
+}
+
+platforms           {darwin >= 20}
+supported_archs     arm64 x86_64
+universal_variant   no
+
+# Prebuilt binaries are published on releases.herdr.dev, not on GitHub.
+master_sites        https://releases.herdr.dev/core/${version}/
+
+if {${build_arch} eq "arm64"} {
+    set hc_target   macos-aarch64
+    checksums       rmd160  6c33b9715bd3c1ddfe37550a064fef3447fe43fe \
+                    sha256  1ab38dd9270f63a8f794d6d60e8702eb0d1c85a72bda85d735e5eea43f05ffed \
+                    size    5260334
+} else {
+    set hc_target   macos-x86_64
+    checksums       rmd160  df1356755b44af4dc18ecea89572a619f2b4fed4 \
+                    sha256  e377e1d342cddce0346da5b2f3c281b9701e4731c00024c7c5028265e77a217f \
+                    size    5820703
+}
+
+distname            herdr-core-${hc_target}
+extract.suffix      .tar.gz
+# The tarball has no top-level directory.
+extract.mkdir       yes
+
+use_configure       no
+build {}
+
+# Install the signed "Herdr Core.app" untouched (re-signing or stripping would
+# break the Developer ID signature that macOS privacy prompts are attributed
+# to) and put herdr-core and hc on PATH as links into the bundle.
+destroot {
+    xinstall -d ${destroot}${applications_dir}
+    copy "${worksrcpath}/Herdr Core.app" ${destroot}${applications_dir}/
+    # The tarball's CodeResources files are mode 0600; as root-owned files
+    # they make codesign fail for normal users.
+    system "chmod -R go+rX '${destroot}${applications_dir}/Herdr Core.app'"
+
+    xinstall -d ${destroot}${prefix}/bin
+    ln -s "${applications_dir}/Herdr Core.app/Contents/MacOS/herdr-core" \
+        ${destroot}${prefix}/bin/herdr-core
+    ln -s herdr-core ${destroot}${prefix}/bin/hc
+
+    set docdir ${destroot}${prefix}/share/doc/${name}
+    xinstall -d ${docdir}
+    xinstall -m 0644 ${worksrcpath}/LICENSE ${worksrcpath}/THIRD-PARTY-NOTICES \
+        ${docdir}
+}
+
+# Releases are listed in the upstream update manifest.
+livecheck.type      regex
+livecheck.url       https://releases.herdr.dev/core/latest.json
+livecheck.regex     {"version":\s*"([0-9.]+)"}
+
+notes "
+herdr-core runs programs on this machine. Clone the repositories you want\
+agents to work on here, and sign the agents in here.
+
+Update with MacPorts (sudo port upgrade ${name}), not with 'hc update' or the\
+upstream install script: the files live under ${prefix} and ${applications_dir}.\
+Upgrading stops herdr-core, so quit running terminals first (they stop with\
+it); 'hc server status' shows what is running.
+"
