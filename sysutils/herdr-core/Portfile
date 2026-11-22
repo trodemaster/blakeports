@@ -3,7 +3,7 @@
 PortSystem          1.0
 
 name                herdr-core
-version             0.1.21
+version             0.1.22
 revision            0
 
 categories          sysutils
@@ -31,17 +31,19 @@ master_sites        https://releases.herdr.dev/core/${version}/
 
 if {${build_arch} eq "arm64"} {
     set hc_target   macos-aarch64
-    checksums       rmd160  6c33b9715bd3c1ddfe37550a064fef3447fe43fe \
-                    sha256  1ab38dd9270f63a8f794d6d60e8702eb0d1c85a72bda85d735e5eea43f05ffed \
-                    size    5260334
+    checksums       rmd160  dfa29d69022015cd96d6ea35ff95d1d05ec339ec \
+                    sha256  90798daadefa8d126b90ef0bcdbe9c7dda9c6cfbf011a247065ab5da348f350e \
+                    size    5404856
 } else {
     set hc_target   macos-x86_64
-    checksums       rmd160  df1356755b44af4dc18ecea89572a619f2b4fed4 \
-                    sha256  e377e1d342cddce0346da5b2f3c281b9701e4731c00024c7c5028265e77a217f \
-                    size    5820703
+    checksums       rmd160  ccf18d416e89b0508a2f1ede23e3268dc0fdc1a3 \
+                    sha256  35144041969e870ddb4edcd2fd08fd26dfe5cee7d18e6b48adb276f90a48aa19 \
+                    size    5983849
 }
 
 distname            herdr-core-${hc_target}
+# The distfile name has no version, so keep each release's file apart.
+dist_subdir         ${name}/${version}
 extract.suffix      .tar.gz
 # The tarball has no top-level directory.
 extract.mkdir       yes
