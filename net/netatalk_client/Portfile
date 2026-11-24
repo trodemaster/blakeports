@@ -84,7 +84,7 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
 
     # Unmount while the main loop still serves the server, so the session is
     # logged out.
-    patchfiles-append      patch-fuse-exit-unmount.diff
+    #patchfiles-append      patch-fuse-exit-unmount.diff
 
     if {${os.major} >= 25} {
         notes "
