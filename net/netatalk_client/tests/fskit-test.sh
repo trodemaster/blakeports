@@ -119,11 +119,11 @@ t_exit() {
     done
 }
 t_dead() {
-    # Killed while idle, then with a request under way, which macFUSE's module
-    # waits a minute for: the path mounts again only then.
+    # Killed while idle, during writes, and right after the mount, when
+    # macFUSE's module can answer nothing for a minute (cause unknown).
     local how t rc p
-    for how in idle busy; do
-        reset; mnt afpfs_test "$M"; ok $? "dead daemon, $how: mounts"; sleep 3
+    for how in idle busy fresh; do
+        reset; mnt afpfs_test "$M"; ok $? "dead daemon, $how: mounts"; [ $how = fresh ] || sleep 3
         if [ $how = busy ]; then ( while :; do echo x > "$M/w$RANDOM" || break; done ) >/dev/null 2>&1 & p=$!; sleep 0.5; fi
         pkill -9 -f "afpfsd --socket-id"; t=$SECONDS
         run ls "$M"; rc=$?; [ $rc -ne 142 ]; ok $? "dead daemon, $how: access fails instead of hanging"
@@ -133,6 +133,7 @@ t_dead() {
         echo "# $how: released or not after $((SECONDS - t)) s"
         until mnt afpfs_test "$M" || [ $((SECONDS - t)) -gt 100 ]; do sleep 2; done; mounted "$M"; ok $? "dead daemon, $how: the path mounts again"
         echo "# $how: mounted or not after $((SECONDS - t)) s"
+        TODO="macFUSE can hold the path for a minute"; [ $((SECONDS - t)) -lt 30 ]; ok $? "dead daemon, $how: and within 30 s"; TODO=
         umnt "$M"
     done
 }
