@@ -26,7 +26,7 @@ up() {
         echo "a netatalk is already running; not starting another" >&2; return 1
     fi
     clean
-    mkdir -p "$DIR/vol1" "$DIR/vol2" "$DIR/cnid"
+    mkdir -p "$DIR/vol1" "$DIR/vol2" "$DIR/vol3" "$DIR/cnid"
     cat > "$DIR/afp.conf" <<CONF
 [Global]
 afp listen = 127.0.0.1
@@ -34,12 +34,17 @@ afp port = $PORT
 log file = $DIR/afpd.log
 log level = default:info
 server name = afpfs_testsrv
-uam list = uams_guest.so
+uam list = uams_guest.so uams_dhx2.so
 guest account = $(id -un)
 zeroconf = no
 spotlight = no
 cnid scheme = sqlite
 vol dbpath = $DIR/cnid
+
+[afpfs_test_nounix]
+path = $DIR/vol3
+volume name = afpfs_test_nounix
+unix priv = no
 
 [afpfs_test2]
 path = $DIR/vol2
