@@ -91,7 +91,7 @@ Run by `Build netatalk_client` on macOS_27; results show as annotations.
 | Test | What | State |
 |---|---|---|
 | `port test` | upstream's unit tests | pass, CI |
-| `upstream-tests.sh` | upstream's `afpcmd`/`afpgetstatus` tests against `port:netatalk` on loopback | see the last run |
+| `upstream-tests.sh` | upstream's `afpcmd`/`afpgetstatus` tests against `port:netatalk` on loopback | 36 pass, 2 skip (Linux only), CI run 45327708994 |
 | `fskit-test.sh` | live FSKit mount tests, one group per entry above | **skipped in CI**: the runner has no FSKit module or helper |
 
 Upstream's `test_afpcmd_interactive.t` is Linux-bound (`ps -C`, `/tmp` not

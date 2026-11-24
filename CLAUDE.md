@@ -95,6 +95,17 @@ changes, so syncing is a real update, not a copy):
   merged 2026-11-18 (blakeports matches it). Trac [#74715](https://trac.macports.org/ticket/74715) filed. Bump 0.15 once libfido2
   releases the fix; that also needs a libfido2 revision bump upstream.
 
+**netatalk_client on macOS 27 (FSKit)** — branch `test/netatalk_client`,
+`net/netatalk_client/WORKLIST.md`. Nothing posted upstream without approval.
+
+- [ ] Snapshot 20261123 is green on macOS_27 (build, unit tests, `afpcmd`
+  against Netatalk). FSKit mount tests skip: the runner needs macFUSE's
+  module enabled and its helper installed. Don't merge to main before they
+  pass; the rebased patches haven't run live.
+- [ ] far-star: macfuse 5.5.0 and the new netatalk_client were installed
+  outside CI, and FSKit mounts broke (module off, old helper). Decide whether
+  to restore.
+
 **MacPorts CDN speed** — Trac [#65160](https://trac.macports.org/ticket/65160)
 (slow Fastly cache misses). ryandesign enabled `beresp.do_stream` on
 2026-11-13 and asked whether it helps.

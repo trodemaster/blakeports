@@ -7,6 +7,12 @@ far-star.
 
 Last updated: 2026-10-20 (filed netatalk-client#386).
 
+**2026-11-23:** snapshot 20261123 is on branch `test/netatalk_client`; see
+`WORKLIST.md` for what is left and what has been shown. The status table and
+findings below are October's. far-star now has macfuse 5.5.0 with 5.4.0's
+helper and the FSKit module off, so mounts there don't work; the user denied
+the prompts. Test on the CI runners only.
+
 ## Ground rules (from the user)
 
 - FSKit only. No macFUSE kernel extension, so no reduced boot security.
@@ -18,7 +24,7 @@ Last updated: 2026-10-20 (filed netatalk-client#386).
 - Filed: [Netatalk/netatalk-client#386](https://github.com/Netatalk/netatalk-client/issues/386)
   (FSKit support: `/dev/macfuse0` check, macOS unmount, `/Volumes`
   mount point), 2026-10-20. Unfiled candidates, one at a time:
-  `UPSTREAM-ISSUES.md`.
+  `WORKLIST.md`.
 - MacPorts must only touch `/opt/local`. Anything outside it is a manual step
   the user approves.
 - Live mount tests are guest-only against the darkstar Netatalk server
