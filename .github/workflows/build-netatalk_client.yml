@@ -275,12 +275,12 @@ jobs:
 
       - name: Upstream client tests
         if: matrix.platform == 'macOS_27'
-        run: net/netatalk_client/tests/upstream-tests.sh test_afpgetstatus.t test_afpcmd_batch.t
+        run: net/netatalk_client/tests/ci-run.sh "upstream client tests" net/netatalk_client/tests/upstream-tests.sh test_afpgetstatus.t test_afpcmd_batch.t
 
       # Skips itself unless macFUSE's FSKit module and helper are set up.
       - name: FSKit mount tests
         if: matrix.platform == 'macOS_27' && !cancelled()
-        run: net/netatalk_client/tests/fskit-test.sh
+        run: net/netatalk_client/tests/ci-run.sh "FSKit mount tests" net/netatalk_client/tests/fskit-test.sh
 
       - name: Stop test AFP server
         if: matrix.platform == 'macOS_27' && always()
@@ -289,7 +289,6 @@ jobs:
           net/netatalk_client/tests/afp-server.sh log | tail -40 || true
           net/netatalk_client/tests/afp-server.sh down
           pkill -x afpsld || true
-          rm -rf "$AFP_TEST_DIR"
 
       - name: Remove test server port
         if: matrix.platform == 'macOS_27' && always()

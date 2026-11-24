@@ -14,12 +14,18 @@ DIR=${AFP_TEST_DIR:?set AFP_TEST_DIR to a scratch directory}
 PORT=${AFP_TEST_PORT:-10548}
 PREFIX=${PREFIX:-/opt/local}
 
+# afpd creates its CNID database as root. The name check keeps a mistaken
+# AFP_TEST_DIR from being deleted.
+clean() {
+    case "$DIR" in /*/afp-test) sudo -n rm -rf "$DIR" ;; *) echo "leaving $DIR" >&2 ;; esac
+}
 probe() { "$PREFIX/bin/afpgetstatus" "afp://127.0.0.1:$PORT" 2>&1; }
 
 up() {
     if pgrep -x netatalk >/dev/null; then
         echo "a netatalk is already running; not starting another" >&2; return 1
     fi
+    clean
     mkdir -p "$DIR/vol1" "$DIR/vol2" "$DIR/cnid"
     cat > "$DIR/afp.conf" <<CONF
 [Global]
@@ -53,11 +59,13 @@ CONF
     cat "$DIR/netatalk.out" "$DIR/afpd.log" >&2; return 1
 }
 
-down() {
+down() { stop; clean; }
+stop() {
     # Only the server started with this configuration
     sudo -n pkill -TERM -f "netatalk -d -F $DIR/afp.conf" || true
-    for _ in $(seq 1 40); do pgrep -f -- "-F $DIR/afp.conf" >/dev/null || return 0; sleep 0.25; done
+    for _ in $(seq 1 40); do pgrep -f -- "-F $DIR/afp.conf" >/dev/null || break; sleep 0.25; done
     sudo -n pkill -KILL -f -- "-F $DIR/afp.conf" || true
+    return 0
 }
 
 case "${1:-}" in
