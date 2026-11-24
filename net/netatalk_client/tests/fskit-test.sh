@@ -119,15 +119,22 @@ t_exit() {
     done
 }
 t_dead() {
-    mnt afpfs_test "$M"; pkill -9 -f "afpfsd --socket-id"; sleep 1
-    local t=$SECONDS; run ls "$M"; local rc=$?; [ $rc -ne 142 ]; ok $? "dead daemon: access fails instead of hanging"
-    echo "# ls ended with $rc after $((SECONDS - t)) s"
-    local e; e=$(limit 10 perl -e 'stat($ARGV[0]) ? print 0 : print $!+0' "$M")   # upstream expects ENOTCONN, 57
-    wait_for 15 unmounted "$M"; ok $? "dead daemon: the manager releases the mount"
-    echo "# stat(2) of the dead mount: errno ${e:-none, no answer}"
-    mounted "$M" && limit 15 /sbin/umount -f "$M"
-    mnt afpfs_test "$M"; ok $? "dead daemon: the path mounts again"
-    umnt "$M"
+    # Killed while idle, then with a request under way, which macFUSE's module
+    # waits a minute for: the path mounts again only then.
+    local how t rc p
+    for how in idle busy; do
+        reset; mnt afpfs_test "$M"; ok $? "dead daemon, $how: mounts"; sleep 3
+        if [ $how = busy ]; then ( while :; do echo x > "$M/w$RANDOM" || break; done ) >/dev/null 2>&1 & p=$!; sleep 0.5; fi
+        pkill -9 -f "afpfsd --socket-id"; t=$SECONDS
+        run ls "$M"; rc=$?; [ $rc -ne 142 ]; ok $? "dead daemon, $how: access fails instead of hanging"
+        echo "# $how: ls ended with $rc after $((SECONDS - t)) s"
+        [ $how = busy ] && { disown $p; kill -9 $p; } 2>/dev/null   # it can be stuck in the mount
+        wait_for 15 unmounted "$M"; ok $? "dead daemon, $how: the manager releases the mount"
+        echo "# $how: released or not after $((SECONDS - t)) s"
+        until mnt afpfs_test "$M" || [ $((SECONDS - t)) -gt 100 ]; do sleep 2; done; mounted "$M"; ok $? "dead daemon, $how: the path mounts again"
+        echo "# $how: mounted or not after $((SECONDS - t)) s"
+        umnt "$M"
+    done
 }
 t_foreground() {
     mark; "$AFPC" fs mount --foreground -a guest -o "$PORT" "$HOST:afpfs_test" "$M" >/dev/null 2>&1 & local p=$!
@@ -139,7 +146,8 @@ t_foreground() {
 t_data() {
     local src sum; src=$(mktemp "${TMPDIR:-/tmp}/fskit.XXXXXX"); head -c 16777216 /dev/urandom > "$src"
     sum=$(shasum -a 256 < "$src" | cut -d' ' -f1)
-    mnt afpfs_test "$M"; mkdir "$M/d"; ok $? "data: mkdir"
+    mnt afpfs_test "$M"; ok $? "data: mounts"; mounted "$M" || return
+    mkdir "$M/d"; ok $? "data: mkdir"
     cp "$src" "$M/d/big"; ok $? "data: cp 16 MB"
     printf 'one\n' > "$M/d/a"; printf 'two\n' >> "$M/d/a"; mv "$M/d/a" "$M/d/b"
     for f in t1 t2 t3 t4; do printf 'twenty-six bytes of text..\n' > "$M/d/$f"; done
@@ -173,7 +181,8 @@ t_data() {
     umnt "$M"; rm -f "$src"
 }
 t_remote() {
-    mnt afpfs_test "$M"; echo first > "$V/r"
+    mnt afpfs_test "$M"; ok $? "remote: mounts"; mounted "$M" || return
+    echo first > "$V/r"
     wait_for 10 test -e "$M/r"; ok $? "remote: a file made on the server appears"
     is "$(limit 10 cat "$M/r")" first "remote: and reads"
     TODO="macFUSE issue 1222: FSKit keeps the old size"
