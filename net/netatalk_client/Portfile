@@ -4,9 +4,9 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           meson 1.0
 
-github.setup        Netatalk netatalk-client eb7751d15895ef13b67a1fd1a29739a348b0f5d8
-# Snapshot of main after 1.0.0; includes the DNS-SD link fix (PR #372)
-version             1.0.0.20261011
+github.setup        Netatalk netatalk-client de759669de8de71a9e5c89c1612201fdc6ed6e6a
+# Snapshot of main after 1.0.0
+version             1.0.0.20261123
 name                netatalk_client
 revision            0
 categories-append   net fuse
@@ -29,9 +29,9 @@ long_description    Netatalk Client is a file sharing client written \
 
 homepage            https://netatalk.io/
 
-checksums           rmd160  d91a0a22e650494072304b2cfd2d3b19cf4303b1 \
-                    sha256  5cc36a41b97c2471a94b7271bb2dc35d5d9a736a89c6909570d9b08175556790 \
-                    size    340623
+checksums           rmd160  7b61875eb81258a3d06edd0f0375db8fe452f3b7 \
+                    sha256  0945fc59679e38cc03a04fa997dc89eeccff7879c70571d89b1186ca3e0e8ad9 \
+                    size    657639
 
 meson.wrap_mode     nodownload
 
@@ -44,6 +44,12 @@ compiler.c_standard 2011
 configure.args-append \
                     -Denable-fuse=false
 
+test.run            yes
+test.dir            ${build_dir}
+test.cmd            ${prefix}/bin/meson
+test.target         test
+test.args           --print-errorlogs
+
 variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpfs) via macFUSE} {
     configure.args-delete  -Denable-fuse=false
     configure.args-append  -Denable-fuse=true
@@ -51,44 +57,35 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     depends_build-append   path:bin/pkg-config:pkgconfig
     depends_lib-append     path:lib/pkgconfig/fuse3.pc:macfuse
 
-    # macfuse installs a compatibility include/fuse.h that resolves to its
-    # bundled FUSE 2.x-style API. Since ${prefix}/include is always on the
-    # search path ahead of ${prefix}/include/fuse3, bare `#include <fuse.h>`
-    # picks up the wrong (FUSE 2.x) struct layout even when linking fuse3.
-    # Point the FUSE daemon sources at fuse3/fuse.h explicitly.
-    patchfiles-append      patch-fuse3-header.diff
+    # macfuse's include/fuse.h is a compatibility header for FUSE 2, and
+    # ${prefix}/include is searched before fuse3's own directory.
+    configure.cppflags-prepend -I${prefix}/include/fuse3
+
+    # One patch per worklist issue, see WORKLIST.md.
 
     # Without the macFUSE kernel extension there is no /dev/macfuse0; don't
-    # require it, and mount via macFUSE's FSKit backend instead.
+    # require it, and mount through macFUSE's FSKit backend instead.
     patchfiles-append      patch-fuse-macos-fskit.diff
 
-    # Upstream implements programmatic unmount only off macOS, so
-    # `afpc fs unmount` and `afpc fs exit` left volumes mounted. Unmount the
-    # mount point with unmount(2) and wait for the FUSE thread.
+    # Upstream unmounts only off macOS, so `afpc fs unmount` and `afpc fs
+    # exit` left volumes mounted.
     patchfiles-append      patch-fuse-macos-unmount.diff
 
-    # The FUSE thread wrote its result into the mount handler's stack frame
-    # after unmount, long after the handler returned; on macOS this crashes
-    # afpfsd before it can log out. Keep that state on the heap instead.
-    patchfiles-append      patch-fuse-thread-arg-lifetime.diff
-
-    # Once exit is triggered the main loop stops reading server replies, so
-    # unmounting from the exit path stalls and the session ends in a reset.
-    # Unmount from the `fs exit` handler first, while replies still flow.
-    patchfiles-append      patch-fuse-exit-unmount.diff
-
-    # /Volumes is root-owned. With FSKit, macFUSE's privileged helper creates
-    # a missing mount point there for the user and removes it on unmount, so
-    # don't insist the directory exist beforehand.
+    # /Volumes is root's. For an FSKit mount, macFUSE's helper creates a
+    # missing mount point there, so don't insist that it exists.
     patchfiles-append      patch-fuse-macos-volumes-mountpoint.diff
 
-    # The manager sent each mount daemon two exit commands and closed the
-    # socket without reading the reply, so the daemon printed "Writing:
-    # Broken pipe". Send once per daemon and wait for its reply.
-    patchfiles-append      patch-fuse-manager-exit-reply.diff
+    if {${os.major} >= 25} {
+        notes "
+        Mounting needs macFUSE's FSKit module and privileged helper, once per
+        user and Mac, in a desktop Terminal window:
 
-    # Truncating through an open fork (O_TRUNC, ftruncate) compared against
-    # a cached size that starts at 0, so truncation to 0 was skipped and the
-    # server kept the old contents. Always send SetForkParms.
-    patchfiles-append      patch-fuse-truncate-open-fork.diff
+            open ${prefix}/Library/Filesystems/macfuse.fs/Contents/Resources/macfuse.app
+            ${prefix}/Library/Filesystems/macfuse.fs/Contents/Resources/macfuse.app/Contents/MacOS/macfuse install --components privileged-helpers
+
+        then enable macFUSE under System Settings > General > Login Items &
+        Extensions > File System Extensions. A macfuse update
+        can need both again.
+        "
+    }
 }

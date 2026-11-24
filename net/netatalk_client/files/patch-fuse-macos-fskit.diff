@@ -1,37 +1,47 @@
 --- fuse/commands.c.orig
 +++ fuse/commands.c
-@@ -375,6 +375,12 @@
+@@ -51,6 +51,11 @@
+ #define FUSE_DEVICE "/dev/fuse"
+ #endif
+ 
++/* macFUSE's FSKit backend, which libfuse 3 alone serves, has no device */
++#if defined(__APPLE__) && FUSE_USE_VERSION >= 30
++#define HAVE_FSKIT_BACKEND 1
++#endif
++
+ #define AFPFSD_CLIENT_INCOMING_BUF (2048 + 256)
+ 
+ _Static_assert(AFPFSD_CLIENT_INCOMING_BUF
+@@ -403,6 +408,17 @@ static void *start_fuse_thread(void *other)
+ 
      fuseargv[fuseargc] = fsoption_buf;
      fuseargc++;
- #ifdef __APPLE__
-+    /* Without the macFUSE kernel extension, mount via its FSKit backend */
-+    if (access(FUSE_DEVICE, F_OK) != 0) {
++#ifdef HAVE_FSKIT_BACKEND
++
++    /* Only macFUSE's kernel extension creates the device. Without it, mount
++     * through the FSKit backend unless the user's options name a backend. */
++    if (access(FUSE_DEVICE, F_OK) != 0
++            && strstr(arg->fuse_options, "backend=") == NULL) {
 +        fuseargv[fuseargc] = "-obackend=fskit";
 +        fuseargc++;
 +    }
 +
++#endif
+ #ifdef __APPLE__
      /* Add volname option for macOS to display custom name in Finder */
      snprintf(volname_option_buf, volname_option_buf_len, "-ovolname=%s",
-              volume->volume_name_printable);
-@@ -661,12 +667,20 @@
-         goto error;
+@@ -761,9 +777,14 @@ static int check_mountpoint(struct afpfsd_client *c, const char *mountpoint)
      }
  
-+#ifdef __APPLE__
-+    /* macFUSE's FSKit backend mounts over XPC and creates no device node;
-+     * only the kernel backend needs /dev/macfuse0 (checked below if present). */
-+    if (stat(FUSE_DEVICE, &lstat) == 0 &&
-+            access(FUSE_DEVICE, R_OK | W_OK) != 0) {
+     if (stat(FUSE_DEVICE, &st)) {
++#ifdef HAVE_FSKIT_BACKEND
++        /* libfuse reports a backend that is missing or not enabled. */
++        return 0;
 +#else
-     if (stat(FUSE_DEVICE, &lstat)) {
--        printf("Could not find %s\n", FUSE_DEVICE);
-+        log_for_client((void *)c, AFPFSD, LOG_ERR,
-+                       "Could not find %s", FUSE_DEVICE);
-         goto error;
+         log_for_client((void *)c, AFPFSD, LOG_ERR, "Could not find %s",
+                        FUSE_DEVICE);
+         return -1;
++#endif
      }
  
      if (access(FUSE_DEVICE, R_OK | W_OK) != 0) {
-+#endif
-         log_for_client((void *)c, AFPFSD, LOG_NOTICE,
-                        "Incorrect permissions on %s, mode of device"
-                        " is %o, uid/gid is %d/%d.  But your effective "

@@ -253,3 +253,46 @@ jobs:
             exit 1
           fi
 
+
+      - name: "Run unit tests (+fuse)"
+        run: |
+          source ./setupenv.bash
+          sudo port -v test netatalk_client +fuse
+
+      # Client tests against a Netatalk server on this runner's loopback; see
+      # net/netatalk_client/tests.
+      - name: Install Netatalk server
+        if: matrix.platform == 'macOS_27'
+        run: |
+          source ./setupenv.bash
+          sudo port -N install netatalk
+
+      - name: Start test AFP server
+        if: matrix.platform == 'macOS_27'
+        run: |
+          echo "AFP_TEST_DIR=$RUNNER_TEMP/afp-test" >> "$GITHUB_ENV"
+          AFP_TEST_DIR="$RUNNER_TEMP/afp-test" net/netatalk_client/tests/afp-server.sh up
+
+      - name: Upstream client tests
+        if: matrix.platform == 'macOS_27'
+        run: net/netatalk_client/tests/upstream-tests.sh test_afpgetstatus.t test_afpcmd_batch.t
+
+      # Skips itself unless macFUSE's FSKit module and helper are set up.
+      - name: FSKit mount tests
+        if: matrix.platform == 'macOS_27' && !cancelled()
+        run: net/netatalk_client/tests/fskit-test.sh
+
+      - name: Stop test AFP server
+        if: matrix.platform == 'macOS_27' && always()
+        run: |
+          [ -n "${AFP_TEST_DIR:-}" ] || exit 0
+          net/netatalk_client/tests/afp-server.sh log | tail -40 || true
+          net/netatalk_client/tests/afp-server.sh down
+          pkill -x afpsld || true
+          rm -rf "$AFP_TEST_DIR"
+
+      - name: Remove test server port
+        if: matrix.platform == 'macOS_27' && always()
+        run: |
+          source ./setupenv.bash
+          sudo port uninstall netatalk || true
