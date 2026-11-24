@@ -78,6 +78,10 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # missing mount point there, so don't insist that it exists.
     patchfiles-append      patch-fuse-macos-volumes-mountpoint.diff
 
+    # `afpc fs exit` unmounted after the main loop had stopped serving the
+    # server, which left the volume mounted and the session not logged out.
+    patchfiles-append      patch-fuse-exit-unmount.diff
+
     if {${os.major} >= 25} {
         notes "
         Mounting needs macFUSE's FSKit module and privileged helper, once per
