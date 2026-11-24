@@ -1,0 +1,60 @@
+--- fuse/daemon.c.orig
++++ fuse/daemon.c
+@@ -327,6 +327,9 @@ static int send_response(int client_fd, char result, const void *data,
+     return 0;
+ }
+ 
++/* The longest wait for a daemon to answer an exit command */
++#define EXIT_REPLY_WAIT_S 15
++
+ /* Send exit command to a socket path */
+ static void send_exit_to_socket(const char *socket_path)
+ {
+@@ -355,6 +358,18 @@ static void send_exit_to_socket(const char *socket_path)
+         if (afpfsd_ipc_write_all(sock, &cmd, sizeof(cmd)) < 0) {
+             log_for_client(NULL, AFPFSD, LOG_WARNING,
+                            "Could not send exit command to child daemon");
++        } else {
++            /* Keep the connection until the daemon has replied and closed
++             * it. macOS refuses setsockopt() on a socket whose peer has
++             * closed, and the daemon then drops the command unread. */
++            struct timeval tv = { EXIT_REPLY_WAIT_S, 0 };
++            char buf[256];
++            ssize_t n;
++            setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
++
++            do {
++                n = read(sock, buf, sizeof(buf));
++            } while (n > 0 || (n < 0 && errno == EINTR));
+         }
+     }
+ 
+@@ -788,14 +803,23 @@ static void cleanup_all_children(void)
+                     send_exit_to_socket(path);
+                 }
+             }
++        }
++
++        /* The recorded daemons the pattern did not reach; a second exit
++         * command to the others is redundant. */
++        for (; child; child = child->next) {
++            int sent = 0;
++
++            for (size_t i = 0; i < g.gl_pathc && !sent; i++) {
++                sent = strcmp(child->socket_id, g.gl_pathv[i]) == 0;
++            }
+ 
+-            globfree(&g);
++            if (!sent) {
++                send_exit_to_socket(child->socket_id);
++            }
+         }
+-    }
+ 
+-    while (child) {
+-        send_exit_to_socket(child->socket_id);
+-        child = child->next;
++        globfree(&g);
+     }
+ 
+     wait_for_children(EXIT_WAIT_MS);

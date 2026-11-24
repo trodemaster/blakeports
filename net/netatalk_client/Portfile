@@ -78,8 +78,12 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # missing mount point there, so don't insist that it exists.
     patchfiles-append      patch-fuse-macos-volumes-mountpoint.diff
 
-    # `afpc fs exit` unmounted after the main loop had stopped serving the
-    # server, which left the volume mounted and the session not logged out.
+    # `afpc fs exit` never reached a mount's daemon: macOS refuses
+    # setsockopt(2) once the peer has closed, and the manager closes at once.
+    patchfiles-append      patch-fuse-manager-exit-reply.diff
+
+    # Unmount while the main loop still serves the server, so the session is
+    # logged out.
     patchfiles-append      patch-fuse-exit-unmount.diff
 
     if {${os.major} >= 25} {
