@@ -47,6 +47,9 @@ configure.args-append \
 # afpgetstatus took any address with a colon for IPv6, so host:port failed.
 patchfiles-append   patch-getstatus-host-port.diff
 
+# SIGINT and SIGTERM ended a daemon without unmounting or logging out.
+patchfiles-append   patch-sigterm-ending-hook.diff
+
 test.run            yes
 test.dir            ${build_dir}
 test.cmd            ${prefix}/bin/meson
@@ -81,6 +84,9 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # `afpc fs exit` never reached a mount's daemon: macOS refuses
     # setsockopt(2) once the peer has closed, and the manager closes at once.
     patchfiles-append      patch-fuse-manager-exit-reply.diff
+
+    # stat(2) of a dead FSKit mount gives ENXIO, so the manager left it.
+    patchfiles-append      patch-fuse-macos-dead-mount.diff
 
     if {${os.major} >= 25} {
         notes "

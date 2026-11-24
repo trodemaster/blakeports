@@ -1,0 +1,25 @@
+--- fuse/daemon.c.orig
++++ fuse/daemon.c
+@@ -636,7 +636,8 @@ static int release_mount(const char *path)
+ /*!
+  * @brief Test whether the mount at a path has lost its FUSE daemon
+  *
+- * The kernel answers ENOTCONN for a dead FUSE mount once it asks the daemon;
++ * The kernel answers ENOTCONN for a dead FUSE mount once it asks the daemon,
++ * and macOS ENXIO for one of macFUSE's FSKit backend;
+  * Linux answers stat() from attributes cached for attr_timeout. A child asks,
+  * so a mount that never answers blocks only the child, which is killed, not
+  * waited for.
+@@ -662,7 +663,12 @@ static int mount_is_dead(const char *path)
+               && errno == ENOTCONN ? 0 : 1);
+ #else
+         struct stat st;
++#ifdef __APPLE__
++        _exit(stat(path, &st) != 0 && (errno == ENOTCONN || errno == ENXIO)
++              ? 0 : 1);
++#else
+         _exit(stat(path, &st) != 0 && errno == ENOTCONN ? 0 : 1);
++#endif
+ #endif
+     }
+ 

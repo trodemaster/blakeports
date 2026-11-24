@@ -107,10 +107,20 @@ t_exit() {
     wait_for 12 unmounted "$M"; ok $? "exit: SIGTERM to the daemon unmounts"
     wait_for 5 no_daemon; ok $? "exit: SIGTERM ends the daemon"
     wait_for 5 logged_out; ok $? "exit: SIGTERM logs out cleanly"
+    no_crash; ok $? "exit: no crash report after SIGTERM"
+    # The loop reads no replies while it ends, so late writes are at risk.
+    local how
+    for how in exit SIGTERM; do
+        reset; mnt afpfs_test "$M"; head -c 1048576 /dev/zero | tr '\0' x > "$M/late"
+        if [ $how = exit ]; then run "$AFPC" fs exit; else pkill -TERM -f "afpfsd --socket-id"; fi
+        SECONDS=0; wait_for 20 unmounted "$M"; ok $? "exit: $how right after a write unmounts"; echo "# unmounted after $SECONDS s"
+        wait_for 5 no_daemon; is "$(stat -f %z "$V/late")" 1048576 "exit: $how right after a write keeps it"
+    done
 }
 t_dead() {
     mnt afpfs_test "$M"; pkill -9 -f "afpfsd --socket-id"; sleep 1
-    ( limit 25 ls "$M" >/dev/null 2>&1 ); [ $? -ne 142 ]; ok $? "dead daemon: access fails instead of hanging"
+    local t=$SECONDS; run ls "$M"; local rc=$?; [ $rc -ne 142 ]; ok $? "dead daemon: access fails instead of hanging"
+    echo "# ls ended with $rc after $((SECONDS - t)) s"
     local e; e=$(limit 10 perl -e 'stat($ARGV[0]) ? print 0 : print $!+0' "$M")   # upstream expects ENOTCONN, 57
     wait_for 15 unmounted "$M"; ok $? "dead daemon: the manager releases the mount"
     echo "# stat(2) of the dead mount: errno ${e:-none, no answer}"
