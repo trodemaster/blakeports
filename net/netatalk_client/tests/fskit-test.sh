@@ -139,18 +139,6 @@ t_dead() {
         umnt "$M"
     done
 }
-t_timeout_experiment() {
-    local i t opt
-    for i in 1 2 3 4 5 6 7; do
-        opt=; [ $i -le 5 ] && opt="-O daemon_timeout=10"
-        reset; mnt afpfs_test "$M" $opt || echo "# fresh: no mount: $OUT"
-        pkill -9 -f "afpfsd --socket-id"; t=$SECONDS
-        limit 100 ls "$M" >/dev/null 2>&1; echo "# fresh experiment $i [$opt]: ls ended after $((SECONDS - t)) s"
-        wait_for 100 unmounted "$M"
-        until mnt afpfs_test "$M" || [ $((SECONDS - t)) -gt 100 ]; do sleep 2; done
-        echo "# fresh experiment $i: mounted after $((SECONDS - t)) s"
-    done
-}
 t_foreground() {
     mark; "$AFPC" fs mount --foreground -a guest -o "$PORT" "$HOST:afpfs_test" "$M" >/dev/null 2>&1 & local p=$!
     wait_for 10 mounted "$M"; ok $? "foreground: mounts"
@@ -235,7 +223,7 @@ reset >/dev/null 2>&1
 preflight
 echo "# $(sw_vers -productVersion) $("$AFPC" -V 2>/dev/null | head -1) macfuse $(port -q installed macfuse 2>/dev/null | sed -n 's/.*@\([0-9.]*\).*(active).*/\1/p')"
 for g in "${@:-}"; do
-    for g in ${g:-backend mountpoint unmount busy exit dead timeout_experiment foreground data remote}; do
+    for g in ${g:-backend mountpoint unmount busy exit dead foreground data remote}; do
         reset >/dev/null 2>&1; echo "# --- $g"; "t_$g"
     done
 done

@@ -98,10 +98,11 @@ changes, so syncing is a real update, not a copy):
 **netatalk_client on macOS 27 (FSKit)** — branch `test/netatalk_client`,
 `net/netatalk_client/WORKLIST.md`. Nothing posted upstream without approval.
 
-- [ ] Snapshot 20261123 is green on macOS_27 (build, unit tests, `afpcmd`
-  against Netatalk). FSKit mounts and `afpc fs exit` work there (run
-  45340300388). Left: SIGTERM to a mount daemon, dead-daemon release, and an
-  intermittent hang after a killed daemon. Don't merge to main before then.
+- [ ] Snapshot 20261123 is green on macOS_27: build, unit tests, `afpcmd`,
+  FSKit mounts, `afpc fs exit`, SIGTERM, dead-daemon release (run
+  45425913479). Left: macFUSE sometimes holds a killed daemon's mount for a
+  minute, and #1222 (both TODO in the tests). Merge to main and the issue
+  texts wait for the user.
 - [ ] far-star: ports restored (macfuse 5.4.0, October netatalk_client); the
   user still has to re-enable the macFUSE extension there.
 

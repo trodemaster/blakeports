@@ -20,10 +20,11 @@ with the 1.0.0-era build in October (see CLAUDE.md) and not repeated since.
 | 2 | Unmount on macOS | [unmount](files/patch-fuse-macos-unmount.diff) | part of #386 | source, live |
 | 3 | `/Volumes` mount points macFUSE creates | [volumes](files/patch-fuse-macos-volumes-mountpoint.diff) | part of #386 | source, live |
 | 4 | `afpc fs exit` leaves the volume mounted, no logout | [exit-reply](files/patch-fuse-manager-exit-reply.diff) | not filed | source, live (fixed) |
-| 5 | SIGTERM to a mount daemon: not unmounted, no logout | none | not filed | source, live (fails) |
-| 6 | A dead daemon's mount is not released | none | not filed | source, live (fails) |
+| 5 | SIGTERM to a mount daemon: not unmounted, no logout | [sigterm](files/patch-sigterm-ending-hook.diff) | not filed | source, live (fixed) |
+| 6 | A dead daemon's mount is not released | [dead-mount](files/patch-fuse-macos-dead-mount.diff) | not filed | source, live (fixed, but see below) |
 | 7 | Manager sends a daemon two exit commands | in 4's patch | not filed | source |
 | 8 | `afpgetstatus host:port` fails | [getstatus](files/patch-getstatus-host-port.diff) | not filed | source, CI |
+| 9 | A daemon reads no replies while it ends | [ending-replies](files/patch-ending-replies.diff) | not filed | source, live (fixed) |
 
 ### 1. Mount without `/dev/macfuse0`
 
@@ -58,15 +59,33 @@ the command is dropped unread. The manager waits 10 s, then its SIGTERM ends
 the daemon with the volume mounted (see 5). The patch keeps the connection
 until the daemon answers. Linux is not known to be affected.
 
-The October `exit-unmount` patch changed nothing alone and is not needed
-with this one (runs 45338753151, 45340300388), so it is gone.
+The October `exit-unmount` patch is gone: 9 covers what it was for, the
+wait during the unmount.
 
-**5.** SIGTERM sets `exit_program = 2` (`lib/loop.c`), which leaves the main
-loop without the unmounting hook. The foreground mount's SIGTERM passes.
+**5.** SIGTERM and SIGINT set `exit_program = 2` (`lib/loop.c`), which leaves
+the main loop without the ending hook that unmounts. The patch asks for the
+ending, as an exit command does; a second signal ends the loop at once. Not
+macOS-specific in the source; shown on macOS only.
 
-**6.** After `kill -9`, stat(2) on the mount gives ENXIO (6);
-`mount_is_dead()` accepts only ENOTCONN. Access to the dead mount hangs over
-25 s in some runs and fails in others (test 34); cause unknown.
+**6.** stat(2) on a dead FSKit mount gives ENXIO (6); `mount_is_dead()`
+accepts only ENOTCONN. ENXIO alone was not enough (run 45422321640): the
+manager probes as it reaps the daemon, and the mount may not answer for a
+minute. On macOS the patch skips that probe, as the daemon has ended, and
+forces the unmount of this user's macFUSE mount found in the mount table, in
+a child the manager does not wait long for.
+
+Left, in macFUSE: after a kill just after the mount or during writes, access
+is sometimes unanswered for 62 to 64 s, and the path cannot be mounted again
+until then. The module logged nothing for 64 s (run 45422321640), and with
+the forced unmount macFUSE ended the unmount after 62 s (run 45423494557).
+Never seen after an idle kill. A request under way at the kill fits, but is
+not shown: seven kills in run 45425913479, five with `daemon_timeout=10`, all
+ended at once. The tests report it as TODO.
+
+**9.** From the exit on, the main loop served no descriptor, so a request of
+the ending timed out: each unmount waited 5 s for afpGetVolParms (log of run
+45422321640), and two used up the manager's 10 s. The patch serves the
+servers, only, until the ending is done; exits now take under 1 s.
 
 ### 8. `afpgetstatus host:port`
 
@@ -121,6 +140,18 @@ Runs (tests changed after the first; 65 and 66 match macFUSE #1222: TODO):
 | 45338753151 | exit-unmount | the same seven |
 | 45339838075 | both | 31, 33, 35 |
 | 45340300388 | exit-reply | 31, 33, 34, 35 |
+
+Later runs, with exit-reply and 5; from 45423494557 with 6's forced unmount
+and 9. The dead group was rewritten twice, so numbers differ:
+
+| Run | Failures |
+|---|---|
+| 45422321640 | SIGTERM: daemon ends late; dead: hang, not released |
+| 45423494557 | dead: path not mountable (62 s); 12 that follow from it |
+| 45424178133 | none (the kill right after the mount was not tested) |
+| 45424644347 | hang after a kill during writes (now TODO) |
+| 45425251130 | hang after a kill right after the mount (now TODO) |
+| 45425913479 | none |
 
 The macos-27 VM has macFUSE's helper, the `/Library/Filesystems/macfuse.fs`
 link and the "macFUSE" module enabled. Enable modules under **By Category**:
