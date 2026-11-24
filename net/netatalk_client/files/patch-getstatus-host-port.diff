@@ -1,0 +1,32 @@
+--- cmdline/getstatus.c.orig
++++ cmdline/getstatus.c
+@@ -404,8 +404,10 @@ int main(int argc, char *argv[])
+     afp_default_url(&url);
+     /* Prepend afp:// if not already an AFP URL, and wrap bare IPv6
+      * addresses in brackets so the URL parser doesn't treat the
+-     * colons as port delimiters */
++     * colons as port delimiters. An address with one colon names a port. */
+     char *url_buf;
++    const char *colon = strchr(servername, ':');
++    int bare_ipv6 = servername[0] != '[' && colon && strchr(colon + 1, ':');
+     size_t servername_len = strnlen(servername, AFP_MAX_UTF8_PATH_STORAGE);
+     size_t url_len;
+ 
+@@ -416,7 +418,7 @@ int main(int argc, char *argv[])
+ 
+     if (strncmp(servername, "afp://", 6) == 0) {
+         url_len = servername_len;
+-    } else if (strchr(servername, ':') && servername[0] != '[') {
++    } else if (bare_ipv6) {
+         if (servername_len > SIZE_MAX - 9U) {
+             return -1;
+         }
+@@ -438,7 +440,7 @@ int main(int argc, char *argv[])
+ 
+     if (strncmp(servername, "afp://", 6) == 0) {
+         memcpy(url_buf, servername, url_len + 1U);
+-    } else if (strchr(servername, ':') && servername[0] != '[') {
++    } else if (bare_ipv6) {
+         snprintf(url_buf, url_len + 1U, "afp://[%s]", servername);
+     } else {
+         snprintf(url_buf, url_len + 1U, "afp://%s", servername);

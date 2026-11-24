@@ -44,6 +44,9 @@ compiler.c_standard 2011
 configure.args-append \
                     -Denable-fuse=false
 
+# afpgetstatus took any address with a colon for IPv6, so host:port failed.
+patchfiles-append   patch-getstatus-host-port.diff
+
 test.run            yes
 test.dir            ${build_dir}
 test.cmd            ${prefix}/bin/meson
