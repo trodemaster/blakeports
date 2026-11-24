@@ -50,6 +50,10 @@ patchfiles-append   patch-getstatus-host-port.diff
 # SIGINT and SIGTERM ended a daemon without unmounting or logging out.
 patchfiles-append   patch-sigterm-ending-hook.diff
 
+# While ending, the loop read no replies: each request of an unmount or a
+# logout waited out its timeout.
+patchfiles-append   patch-ending-replies.diff
+
 test.run            yes
 test.dir            ${build_dir}
 test.cmd            ${prefix}/bin/meson
@@ -85,7 +89,8 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # setsockopt(2) once the peer has closed, and the manager closes at once.
     patchfiles-append      patch-fuse-manager-exit-reply.diff
 
-    # stat(2) of a dead FSKit mount gives ENXIO, so the manager left it.
+    # stat(2) of a dead FSKit mount gives ENXIO, or blocks for a minute first,
+    # so the manager left it mounted.
     patchfiles-append      patch-fuse-macos-dead-mount.diff
 
     if {${os.major} >= 25} {

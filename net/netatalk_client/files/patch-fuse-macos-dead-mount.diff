@@ -23,3 +23,102 @@
  #endif
      }
  
+@@ -714,6 +720,89 @@ int release_dead_mount(const char *path)
+     return 1;
+ }
+ 
++#ifdef __APPLE__
++/*!
++ * @brief Test whether the mount table has a macFUSE mount of this user at a
++ *        path
++ *
++ * The table answers at once, where access to a dead mount can block.
++ *
++ * @param[in] path  the mount point
++ * @returns 1 when it has one, 0 otherwise
++ */
++static int has_own_mount(const char *path)
++{
++    struct statfs *table;
++    int found = 0;
++    int count = getfsstat(NULL, 0, MNT_NOWAIT);
++
++    if (count <= 0
++            || (table = calloc((size_t) count, sizeof(*table))) == NULL) {
++        return 0;
++    }
++
++    count = getfsstat(table, count * (int) sizeof(*table), MNT_NOWAIT);
++
++    for (int i = 0; i < count && !found; i++) {
++        found = strcmp(table[i].f_mntonname, path) == 0
++                && strcmp(table[i].f_fstypename, "macfuse") == 0
++                && table[i].f_owner == geteuid();
++    }
++
++    free(table);
++    return found;
++}
++#endif
++
++/*!
++ * @brief Release any mount an ended daemon left
++ *
++ * macFUSE's FSKit module can leave access to the mount of a daemon that was
++ * killed unanswered for a minute, longer than a probe waits. The daemon is
++ * known to have ended, so on macOS a child forces the unmount, unprobed. One
++ * that takes long goes on without the manager, which reaps it later.
++ *
++ * @param[in] path  the mount point
++ */
++static void release_ended_mount(const char *path)
++{
++#ifdef __APPLE__
++    const struct timespec step = { 0, SPAWN_WAIT_STEP_MS * 1000000L };
++    char safe_path[PATH_MAX * 4];
++    int status;
++    pid_t pid;
++
++    if (!has_own_mount(path) || (pid = fork()) < 0) {
++        return;
++    }
++
++    if (pid == 0) {
++        _exit(unmount(path, MNT_FORCE) == 0 ? 0 : 1);
++    }
++
++    sanitize_text(path, safe_path, sizeof(safe_path));
++
++    for (int waited = 0; waited < PROBE_WAIT_MS;
++            waited += SPAWN_WAIT_STEP_MS) {
++        if (waitpid(pid, &status, WNOHANG) == pid) {
++            int released = WIFEXITED(status) && WEXITSTATUS(status) == 0;
++            log_for_client(NULL, AFPFSD, released ? LOG_NOTICE : LOG_WARNING,
++                           released
++                           ? "Released the mount at %s, whose daemon had ended"
++                           : "Could not release the mount at %s", safe_path);
++            return;
++        }
++
++        nanosleep(&step, NULL);
++    }
++
++    log_for_client(NULL, AFPFSD, LOG_WARNING,
++                   "The release of the mount at %s takes long", safe_path);
++#else
++    release_dead_mount(path);
++#endif
++}
++
+ /*!
+  * @brief Reap ended children; forget each daemon and release any mount it left
+  *
+@@ -750,7 +839,7 @@ static void reap_children(void)
+                            safe_mountpoint, WEXITSTATUS(status));
+         }
+ 
+-        release_dead_mount(child->mountpoint);
++        release_ended_mount(child->mountpoint);
+         remove_child(pid);
+     }
+ }

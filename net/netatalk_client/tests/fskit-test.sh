@@ -113,8 +113,9 @@ t_exit() {
     for how in exit SIGTERM; do
         reset; mnt afpfs_test "$M"; head -c 1048576 /dev/zero | tr '\0' x > "$M/late"
         if [ $how = exit ]; then run "$AFPC" fs exit; else pkill -TERM -f "afpfsd --socket-id"; fi
-        SECONDS=0; wait_for 20 unmounted "$M"; ok $? "exit: $how right after a write unmounts"; echo "# unmounted after $SECONDS s"
-        wait_for 5 no_daemon; is "$(stat -f %z "$V/late")" 1048576 "exit: $how right after a write keeps it"
+        SECONDS=0; wait_for 20 unmounted "$M"; ok $? "exit: $how right after a write unmounts"
+        wait_for 5 no_daemon; ok $? "exit: $how right after a write ends the daemon"; echo "# ended after $SECONDS s"
+        is "$(stat -f %z "$V/late")" 1048576 "exit: $how right after a write keeps it"
     done
 }
 t_dead() {

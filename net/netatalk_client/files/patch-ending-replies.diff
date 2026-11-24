@@ -1,0 +1,67 @@
+--- lib/loop.c.orig
++++ lib/loop.c
+@@ -429,6 +429,33 @@ static int process_server_fds(fd_set *set, int **onfd)
+     return 0;
+ }
+ 
++/*!
++ * @brief Leave only servers' descriptors in a set
++ *
++ * @param[in,out] set  the set
++ * @returns one past the set's highest descriptor, 0 for an empty set
++ */
++static int keep_server_fds(fd_set *set)
++{
++    fd_set servers;
++    int bound = 0;
++    FD_ZERO(&servers);
++    afp_lock_server_list();
++
++    for (struct afp_server *s = get_server_base(); s; s = s->next) {
++        int fd = __atomic_load_n(&s->fd, __ATOMIC_ACQUIRE);
++
++        if (fd >= 0 && fd < FD_SETSIZE && FD_ISSET(fd, set)) {
++            FD_SET(fd, &servers);
++            bound = max(bound, fd + 1);
++        }
++    }
++
++    afp_unlock_server_list();
++    *set = servers;
++    return bound;
++}
++
+ static void deal_with_server_signals(void)
+ {
+     if (exit_program == 1) {
+@@ -603,12 +630,11 @@ int afp_main_loop(int command_fd)
+         }
+ 
+         /* The ending thread wakes the loop once it is done; until then the
+-         * loop serves no descriptor. */
++         * loop serves only the servers, whose replies the ending waits for. */
+         if (exit_program == 1) {
+             start_ending_thread();
+-            FD_ZERO(&ords);
+-            FD_ZERO(&oeds);
+-            nfds = 0;
++            nfds = keep_server_fds(&ords);
++            oeds = ords;
+         }
+ 
+ #ifdef DEBUG_AFP_LOOP
+@@ -630,6 +656,14 @@ int afp_main_loop(int command_fd)
+         }
+ 
+         if (exit_program == 1) {
++            int *onfd;
++
++            if (ret > 0) {
++                process_server_fds(&ords, &onfd);
++            } else if (ret < 0 && errno == EBADF) {
++                rm_invalid_fds();
++            }
++
+             start_ending_thread();
+             continue;
+         }
