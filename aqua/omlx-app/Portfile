@@ -3,10 +3,10 @@
 PortSystem          1.0
 PortGroup           github 1.0
 
-github.setup        jundot omlx 0.7.0 v
+github.setup        jundot omlx 0.8.3 v
 github.tarball_from archive
 name                omlx-app
-revision            1
+revision            0
 
 categories          aqua llm
 maintainers         {@trodemaster icloud.com:manuals-unread2u} openmaintainer
@@ -23,9 +23,9 @@ long_description    {*}${description}. Builds only the native SwiftUI menu bar \
                     runtime. The server runs from a Python virtual \
                     environment you create (see notes).
 
-checksums           rmd160  c1e5224c0ac23824c776001f2d54e66264238b85 \
-                    sha256  cd58f72b7390896d8484ae0056cb8f578e21b18b448a5199caa023118a215c83 \
-                    size    54462019
+checksums           rmd160  4efb6bb80d6acd787c21ed7852b8c45f9b5494b8 \
+                    sha256  ccc4939f6ee9ec57a56b8b26333d1e5c0f5b4723d8165ba33cb87832ddac01ac \
+                    size    60626429
 
 if {${os.platform} ne "darwin" || ${os.major} < 24} {
     pre-fetch {
