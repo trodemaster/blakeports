@@ -82,10 +82,6 @@ variant fuse description {Enable FUSE-based AFP mounting (afp_client, mount_afpf
     # setsockopt(2) once the peer has closed, and the manager closes at once.
     patchfiles-append      patch-fuse-manager-exit-reply.diff
 
-    # Unmount while the main loop still serves the server, so the session is
-    # logged out.
-    #patchfiles-append      patch-fuse-exit-unmount.diff
-
     if {${os.major} >= 25} {
         notes "
         Mounting needs macFUSE's FSKit module and privileged helper, once per

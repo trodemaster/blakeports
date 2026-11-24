@@ -17,12 +17,12 @@ with the 1.0.0-era build in October (see CLAUDE.md) and not repeated since.
 | # | Change | Patch | Upstream issue | Evidence |
 |---|---|---|---|---|
 | 1 | Mount without `/dev/macfuse0`, through FSKit | [fskit](files/patch-fuse-macos-fskit.diff) | part of [#386](https://github.com/Netatalk/netatalk-client/issues/386) | source, live |
-| 2 | Unmount on macOS | [unmount](files/patch-fuse-macos-unmount.diff) | part of #386 | source, live (`umount(8)` not tested yet) |
+| 2 | Unmount on macOS | [unmount](files/patch-fuse-macos-unmount.diff) | part of #386 | source, live |
 | 3 | `/Volumes` mount points macFUSE creates | [volumes](files/patch-fuse-macos-volumes-mountpoint.diff) | part of #386 | source, live |
-| 4 | `afpc fs exit` leaves the volume mounted, no logout | none (dropped, see below) | not filed | source, live (fails) |
-| 5 | SIGTERM to a mount daemon: no logout | none | not filed | live (fails) |
-| 6 | A dead daemon's mount is not released | none | not filed | live (fails) |
-| 7 | Manager sends a daemon two exit commands and closes without reading the reply | none (dropped, see below) | not filed | source, live (Oct); "Broken pipe" not seen now |
+| 4 | `afpc fs exit` leaves the volume mounted, no logout | [exit-reply](files/patch-fuse-manager-exit-reply.diff) | not filed | source, live (fixed) |
+| 5 | SIGTERM to a mount daemon: not unmounted, no logout | none | not filed | source, live (fails) |
+| 6 | A dead daemon's mount is not released | none | not filed | source, live (fails) |
+| 7 | Manager sends a daemon two exit commands | in 4's patch | not filed | source |
 | 8 | `afpgetstatus host:port` fails | [getstatus](files/patch-getstatus-host-port.diff) | not filed | source, CI |
 
 ### 1. Mount without `/dev/macfuse0`
@@ -47,26 +47,26 @@ creates a missing directory there and removes it on unmount, but
 
 ### 4 to 7. Shutdown
 
-Live, CI run 45334492759 (macOS 27.2.1, macFUSE 5.5.0): after `afpc fs exit`
-the daemon ends, but the volume is still mounted 12 s later and the server
-logs no logout; the same with two volumes. After SIGTERM the server logs no
-logout. After `kill -9` the manager does not release the mount in 15 s.
+All live on macOS 27.2.1, macFUSE 5.5.0, upstream de759669.
 
-Likely causes, from source and not proven: on exit the main loop serves no
-descriptor while the ending thread unmounts (`lib/loop.c`), as in October;
-and `mount_is_dead()` accepts only ENOTCONN. The next run prints the errno.
-`mounted` took an unanswered mount(8) for "unmounted" in that run, so its
-other exit and dead-daemon passes need repeating.
+**4.** The manager's `send_exit_to_socket()` writes the command byte, then
+shuts the socket down and closes it. The mount daemon's
+`fuse_scan_extra_fds()` sets SO_RCVTIMEO after accept(), and closes the
+connection if that fails. macOS refuses setsockopt() with EINVAL once the
+peer has closed (a socketpair shows it, and the byte is still readable), so
+the command is dropped unread. The manager waits 10 s, then its SIGTERM ends
+the daemon with the volume mounted (see 5). The patch keeps the connection
+until the daemon answers. Linux is not known to be affected.
 
-Before that run:
+The October `exit-unmount` patch changed nothing alone and is not needed
+with this one (runs 45338753151, 45340300388), so it is gone.
 
-At de759669 `process_exit()` still only logs, and `cleanup_all_children()`
-still sends exit to every globbed socket and again to each tracked child.
-PR #410 changed what surrounds them (one unmount alone proceeds, daemons keep
-the pid the manager waits for, the manager waits 10 s), so the October
-symptoms (no FPLogout, volume left mounted, "Broken pipe") may be gone. Our
-two patches are therefore dropped until the `exit` group shows a failure;
-the last versions are in git history before this snapshot.
+**5.** SIGTERM sets `exit_program = 2` (`lib/loop.c`), which leaves the main
+loop without the unmounting hook. The foreground mount's SIGTERM passes.
+
+**6.** After `kill -9`, stat(2) on the mount gives ENXIO (6);
+`mount_is_dead()` accepts only ENOTCONN. Access to the dead mount hangs over
+25 s in some runs and fails in others (test 34); cause unknown.
 
 ### 8. `afpgetstatus host:port`
 
@@ -107,16 +107,20 @@ Run by `Build netatalk_client` on macOS_27; results show as annotations.
 |---|---|---|
 | `port test` | upstream's unit tests | pass, CI |
 | `upstream-tests.sh` | upstream's `afpcmd`/`afpgetstatus` tests against `port:netatalk` on loopback | 36 pass, 2 skip (Linux only), CI run 45327708994 |
-| `fskit-test.sh` | live FSKit mount tests, one group per entry above | 55 of 66 pass, run 45334492759; see below |
+| `fskit-test.sh` | live FSKit mount tests, one group per entry above | see the runs below |
 
 Upstream's `test_afpcmd_interactive.t` is Linux-bound (`ps -C`, `/tmp` not
 resolved to `/private/tmp`, a local test account) and is not run.
 
-The 11 failures in run 45334492759: items 4 (3 tests), 5 (1) and 6 (1);
-3 `umount(8)` tests that never ran `umount` (test bug, fixed, not rerun);
-1 mtime test that may be a test fault (reworked, not rerun); and 2 tests of
-a file whose size changes on the server, which match macFUSE #1222 and are
-now TODO.
+Runs (tests changed after the first; 65 and 66 match macFUSE #1222: TODO):
+
+| Run | Exit patches | Failures |
+|---|---|---|
+| 45334492759 | none | 11, some test faults |
+| 45338383682 | none | exit 25, 27, 30; SIGTERM 31, 33; dead 34, 35 |
+| 45338753151 | exit-unmount | the same seven |
+| 45339838075 | both | 31, 33, 35 |
+| 45340300388 | exit-reply | 31, 33, 34, 35 |
 
 The macos-27 VM has macFUSE's helper, the `/Library/Filesystems/macfuse.fs`
 link and the "macFUSE" module enabled. Enable modules under **By Category**:

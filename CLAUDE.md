@@ -99,9 +99,9 @@ changes, so syncing is a real update, not a copy):
 `net/netatalk_client/WORKLIST.md`. Nothing posted upstream without approval.
 
 - [ ] Snapshot 20261123 is green on macOS_27 (build, unit tests, `afpcmd`
-  against Netatalk). FSKit mounts work there (run 45334492759, 55 of 66
-  tests). Left: exit/SIGTERM logout, dead-daemon release, and a rerun with
-  the test fixes. Don't merge to main before they pass.
+  against Netatalk). FSKit mounts and `afpc fs exit` work there (run
+  45340300388). Left: SIGTERM to a mount daemon, dead-daemon release, and an
+  intermittent hang after a killed daemon. Don't merge to main before then.
 - [ ] far-star: ports restored (macfuse 5.4.0, October netatalk_client); the
   user still has to re-enable the macFUSE extension there.
 
