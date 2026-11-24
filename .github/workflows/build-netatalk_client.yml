@@ -283,11 +283,13 @@ jobs:
         run: net/netatalk_client/tests/ci-run.sh "upstream client tests" net/netatalk_client/tests/upstream-tests.sh test_afpgetstatus.t test_afpcmd_batch.t
 
       - name: Set up macFUSE on the runner
+        timeout-minutes: 45  # it can wait for prompts on the runner's desktop
         if: matrix.platform == 'macOS_27' && inputs.setup_macfuse && !cancelled()
         run: net/netatalk_client/tests/setup-macfuse.sh
 
       # Skips itself unless macFUSE's FSKit module and helper are set up.
       - name: FSKit mount tests
+        timeout-minutes: 15
         if: matrix.platform == 'macOS_27' && !cancelled()
         run: net/netatalk_client/tests/ci-run.sh "FSKit mount tests" net/netatalk_client/tests/fskit-test.sh
 

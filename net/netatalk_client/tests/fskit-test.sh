@@ -168,13 +168,20 @@ t_remote() {
 preflight() {
     # Every mount that macFUSE refuses leaves a dialog on the desktop, so try
     # once and give up, rather than failing (and prompting) in each group.
-    mnt afpfs_test "$M" && { umnt "$M"; return 0; }
-    echo "Bail out! no FSKit mount; enable macFUSE's file system extension and helper"
+    local why="no FSKit mount; enable macFUSE's file system extension and helper"
+    if mnt afpfs_test "$M"; then
+        # A first access can wait for a Network Volumes prompt.
+        limit 60 ls "$M" >/dev/null 2>&1 && { umnt "$M"; return 0; }
+        why="the volume mounts but cannot be read; a privacy prompt may be waiting"
+    fi
+    echo "Bail out! $why"
     printf '%s\n' "$OUT" | sed 's/^/# /'
+    /usr/bin/log show --last 1m --style compact --predicate 'process == "io.macfuse.app.launchservice.daemon" OR (process == "afpfsd" AND NOT subsystem BEGINSWITH "com.apple")' 2>/dev/null |
+        grep -E ' E |not enabled|[Mm]ount|rror' | tail -8 | cut -c1-200 | sed 's/^/# /'
     exit 1
 }
 
-if ! pluginkit -m -i io.macfuse.app.fsmodule.macfuse 2>/dev/null | grep -q macfuse || [ ! -x "$HELPER" ]; then
+if ! pluginkit -m -i io.macfuse.app.fsmodule.macfuse 2>/dev/null | grep -q macfuse || [ ! -e "$HELPER" ]; then
     echo "1..0 # SKIP macFUSE's FSKit module or privileged helper is not set up on this host"
     exit 0
 fi

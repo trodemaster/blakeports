@@ -12,7 +12,7 @@ annotate() {  # annotate <level> <text>
     echo "::$1 title=$title::${t:0:3500}"
 }
 if [ "$rc" -ne 0 ]; then
-    annotate error "$(grep -E -A3 '^(not ok|Bail out|Dubious|[^#]*Failed [0-9]|.*(rror|usage):)' "$log" | grep -v '^ok ' | head -60; echo "[last lines]"; tail -8 "$log")"
+    annotate error "$(grep -E -A8 '^(not ok|Bail out|Dubious|[^#]*Failed [0-9]|.*(rror|usage):)' "$log" | grep -v '^ok ' | head -60; echo "[last lines]"; tail -8 "$log")"
 else
     annotate notice "$(grep -c '^ok ' "$log") ok; $(grep -E '# SKIP|# skip|^# failed|^Result|^Files=' "$log" | head -15)"
 fi
