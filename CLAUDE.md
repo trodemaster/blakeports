@@ -95,14 +95,13 @@ changes, so syncing is a real update, not a copy):
   merged 2026-11-18 (blakeports matches it). Trac [#74715](https://trac.macports.org/ticket/74715) filed. Bump 0.15 once libfido2
   releases the fix; that also needs a libfido2 revision bump upstream.
 
-**netatalk_client on macOS 27 (FSKit)** — branch `test/netatalk_client`,
+**netatalk_client on macOS 27 (FSKit)** — on main since 2026-11-24;
 `net/netatalk_client/WORKLIST.md`. Nothing posted upstream without approval.
 
-- [ ] Snapshot 20261123 is green on macOS_27: build, unit tests, `afpcmd`,
-  FSKit mounts, `afpc fs exit`, SIGTERM, dead-daemon release (run
-  45425913479). Left: macFUSE sometimes holds a killed daemon's mount for a
-  minute, and #1222 (both TODO in the tests). Merge to main and the issue
-  texts wait for the user.
+- [ ] Snapshot 20261123 is green: mount tests on macOS_27 (run 45426426386),
+  builds and +fuse unit tests on 15 and 26 (run 45516556584). Left: macFUSE sometimes
+  holds a killed daemon's mount for a minute, and #1222 (both TODO in the
+  tests). Issue texts are drafted locally and wait for the user's review.
 - [ ] far-star: ports restored (macfuse 5.4.0, October netatalk_client); the
   user still has to re-enable the macFUSE extension there.
 

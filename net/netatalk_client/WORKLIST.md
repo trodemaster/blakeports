@@ -75,7 +75,7 @@ forces the unmount of this user's macFUSE mount found in the mount table, in
 a child the manager does not wait long for.
 
 Left, in macFUSE: after a kill just after the mount or during writes, access
-is sometimes unanswered for 62 to 64 s, and the path cannot be mounted again
+is sometimes unanswered for 60 to 64 s, and the path cannot be mounted again
 until then. The module logged nothing for 64 s (run 45422321640), and with
 the forced unmount macFUSE ended the unmount after 62 s (run 45423494557).
 Never seen after an idle kill. A request under way at the kill fits, but is
@@ -152,6 +152,10 @@ and 9. The dead group was rewritten twice, so numbers differ:
 | 45424644347 | hang after a kill during writes (now TODO) |
 | 45425251130 | hang after a kill right after the mount (now TODO) |
 | 45425913479 | none |
+| 45426426386 | none counted; the hang after both kills (TODO), 60 and 64 s |
+
+macOS 15 and 26 (both variants build, +fuse unit tests pass, no mounts): run
+45516556584.
 
 The macos-27 VM has macFUSE's helper, the `/Library/Filesystems/macfuse.fs`
 link and the "macFUSE" module enabled. Enable modules under **By Category**:
