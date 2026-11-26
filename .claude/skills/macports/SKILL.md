@@ -215,12 +215,16 @@ chat.
   the note's current body, not an earlier copy from the conversation.
 - Posting still needs the user's explicit approval of that note. Afterwards,
   set `status: posted <date> <URL>`.
+- Once the issue or PR is closed or merged, move its whole folder into
+  `Computer/blakeports/resolved/`. Folders for open or unfiled items stay
+  at the top level. Check the state with `gh issue view` / `gh pr view`
+  when tidying.
 - Links in the drafts follow the commit message rule below: a link to
   another GitHub repo's issue or PR adds an entry to its timeline once
   posted, so name such issues in words where the user wants no activity
   (macFUSE, for example).
 
-The lima drafts follow the same layout (`lima 5528 guest os version/`, ...);
+The lima drafts follow the same layout (`resolved/lima 5528 guest os version/`, ...);
 the `lima-devl` skill points here. Notes that aren't drafts (`New ports.md`)
 stay at the folder's top level.
 
