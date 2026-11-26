@@ -101,7 +101,8 @@ changes, so syncing is a real update, not a copy):
 - [ ] Snapshot 20261123 is green: mount tests on macOS_27 (run 45426426386),
   builds and +fuse unit tests on 15 and 26 (run 45516556584). Left: macFUSE sometimes
   holds a killed daemon's mount for a minute, and #1222 (both TODO in the
-  tests). Issue texts are drafted locally and wait for the user's review.
+  tests). Issue texts are drafted in the orac vault,
+  `Computer/blakeports/netatalk-client */`, and wait for the user's review.
 - [ ] far-star: ports restored (macfuse 5.4.0, October netatalk_client); the
   user still has to re-enable the macFUSE extension there.
 

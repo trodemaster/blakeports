@@ -190,6 +190,40 @@ sudo port install -sv portname
 
 Reference: https://guide.macports.org/chunked/project.contributing.html
 
+#### Where drafts live (orac vault)
+
+Every message meant for an outside project — a PR description, an issue, a
+comment, a Trac ticket, for any repo (macports-ports, netatalk-client, lima,
+...) — is drafted in the orac Obsidian vault, so the user can preview and
+edit it in Obsidian. Not in blakeports, which is public, and not only in the
+chat.
+
+- One folder per PR or issue, under `~/orac/Computer/blakeports/` (capital
+  C; the vault's CLAUDE.md puts new notes in topic folders, not the root).
+  Name it `<project> <number or short topic>`, e.g.
+  `netatalk-client 386 FSKit backend/` or `netatalk-client getstatus host port/`.
+  Add the number to the name once it is filed.
+- Inside it, one note per message: `issue draft.md`, `comment draft.md`,
+  `PR body draft.md`, `commit message draft.md`, and for replies
+  `reply <date> draft.md`.
+- Frontmatter holds what is not posted: `repo`, `kind` (issue, comment, PR,
+  ticket), `title`, `target` (URL being answered), `status` (draft,
+  approved, posted <date> <URL>), `checked` (date and upstream commit). The
+  body is exactly the text to paste.
+- Write with the Read/Write/Edit tools (the vault's convention). The user
+  edits these notes, so read the note again before changing it, and post
+  the note's current body, not an earlier copy from the conversation.
+- Posting still needs the user's explicit approval of that note. Afterwards,
+  set `status: posted <date> <URL>`.
+- Links in the drafts follow the commit message rule below: a link to
+  another GitHub repo's issue or PR adds an entry to its timeline once
+  posted, so name such issues in words where the user wants no activity
+  (macFUSE, for example).
+
+The lima drafts follow the same layout (`lima 5528 guest os version/`, ...);
+the `lima-devl` skill points here. Notes that aren't drafts (`New ports.md`)
+stay at the folder's top level.
+
 #### Commit Message Format (Official MacPorts Guidelines)
 
 Reference: https://trac.macports.org/wiki/CommitMessages
@@ -274,8 +308,8 @@ Closes: https://trac.macports.org/ticket/12345
    ```
 10. Push to fork: `git push -u origin branch-name`
 11. Extract "Tested on" system info from CI runner logs (see pr-template.md) — do NOT use local machine info
-12. Draft PR description using the official template with CI-sourced system info
-13. **SHOW PR description to user — STOP and wait for explicit approval before proceeding**
+12. Draft PR description using the official template with CI-sourced system info, as `PR body draft.md` in the PR's vault folder (see [Where drafts live](#where-drafts-live-orac-vault))
+13. **SHOW PR description to user — STOP and wait for explicit approval before proceeding**; post the note's current body
 14. Create PR only after approval: `gh pr create --repo macports/macports-ports`
 15. If reviewer feedback requires changes: follow [Handling Review Feedback](#handling-review-feedback) below — fix in blakeports, CI green, amend + force push with the commit message and PR text untouched, reply with a diff, then resolve
 16. If PR doesn't receive attention within a few days, email macports-dev@lists.macports.org
