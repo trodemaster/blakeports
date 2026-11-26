@@ -779,7 +779,7 @@ index 3c644745..325ba981 100644
  	QemuEfiCodeFD           = "qemu-efi-code.fd"          // efi code; not always created
  	AnsibleInventoryYAML    = "ansible-inventory.yaml"
 diff --git website/content/en/docs/dev/internals.md website/content/en/docs/dev/internals.md
-index a1e49911..57ec61e6 100644
+index e697bed9..990243bf 100644
 --- website/content/en/docs/dev/internals.md
 +++ website/content/en/docs/dev/internals.md
 @@ -76,6 +76,7 @@ VZ:

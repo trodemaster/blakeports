@@ -1730,7 +1730,7 @@ index 00000000..0b616301
 +	assert.Equal(t, unknown.IsServer(), false)
 +}
 diff --git website/content/en/docs/usage/guests/windows.md website/content/en/docs/usage/guests/windows.md
-index c628e618..7f1efc72 100644
+index 1024b2c3..80cfc20b 100644
 --- website/content/en/docs/usage/guests/windows.md
 +++ website/content/en/docs/usage/guests/windows.md
 @@ -32,6 +32,47 @@ By default, Windows 11 enables Trusted Platform Module (TPM) emulation because o

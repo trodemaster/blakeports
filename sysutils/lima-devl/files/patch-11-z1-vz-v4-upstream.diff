@@ -1,5 +1,5 @@
 diff --git go.mod go.mod
-index 4d3b575e..55a44d38 100644
+index 1691d348..6331e2b7 100644
 --- go.mod
 +++ go.mod
 @@ -19,7 +19,7 @@ require (
@@ -28,7 +28,7 @@ index 4d3b575e..55a44d38 100644
  	github.com/go-logr/stdr v1.2.2 // indirect
  	github.com/google/uuid v1.6.0 // indirect
 diff --git go.sum go.sum
-index 854edfd4..206bdf78 100644
+index 53ecb527..5752412f 100644
 --- go.sum
 +++ go.sum
 @@ -2,10 +2,8 @@ al.essio.dev/pkg/shellescape v1.6.1 h1:ki/kUs/D3dDbZpyKbNRhwY/ajgAEIJFagVKDWKnof
