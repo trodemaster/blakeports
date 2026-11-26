@@ -30,9 +30,9 @@ maintainers         {@trodemaster icloud.com:manuals-unread2u} \
 
 conflicts           lima
 
-checksums           rmd160  12e4e3394303dfc9e1521a6e7b67601022304ab8 \
-                    sha256  a03ba68c465301432407b99db68bd7b475f24bdb7ea7533c6ce8faa4f2513653 \
-                    size    2454178
+checksums           rmd160  39dd9cb0a267c3c6049d301bb3ec244135bea6dd \
+                    sha256  880a4522812f0bf7f5387a074a7769e50dda6b416ab5083c967866ccab056f21 \
+                    size    2455120
 
 # Standard patches (shared with the upstream lima port)
 # Feature patches (upstream PR candidates, applied in dependency order)
