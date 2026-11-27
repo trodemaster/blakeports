@@ -261,6 +261,37 @@ against upstream's patterns; code walkthrough for review in [P1-CODE-GUIDE.md](P
   style, B2's `[{preset: x}]` vs a plain string list, and whether to reproduce the
   mount-inside-home bug before proposing the fix.
 
+**2026-11-27 r20/r3/r16 on far-star, installed port.** `4e66401` pushed, CI run 46043568511
+green on 15/26/27. Port installed on far-star (`lima-devl @2.3.0-dev.20261126_0`, from
+source; replaced the 20261107 build), and all three builds used `/opt/local/bin/limactl`.
+Test `limactl` trees in `/tmp/claude-501` removed. Same read-only checks on each guest
+(`guest-check.sh`); every build exit 0, `wait-mount` ready on both boots each time (the
+cidata boot race didn't recur).
+- **macOS 15**, `make build-15 INSTANCE_15=macos-15-test RUNNER_15=macOS_15_test` (so umac's
+  `macOS_15` was untouched; it stayed online), 11:44–11:59. Guest 15.8.3 (image 15.6.1).
+  Classic path: no P1 files, `.AppleSetupDone` and `.skipbuddy` present, `blake` uid 501,
+  home `/Users/blake.guest` 700, SecureToken ENABLED, auto-login (console `blake`,
+  kcpassword), sshd FDA works, `~/password`/`authorized_keys` from the first boot only.
+  Runner `macOS_15_test` came up with only its own label; VM deleted and the registration
+  (id 500) removed by API afterwards (`ghrunner -remove` doesn't know the name).
+- **macOS 26**, `make build-26` after `clean-26`, 12:00–12:14. Guest 26.7.3 (image 26.6.2).
+  Same results as 15. Runner `macOS_26` online.
+- **macOS 27**, `make rebuild-27`, 12:14–12:23. Guest 27.2.1. P1 path: hostagent logged
+  `Provisioning guest user blake on first boot`; instance dir has `vz-guest-password`, no
+  marker; cidata has `guest-provisioning-password` and `auto-login`; `.AppleSetupDone`
+  present, no `.skipbuddy` (Setup Assistant ran); home `/Users/blake.guest` 700, no
+  `/Users/blake`; SecureToken ENABLED; auto-login on; sshd FDA works. Birth times show the
+  r16 order: home 12:17:43 (Setup Assistant), `.AppleSetupDone` 12:17:46, `~/password`
+  12:17:47, `authorized_keys` 12:17:48, none rewritten on later boots. Runner `macOS_27`
+  online.
+- Screenshots: `limactl screenshot` black on all three (VM app hidden). `wincap` first
+  returned `capture_failed` for every Lima window; on retry at 12:42 it captured 26 and 27:
+  both at the desktop, logged in as `blake` by auto-login, no Setup Assistant or
+  first-login screens, only macOS's "App Background Activity" notices for the runner
+  (`runsvc.sh`; on 27 also `sh`). The 15 test VM was already deleted.
+- Not covered: an interrupted first boot; the mount-inside-the-home fix (lima_mac mounts
+  nothing under `user.home`); the first boot's serial log (rewritten each boot).
+
 **2026-11-26 sync to master `9a3022aa` (v2.3.0-rc.0+):** 65 upstream commits since
 `fd6cf105`, mostly fixes and dependabot. Nothing touches the plans: A1 still not merged,
 no tagged vz v4 (v3.8.0 still latest), #5516 unchanged, #5790 (USB) still open. Upstream
