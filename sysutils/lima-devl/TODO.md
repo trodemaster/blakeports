@@ -219,6 +219,17 @@ B2 `d88cdbb4` → A1 `1ba0a9cc` → P1 `eff6292f` (old `backup/p1-port-20261126e
 only at the `macos.Patch` call). patch-08 unchanged; `b2_rev` 18→19, `p1_rev` 14→15. Build,
 tests (B2 alone and the stack), amd64 vet and golangci-lint pass. The failed `clean-27` had
 already deregistered `macOS_27` and stopped the VM.
+**macos-27 rebuilt** with the r19/r15 limactl (`2.3.0-dev.20261126d`), 22:56–23:04: `clean-27`
+deleted the r15 instance (the fix works), the first start logged `Provisioning guest user
+blake on first boot`, and the instance dir kept `vz-guest-password` with no
+`vz-guest-provisioning`. Guest 27.2.1: home `/Users/blake.guest` (no `/Users/blake`),
+`.AppleSetupDone` and no `.skipbuddy` (Setup Assistant ran), SecureToken ENABLED, `blake` on
+the console (auto-login), SSH reads the system TCC dir (sshd preset), and
+`guest-provisioning-password` still on cidata. `~/password` and `authorized_keys` are from
+the first boot (22:59) and were not rewritten on the later boots, so the authorized_keys
+skip works. Runner `macOS_27` online and took a job. Not tested: an actually interrupted
+first boot. `limactl screenshot` gave black frames on both guests (VM app hidden;
+the `osascript` unhide hung).
 
 **2026-11-26 sync to master `9a3022aa` (v2.3.0-rc.0+):** 65 upstream commits since
 `fd6cf105`, mostly fixes and dependabot. Nothing touches the plans: A1 still not merged,
