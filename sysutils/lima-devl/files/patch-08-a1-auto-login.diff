@@ -38,22 +38,28 @@ index 3efd6d03..623d2acc 100644
  	GuestOSBuildVersion             string // macOS guests only: restore-image build, e.g. "26A428"; empty otherwise
  }
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-index 5a0dd403..61fef209 100644
+index 5a0dd403..b2cfcc25 100644
 --- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 +++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-@@ -436,6 +436,47 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -436,6 +436,53 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  			return fmt.Errorf("failed to write sudoers file for user %#q: %w", u.Name, err)
  		}
  	}
-+	// Presence of auto-login on the cidata volume (not any cloud-config key) is what
-+	// signals this feature is enabled -- see GenerateISO9660.
-+	if _, statErr := os.Stat(filepath.Join(mnt, "auto-login")); statErr == nil {
-+		if err := enableAutoLogin(ctx, u.Name, pw); err != nil {
-+			// Non-fatal: the guest is still reachable over SSH.
-+			logrus.WithError(err).Warnf("Failed to enable automatic login for user %#q", u.Name)
-+		}
-+	}
++	maybeEnableAutoLogin(ctx, mnt, u.Name, pw)
 +	return nil
++}
++
++// maybeEnableAutoLogin turns on automatic login for the user if osOpts.Darwin.autoLogin
++// is set. Presence of auto-login on the cidata volume (not any cloud-config key) is what
++// signals this feature is enabled -- see GenerateISO9660.
++func maybeEnableAutoLogin(ctx context.Context, mnt, name, pw string) {
++	if _, statErr := os.Stat(filepath.Join(mnt, "auto-login")); statErr != nil {
++		return
++	}
++	if err := enableAutoLogin(ctx, name, pw); err != nil {
++		// Non-fatal: the guest is still reachable over SSH.
++		logrus.WithError(err).Warnf("Failed to enable automatic login for user %#q", name)
++	}
 +}
 +
 +// kcpasswordKey is the fixed key that loginwindow uses to obfuscate the automatic

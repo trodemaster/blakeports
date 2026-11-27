@@ -310,7 +310,7 @@ index 4660534f..aadfd03a 100644
 +	assert.Assert(t, errors.Is(guestProvisioningSkipReason(26, "27.0.0"), errGuestProvisioningNeedsNewerHost))
 +}
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-index 61fef209..1aaf6149 100644
+index b2cfcc25..f8ae6778 100644
 --- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 +++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 @@ -17,6 +17,7 @@ import (
@@ -321,7 +321,7 @@ index 61fef209..1aaf6149 100644
  
  	"github.com/goccy/go-yaml"
  	"github.com/sethvargo/go-password/password"
-@@ -107,21 +108,25 @@ func processUserData(ctx context.Context, mnt string) error {
+@@ -107,21 +108,26 @@ func processUserData(ctx context.Context, mnt string) error {
  	if userData.PackageRebootIfRequired {
  		logrus.Warn("package_reboot_if_required is not implemented")
  	}
@@ -335,10 +335,11 @@ index 61fef209..1aaf6149 100644
  			errs = append(errs, fmt.Errorf("failed to set timezone: %w", err))
  		}
  	}
-+	// Create the users before mounting: on macOS 27 and later, Setup Assistant
-+	// creates the home at /Users/<user>, which is where the host home is mounted
-+	// by default, and the guest agent must move it to user.home before that path
-+	// becomes a mount.
++	// Create the users before mounting: a mount is a symlink created without its
++	// parent directories, so a mount point inside a user's home needs the home.
++	// On macOS 27 and later, Setup Assistant also creates the home at /Users/<user>,
++	// where the host home is mounted by default, and the guest agent must move it
++	// to user.home before that path becomes a mount.
  	for _, u := range userData.Users {
  		if err := createUser(ctx, &u, mnt); err != nil {
  			errs = append(errs, fmt.Errorf("failed to create user %#q: %w", u.Name, err))
@@ -352,7 +353,7 @@ index 61fef209..1aaf6149 100644
  	for _, entry := range userData.WriteFiles {
  		if err := writeFiles(ctx, entry); err != nil {
  			errs = append(errs, fmt.Errorf("failed to write file for path %#q: %w", entry.Path, err))
-@@ -337,6 +342,21 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -337,6 +343,21 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  	if homedir == "" {
  		return fmt.Errorf("homedir is required for user %#q", u.Name)
  	}
@@ -374,7 +375,7 @@ index 61fef209..1aaf6149 100644
  	if osutil.FileExists(homedir) {
  		logrus.Debugf("homedir %#q already exists, skipping user creation for user %#q", homedir, u.Name)
  		return nil
-@@ -411,23 +431,216 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -411,23 +432,213 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  		return fmt.Errorf("failed to execute command %v: %w (output=%#q)", cmd.Args, err, output)
  	}
  
@@ -402,6 +403,17 @@ index 61fef209..1aaf6149 100644
 +	}); err != nil {
 +		return fmt.Errorf("user %#q was not created by Setup Assistant: %w", u.Name, err)
 +	}
++	// Setup Assistant writes .AppleSetupDone when it finishes, after it has
++	// created the home. Wait for it even if the home stays where it is, so that
++	// Lima's files are not written while Setup Assistant is still working.
++	if err := waitFor(ctx, 10*time.Minute, func() error {
++		if !osutil.FileExists("/var/db/.AppleSetupDone") {
++			return errors.New("setup assistant has not finished")
++		}
++		return nil
++	}); err != nil {
++		return err
++	}
 +	if u.UID != "" && u.UID != strconv.Itoa(uid) {
 +		logrus.Warnf("Requested UID %s for user %#q, but Setup Assistant assigned UID %d; using the actual UID", u.UID, u.Name, uid)
 +	}
@@ -414,11 +426,6 @@ index 61fef209..1aaf6149 100644
 +			}
 +		} else {
 +			homedir = u.Homedir
-+		}
-+	}
-+	if !osutil.FileExists(homedir) {
-+		if err := populateHomeDir(ctx, uid, homedir); err != nil {
-+			return fmt.Errorf("failed to populate home directory for user %#q: %w", u.Name, err)
 +		}
 +	}
 +	if _, statErr := os.Stat(filepath.Join(mnt, "setup-assistant.plist")); statErr == nil {
@@ -443,20 +450,11 @@ index 61fef209..1aaf6149 100644
 +
 +// moveProvisionedHome moves the home directory Setup Assistant created (always
 +// /Users/<name>; VZMacGuestProvisioningOptions cannot choose it) to the Lima home.
-+// It only does so after Setup Assistant has finished and while nothing runs as
-+// the user, since a logged-in session keeps using the old path. The vz driver
-+// turns automatic login off in the provisioning options so the user stays
-+// logged out.
++// The caller waits for Setup Assistant to finish. The home is only moved while
++// nothing runs as the user, since a logged-in session keeps using the old path.
++// The vz driver turns automatic login off in the provisioning options so the
++// user stays logged out.
 +func moveProvisionedHome(ctx context.Context, name string, uid int, src, dst string) error {
-+	// Setup Assistant writes .AppleSetupDone when it finishes.
-+	if err := waitFor(ctx, 10*time.Minute, func() error {
-+		if !osutil.FileExists("/var/db/.AppleSetupDone") {
-+			return errors.New("setup assistant has not finished")
-+		}
-+		return nil
-+	}); err != nil {
-+		return err
-+	}
 +	// Setup Assistant leaves a background launchd session running for the new
 +	// user (cfprefsd, secd, lsd, trustd, distnoted, ...) although nobody has
 +	// logged in; those processes keep the old home open. End that session.
@@ -596,37 +594,14 @@ index 61fef209..1aaf6149 100644
  			return fmt.Errorf("failed to chown %#q for user %#q: %w", f, u.Name, err)
  		}
  	}
-@@ -436,17 +649,22 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -436,7 +647,6 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  			return fmt.Errorf("failed to write sudoers file for user %#q: %w", u.Name, err)
  		}
  	}
--	// Presence of auto-login on the cidata volume (not any cloud-config key) is what
--	// signals this feature is enabled -- see GenerateISO9660.
--	if _, statErr := os.Stat(filepath.Join(mnt, "auto-login")); statErr == nil {
--		if err := enableAutoLogin(ctx, u.Name, pw); err != nil {
--			// Non-fatal: the guest is still reachable over SSH.
--			logrus.WithError(err).Warnf("Failed to enable automatic login for user %#q", u.Name)
--		}
--	}
+-	maybeEnableAutoLogin(ctx, mnt, u.Name, pw)
  	return nil
  }
  
-+// maybeEnableAutoLogin turns on automatic login for the user if osOpts.Darwin.autoLogin
-+// is set. Presence of auto-login on the cidata volume (not any cloud-config key) is what
-+// signals this feature is enabled -- see GenerateISO9660.
-+func maybeEnableAutoLogin(ctx context.Context, mnt, name, pw string) {
-+	if _, statErr := os.Stat(filepath.Join(mnt, "auto-login")); statErr != nil {
-+		return
-+	}
-+	if err := enableAutoLogin(ctx, name, pw); err != nil {
-+		// Non-fatal: the guest is still reachable over SSH.
-+		logrus.WithError(err).Warnf("Failed to enable automatic login for user %#q", name)
-+	}
-+}
-+
- // kcpasswordKey is the fixed key that loginwindow uses to obfuscate the automatic
- // login password in /etc/kcpassword. The format is not documented by Apple; it has
- // been unchanged since at least OS X 10.7.
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin_test.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin_test.go
 index d59bd418..b9eba1b0 100644
 --- pkg/guestagent/fakecloudinit/fakecloudinit_darwin_test.go

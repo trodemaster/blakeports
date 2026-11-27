@@ -231,6 +231,36 @@ skip works. Runner `macOS_27` online and took a job. Not tested: an actually int
 first boot. `limactl screenshot` gave black frames on both guests (VM app hidden;
 the `osascript` unhide hung).
 
+**2026-11-27 B2 r20 / A1 r3 / P1 r16: atomic PRs and review pass.** Read B2, A1 and P1
+against upstream's patterns; code walkthrough for review in [P1-CODE-GUIDE.md](P1-CODE-GUIDE.md).
+- B2: `tccEntry` keeps only service, client and csreq; `client_type` 1, `auth_value` 2,
+  `auth_reason` 4 and `auth_version` 1 are literals in `insertTCCEntry`, explained in the
+  type's comment (the fields were left over from custom entries). `upstream-pr/b2-tcc` =
+  `968911e9` (old `backup/b2-tcc-20261127`).
+- A1: new `upstream-pr/a1-auto-login` `5641ee67` on master `9a3022aa`, signed off (the
+  old `feat/darwin-auto-login` `8dd10c17` was on `fd6cf105` with no sign-off). The cidata
+  check is now `maybeEnableAutoLogin`, called from `createUser`, so P1 no longer moves it.
+- P1 split in three commits: `refactor(fakecloudinit)` `installUserFiles` (no behavior
+  change); `fix(fakecloudinit): create macOS guest users before mounting`; the feature.
+  The reorder is a fix on its own: `mountVirtiofs` is an `os.Symlink` without parents,
+  so on the first boot a mount point inside the user's home failed (from the code, not
+  reproduced on a guest). Standalone branch `upstream-pr/users-before-mounts` `f502bcbe`.
+- P1 fix: `adoptProvisionedUser` now waits for `.AppleSetupDone` itself, also when the
+  home doesn't move. Before, only `moveProvisionedHome` waited, so with `user.home` =
+  `/Users/<user>` Lima could write `~/.ssh` while Setup Assistant was still running. The
+  `populateHomeDir` branch that covered a missing home is gone (dead after the wait).
+- Stack `macports/p1-port` = `upstream-pr/p1-guest-provisioning` = `e4209709`: Z1
+  `ac0824b6` → B2 `aeead930` → A1 `19268c2c` → `fa39fc07` → `ca55afba` → P1 (old
+  `backup/p1-port-20261127`). patch-08 = `p1-port~4..~3`, patch-12 = `p1-port~3..p1-port`.
+  All patches apply to `9a3022aa` without fuzz; the patched tree equals the stack except
+  W1's files. Build, the vz/cidata/fakecloudinit/guestpatch/limatype tests, amd64 vet
+  and golangci-lint v2.15.0 (0 issues) pass on B2, A1, the fix (each alone on master)
+  and the stack. Not yet built by CI or run on a guest.
+- Upstream subjects are mostly `area: change` (about 9 in 10 non-dependabot commits
+  since October); the stack mixes that with `feat(scope):`. Open for Blake: commit
+  style, B2's `[{preset: x}]` vs a plain string list, and whether to reproduce the
+  mount-inside-home bug before proposing the fix.
+
 **2026-11-26 sync to master `9a3022aa` (v2.3.0-rc.0+):** 65 upstream commits since
 `fd6cf105`, mostly fixes and dependabot. Nothing touches the plans: A1 still not merged,
 no tagged vz v4 (v3.8.0 still latest), #5516 unchanged, #5790 (USB) still open. Upstream

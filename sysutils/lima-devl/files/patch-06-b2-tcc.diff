@@ -251,10 +251,10 @@ index e6a3974d..4c596734 100644
  }
 diff --git pkg/guestpatch/macos/tcc_darwin.go pkg/guestpatch/macos/tcc_darwin.go
 new file mode 100644
-index 00000000..fe647aaf
+index 00000000..4cee6dbf
 --- /dev/null
 +++ pkg/guestpatch/macos/tcc_darwin.go
-@@ -0,0 +1,243 @@
+@@ -0,0 +1,234 @@
 +// SPDX-FileCopyrightText: Copyright The Lima Authors
 +// SPDX-License-Identifier: Apache-2.0
 +
@@ -274,13 +274,13 @@ index 00000000..fe647aaf
 +	"github.com/lima-vm/lima/v2/pkg/limatype"
 +)
 +
++// tccEntry is one row of the access table. insertTCCEntry writes every entry for a
++// client given by its path (client_type 1) as allowed (auth_value 2), set by the
++// system (auth_reason 4), with auth_version 1.
 +type tccEntry struct {
-+	service     string
-+	client      string
-+	clientType  int    // 0=bundle, 1=path
-+	authValue   int    // 0=deny, 2=allow
-+	authVersion int    // usually 1; kTCCServicePostEvent uses 2
-+	csreq       []byte // nil = no csreq
++	service string
++	client  string
++	csreq   []byte // nil = no csreq
 +}
 +
 +// csreq blobs are compiled code requirements, generated with:
@@ -307,12 +307,9 @@ index 00000000..fe647aaf
 +var tccPresets = map[string][]tccEntry{
 +	"sshd-full-disk-access": {
 +		{
-+			service:     "kTCCServiceSystemPolicyAllFiles",
-+			client:      "/usr/libexec/sshd-keygen-wrapper",
-+			clientType:  1,
-+			authValue:   2,
-+			authVersion: 1,
-+			csreq:       csreqSSHDKeygen,
++			service: "kTCCServiceSystemPolicyAllFiles",
++			client:  "/usr/libexec/sshd-keygen-wrapper",
++			csreq:   csreqSSHDKeygen,
 +		},
 +	},
 +	// lima-guestagent-full-disk-access: allows the lima guest agent to read any file.
@@ -322,12 +319,8 @@ index 00000000..fe647aaf
 +	// first use.
 +	"lima-guestagent-full-disk-access": {
 +		{
-+			service:     "kTCCServiceSystemPolicyAllFiles",
-+			client:      "/Volumes/cidata/lima-guestagent",
-+			clientType:  1,
-+			authValue:   2,
-+			authVersion: 1,
-+			csreq:       nil,
++			service: "kTCCServiceSystemPolicyAllFiles",
++			client:  "/Volumes/cidata/lima-guestagent",
 +		},
 +	},
 +}
@@ -438,11 +431,9 @@ index 00000000..fe647aaf
 +		`INSERT OR REPLACE INTO access
 +		 (service, client, client_type, auth_value, auth_reason, auth_version,
 +		  csreq, indirect_object_identifier, boot_uuid, last_reminded)
-+		 VALUES (%s, %s, %d, %d, 4, %d,
++		 VALUES (%s, %s, 1, 2, 4, 1,
 +		         %s, 'UNUSED', 'UNUSED', CAST(strftime('%%s','now') AS INTEGER));`,
-+		sqlQuote(e.service), sqlQuote(e.client),
-+		e.clientType, e.authValue, e.authVersion,
-+		csreqLit,
++		sqlQuote(e.service), sqlQuote(e.client), csreqLit,
 +	)
 +	return runSQLite(ctx, dbPath, sql)
 +}

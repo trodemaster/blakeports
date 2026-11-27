@@ -1,15 +1,19 @@
 # P1 flow: macOS 27 guest provisioning with a moved home
 
 How Lima creates the user of a macOS 27+ guest with Apple's guest provisioning, as of
-P1 r14 (2026-11-26). P1 is automatic and has no config. The branch is lima
+P1 r16 (2026-11-27). P1 is automatic and has no config. The branch is lima
 `macports/p1-port`, which is also the upstream PR branch `upstream-pr/p1-guest-provisioning`:
 
-| Commit | Patch | What |
-|---|---|---|
-| `ac0824b6` | Z1, patch-11 | move to Code-Hex/vz v4 main (untagged) |
-| `b6294479` | B2, patch-06 | TCC presets (`osOpts.Darwin.tccPermissions`) |
-| `00558c36` | A1, patch-08 | `osOpts.Darwin.autoLogin` |
-| `9332409e` | P1, patch-12 | guest provisioning |
+| Commit | Patch | What | Standalone branch on master |
+|---|---|---|---|
+| `ac0824b6` | Z1, patch-11 | move to Code-Hex/vz v4 main (untagged) | `macports/vz4-upstream` |
+| `aeead930` | B2, patch-06 | TCC presets (`osOpts.Darwin.tccPermissions`) | `upstream-pr/b2-tcc` |
+| `19268c2c` | A1, patch-08 | `osOpts.Darwin.autoLogin` | `upstream-pr/a1-auto-login` |
+| `fa39fc07` | P1, patch-12 | refactor: `installUserFiles` out of `createUser` | — |
+| `ca55afba` | P1, patch-12 | fix: create users before mounts | `upstream-pr/users-before-mounts` |
+| `e4209709` | P1, patch-12 | guest provisioning | — |
+
+A code walkthrough, in reading order, is in [P1-CODE-GUIDE.md](P1-CODE-GUIDE.md).
 
 The test history is in [TODO.md](TODO.md) (the P1 notes from 2026-11-07, -13 and -17).
 The Apple-side mechanism is reverse engineered in
@@ -103,9 +107,12 @@ launchd session `user/501` running (`cfprefsd`, `secd`, `lsd`, `trustd`, `distno
 
 **fakecloudinit** (`Run`): `enableSSHD`, meta-data, then user-data in this order:
 timezone, **users, then mounts**, write_files, resolv.conf, then boot scripts. Users come
-before mounts because the default host-home mount is a symlink at `/Users/<user>`. If it
-came first, it would take that path a few seconds before Setup Assistant made the home
-there. That happened in the r11 test, and the move then renamed the symlink.
+before mounts for two reasons. A mount is a symlink created without its parents, so a
+mount point inside a user's home needs the home (that alone is a fix for every macOS
+guest, its own commit and PR). And the default host-home mount is a symlink at
+`/Users/<user>`: if it came first, it would take that path a few seconds before Setup
+Assistant made the home there. That happened in the r11 test, and the move then renamed
+the symlink.
 
 For the Lima user, `createUser` sees `guest-provisioning-password` on cidata. If
 `user.home/.ssh/authorized_keys` exists, the account was set up on an earlier boot and it
@@ -115,10 +122,14 @@ calls `adoptProvisionedUser`:
 
 1. **Wait for the account**: `lookupDSUser` (`dscl . -read /Users/<name> UniqueID
    NFSHomeDirectory`, parsed by the tested `parseDSCLRead`, `UniqueID` required) every
-   2 s, for up to 10 min. A UID different from `user.uid` is logged as a warning.
+   2 s, for up to 10 min. Then wait for `/var/db/.AppleSetupDone` (up to 10 min), so
+   Setup Assistant has finished, whether or not the home moves (since r16; before, only
+   the move waited, so with `user.home` = `/Users/<user>` Lima's files could be written
+   while Setup Assistant was still working). A UID different from `user.uid` is logged
+   as a warning.
 2. **Move the home** (`moveProvisionedHome`), when the cleaned home path differs from
    `user.home`:
-   1. Wait for `/var/db/.AppleSetupDone` (up to 10 min), so Setup Assistant has finished.
+   1. (Waiting for Setup Assistant is done by the caller.)
    2. `launchctl bootout user/<uid>` ends Setup Assistant's background session. A failure
       is logged and the next check decides.
    3. Wait until `pgrep -U <uid>` finds nothing (exit 1), for up to 1 min.
@@ -134,8 +145,7 @@ calls `adoptProvisionedUser`:
    to it, so boot scripts that use `user.home` still work. With the default host-home
    mount, Apple's home is then hidden under the mount. With the FDA grant this hasn't
    happened.
-4. Create the home if it's missing, run `suppressFirstLoginScreens` if
-   `suppressFirstLoginSetup` is set, and `chmod 700` the home (as `sysadminctl` does).
+4. Run `suppressFirstLoginScreens` if `suppressFirstLoginSetup` is set, and `chmod 700` the home (as `sysadminctl` does).
 5. `installUserFiles`: `~/password` (mode 0400), `~/.ssh/authorized_keys`, and sudoers.
 6. **Auto-login** (A1's `maybeEnableAutoLogin`), if `auto-login` is on cidata. It writes
    `/etc/kcpassword` (the password XORed with the fixed loginwindow key and padded to a
@@ -182,8 +192,7 @@ sequenceDiagram
     VZ->>SA: first boot reads provisioning options
     SA->>SA: create user, /Users/name, SecureToken, .AppleSetupDone
     SA-->>LW: login window; background user/uid session left running
-    FC->>FC: enable sshd; wait for dscl record
-    FC->>FC: wait for .AppleSetupDone
+    FC->>FC: enable sshd; wait for dscl record, then .AppleSetupDone
     FC->>FC: launchctl bootout user/uid, wait until pgrep -U uid is empty
     FC->>FC: rename /Users/name to user.home, dscl NFSHomeDirectory, verify
     FC->>FC: chmod 700, ~/password, authorized_keys, sudoers
@@ -191,7 +200,7 @@ sequenceDiagram
     FC->>FC: mounts (host home symlink at /Users/name), boot scripts, READY
     Note over L,LW: second boot
     L->>VZ: Start() with no provisioning options
-    FC->>FC: user.home exists, skip user
+    FC->>FC: user.home/.ssh/authorized_keys exists, skip user
     LW->>LW: auto-login with kcpassword
 ```
 
@@ -238,12 +247,15 @@ osascript -e 'tell application "System Events" to set visible of (first process 
 
 ## Open points for upstream (#5516)
 
-- **P1 depends on B2 upstream.** The FDA grant uses B2's TCC writer and preset, so B2 has
-  to be submitted and merged first. The PR order is Z1 → B2 → A1 → P1.
+- **PR order.** A1 and the users-before-mounts fix stand alone on master and can go any
+  time, one at a time. P1 needs B2 (its FDA grant uses B2's TCC writer and preset) and
+  Z1 (vz v4) merged first. Proposed: A1, users-before-mounts, B2, then P1 once vz v4 is
+  tagged. P1's own PR then carries the `installUserFiles` refactor and the feature.
 - **Lima grants its guest agent Full Disk Access on 27+ guests.** The agent already runs
   as root, but expect a reviewer to ask about it. The docs say so.
-- **Users are now created before mounts on every macOS guest.** Nothing depends on the
-  old order, and a mount point inside the guest home needs the home to exist first.
+- **Users are created before mounts on every macOS guest** (own commit and PR). Nothing
+  depends on the old order. The mount-inside-the-home failure it fixes is from reading
+  the code (`os.Symlink` without parents); not reproduced on a guest.
 - **An interrupted first boot (r14).** macOS guests run no guest agent daemon, so the host
   can't tell when the first boot finished, and the marker is removed once `Start` returns.
   The password stays on cidata, so if the first boot dies after Setup Assistant created
