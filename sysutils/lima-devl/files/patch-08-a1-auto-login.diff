@@ -124,7 +124,7 @@ index 00000000..d59bd418
 +	}
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 7491f2e6..d6ac54f9 100644
+index 72cdbdda..c3e1dd38 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
 @@ -374,6 +374,9 @@ type DarwinOpts struct {
@@ -136,14 +136,14 @@ index 7491f2e6..d6ac54f9 100644
 +	AutoLogin *bool `yaml:"autoLogin,omitempty" json:"autoLogin,omitempty" jsonschema:"nullable"`
  }
  
- // TCCPermission adds one entry to the guest's system TCC database during disk patching.
+ // TCCPermission names a built-in set of entries for the guest's system TCC database,
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 6b049427..53bf2fc9 100644
+index 31f60706..ed487d8e 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -179,6 +179,29 @@ as the preset includes the correct csreq blob that macOS records for
- | `clientType` | `bundle` or `path` | |
- | `authValue` | `allow` (default) or `deny` | |
+@@ -146,6 +146,29 @@ but doesn't honor all of them (for example, an Accessibility entry for
+ Terminal has no effect on macOS 26 and 27 guests), so Lima only offers
+ entries that are known to work.
  
 +### Automatic login
 +| ⚡ Requirement | Lima >= 2.4, macOS >= 13.0 |

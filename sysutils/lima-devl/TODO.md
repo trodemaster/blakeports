@@ -8,7 +8,7 @@ Patch revs: see `w1_rev` / `b2_rev` / `p1_rev` in the Portfile (B4 is parked, no
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
 | V1 (`patch-04`) | ~~Guest macOS version detection~~ — **merged upstream as PR #5528 (2026-09-23)**, patch removed from port 2026-10-04 | done |
-| B2 (`patch-06`) | TCC pre-seeding (`osOpts.Darwin.tccPermissions`, moved from `vmOpts.vz.guestPatch` in r14); branch `upstream-pr/b2-tcc` | ready for submission (B1 dependency now merged) |
+| B2 (`patch-06`) | TCC pre-seeding (`osOpts.Darwin.tccPermissions`, moved from `vmOpts.vz.guestPatch` in r14; sshd csreq fixed in r15, Terminal preset dropped and squashed in r16, presets only in r17); branch `upstream-pr/b2-tcc` | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | ~~macOS 27 fakecloudinit workarounds~~ — **removed from port 2026-10-05** (beta-era; branch `macports/m1-fakecloudinit-macos27` kept in case any SA plist keys are still needed on 27 GA) | dropped |
 | A1 (`patch-08`) | `osOpts.Darwin.autoLogin` (opt-in bool): fakecloudinit writes `/etc/kcpassword` + loginwindow `autoLoginUser` for the user it creates (classic and P1 paths), from the second boot; signalled by an empty `auto-login` cidata file. Not in upstream (no auto-login code, no issue); independent of vz v4, so it can go upstream before P1. Branch `feat/darwin-auto-login` (one commit on master) | **r2 2026-11-17**: E2E on a stock config (no lima_mac) auto-logs in from the 2nd boot; a password change breaks it (confirmed), docs say so |
@@ -124,7 +124,45 @@ Build, vet and the vz, limayaml, cidata and fakecloudinit tests pass on the full
 tree, except W1's ISO fixture test (binary fixtures can't travel in a `.diff`, as before).
 lima_mac's macos-14/15/26/27 yamls moved their `tccPermissions` into `osOpts.Darwin` at the
 same time; existing VMs are unaffected (TCC rows are only written when a disk is patched).
-Not yet: CI build, E2E on a fresh VM.
+CI run 45917460516 green on 15/26/27 (incl. golangci-lint). E2E: `make rebuild-27` with a
+limactl built from the port's patches (27.2.1 guest): the system TCC.db (read from the stopped
+disk on the host) has the sshd FDA, Terminal Accessibility/PostEvent and guest-agent FDA rows,
+auth_value 2, written at disk-patch time; the Terminal rows come only from the yaml, so the
+new key works. P1 home move, SecureToken and A1 auto-login also OK. As already known, macOS
+ignores some pre-written rows: SSH has no FDA and Terminal no Accessibility despite the rows
+(sshd FDA has no effect on macos-26 either); only the guest-agent FDA row takes effect.
+`upstream-pr/b2-tcc` also has a `TestConfigureTCCPermissions` commit (not in the port).
+
+**2026-11-26 B2 r15: sshd preset csreq fixed.** The sshd FDA failure was B2's own bug: the
+hard-coded `csreqSSHDKeygen` hex had one extra zero pad byte (61 bytes, length field 60), so
+tccd saw `identifier "com.apple.sshd-keygen-wrapper" and never`. Replaced with the blob
+`csreq -b` compiles for `... and anchor apple`; new `TestPresetCSReqs` decodes both preset
+blobs (fails on the old hex). Commit `0ed25185` on `upstream-pr/b2-tcc`; `macports/p1-port`
+rebuilt as Z1 → B2 (now incl. both tests and the fix) → A1 → P1 (old: `backup/p1-port-20261126b`;
+the only differences are the two tests and the fix). patch-06 now includes the test commits;
+patch-12 changed only in test-file context; patch-08 identical. `b2_rev` 14→15, `p1_rev`
+12→13. Write-up: [findings/lima-tcc-sshd-csreq.md](../../findings/lima-tcc-sshd-csreq.md).
+E2E 2026-11-26: `make rebuild-27` with a limactl from the port's patches (27.2.1 guest): SSH
+sessions now have Full Disk Access (TCC dir, `~/Library/Mail`, system TCC.db readable); no
+prompts; runner back online.
+
+**2026-11-26 B2 r16: prepared for the upstream PR.** Dropped the `terminal-accessibility`
+preset (rows kept but ignored on 26/27) and its csreq; docs now say presets carry the csreq,
+custom entries get the binary's cdhash recorded by tccd on first use, and a "Limits" section
+(system DB only; macOS doesn't honor every entry). Squashed `upstream-pr/b2-tcc` into one
+commit `179b48f9` "vz: write TCC entries into macOS guests before the first boot" (old:
+`backup/b2-tcc-20261126`). `macports/p1-port` rebuilt on it (A1 docs conflict resolved by
+keeping both sections); patch-08 and patch-12 changed only in context (`a1_rev`/`p1_rev`
+unchanged), `b2_rev` 15→16. lima_mac yamls (14/15/26/27) dropped the preset; a rebuild with
+an r16 limactl would otherwise fail on an unknown preset.
+
+**2026-11-26 B2 r17: presets only.** Custom entries (`service`/`client`/`clientType`/`authValue`)
+removed: none of it was ever upstream, lima_mac used presets only, and pre-written rows can be
+silently ignored. `TCCPermission` has only `preset`; `macos.ValidateTCCPermissions` runs in vz
+`Configure`, so an unknown preset fails before the macOS install (new subtest). Docs: one preset
+table, no custom section. B2 is now one commit `5f09d6c1` (414 lines; old `backup/b2-tcc-20261126`),
+`macports/p1-port` rebuilt (`48b47c14`; old `backup/p1-port-20261126c`); patch-08/12 context only;
+`b2_rev` 16→17. lima_mac yamls validate with an r17 limactl.
 
 **2026-11-26 sync to master `9a3022aa` (v2.3.0-rc.0+):** 65 upstream commits since
 `fd6cf105`, mostly fixes and dependabot. Nothing touches the plans: A1 still not merged,

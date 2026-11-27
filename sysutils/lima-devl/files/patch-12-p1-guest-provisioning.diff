@@ -152,7 +152,7 @@ index 98946b56..588db39e 100644
 +	return []vz.VirtualMachineStartOption{vz.WithGuestProvisioningOptions(opts)}, nil
 +}
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index 26f5370f..f9d12a5e 100644
+index 155a8fa9..b1671d2e 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -15,6 +15,8 @@ import (
@@ -180,7 +180,7 @@ index 26f5370f..f9d12a5e 100644
  )
  
  var knownYamlProperties = []string{
-@@ -421,7 +425,10 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+@@ -424,7 +428,10 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  		patchedMarker := disk + ".patched" // empty file
  		if !osutil.FileExists(patchedMarker) {
  			logrus.Infof("Patching macOS disk %#q", disk)
@@ -192,7 +192,7 @@ index 26f5370f..f9d12a5e 100644
  				return err
  			}
  			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
-@@ -438,6 +445,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+@@ -441,6 +448,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  // The function creates the following files:
  // - `image.ipsw`: hardlink to `image` (".ipsw" suffix is required by VZMacOSInstaller)
  // - `disk`: raw or ASIF disk (ASIF requires macOS 26+)
@@ -200,7 +200,7 @@ index 26f5370f..f9d12a5e 100644
  //
  // After successful installation, `image.ipsw` and `image` are removed.
  func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
-@@ -490,6 +498,63 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
+@@ -493,6 +501,63 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
  		}
  	}
  
@@ -265,12 +265,12 @@ index 26f5370f..f9d12a5e 100644
  }
  
 diff --git pkg/driver/vz/vz_driver_darwin_test.go pkg/driver/vz/vz_driver_darwin_test.go
-index 1677fc62..ee7e9849 100644
+index 74f17873..d50549b3 100644
 --- pkg/driver/vz/vz_driver_darwin_test.go
 +++ pkg/driver/vz/vz_driver_darwin_test.go
-@@ -88,3 +88,31 @@ func TestValidateRejectsHostLoopbackFalseWithUserV2(t *testing.T) {
- 	l := &LimaVzDriver{Instance: &limatype.Instance{Config: cfg}}
- 	assert.ErrorContains(t, l.Validate(t.Context()), "not supported with a `user-v2` network")
+@@ -124,3 +124,31 @@ osOpts:
+ 		assert.ErrorContains(t, err, `unknown TCC preset "no-such-preset"`)
+ 	})
  }
 +
 +func TestGuestProvisioningSkipReason(t *testing.T) {
@@ -791,10 +791,10 @@ index e697bed9..990243bf 100644
  
  Serial:
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 53bf2fc9..390cbd91 100644
+index ed487d8e..30e293e5 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -202,6 +202,30 @@ login is not available while FileVault is on.
+@@ -169,6 +169,30 @@ login is not available while FileVault is on.
  
  **Default:** `false`
  

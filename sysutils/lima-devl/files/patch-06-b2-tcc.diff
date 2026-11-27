@@ -1,5 +1,5 @@
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index dadb6005..8644c6ce 100644
+index dadb6005..2885cb57 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -97,6 +97,7 @@ type LimaVzDriver struct {
@@ -10,7 +10,7 @@ index dadb6005..8644c6ce 100644
  
  	machine                    *virtualMachineWrapper
  	waitSSHLocalPortAccessible <-chan any
-@@ -161,6 +162,13 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) (*d
+@@ -161,6 +162,16 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) (*d
  	} else {
  		l.diskImageFormat = raw.Type
  	}
@@ -19,12 +19,15 @@ index dadb6005..8644c6ce 100644
 +		if err := limayaml.Convert(l.Instance.Config.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.Darwin"); err != nil {
 +			return nil, err
 +		}
++		if err := macos.ValidateTCCPermissions(darwinOpts.TCCPermissions); err != nil {
++			return nil, fmt.Errorf("osOpts.Darwin.tccPermissions: %w", err)
++		}
 +		l.tccPermissions = darwinOpts.TCCPermissions
 +	}
  
  	return &driver.ConfiguredDriver{
  		Driver: l,
-@@ -413,7 +421,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+@@ -413,7 +424,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  		patchedMarker := disk + ".patched" // empty file
  		if !osutil.FileExists(patchedMarker) {
  			logrus.Infof("Patching macOS disk %#q", disk)
@@ -33,6 +36,57 @@ index dadb6005..8644c6ce 100644
  				return err
  			}
  			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
+diff --git pkg/driver/vz/vz_driver_darwin_test.go pkg/driver/vz/vz_driver_darwin_test.go
+index 1677fc62..74f17873 100644
+--- pkg/driver/vz/vz_driver_darwin_test.go
++++ pkg/driver/vz/vz_driver_darwin_test.go
+@@ -16,6 +16,7 @@ import (
+ 
+ 	"github.com/lima-vm/lima/v2/pkg/limatype"
+ 	"github.com/lima-vm/lima/v2/pkg/limatype/filenames"
++	"github.com/lima-vm/lima/v2/pkg/limayaml"
+ )
+ 
+ func TestWaitForStopped(t *testing.T) {
+@@ -88,3 +89,38 @@ func TestValidateRejectsHostLoopbackFalseWithUserV2(t *testing.T) {
+ 	l := &LimaVzDriver{Instance: &limatype.Instance{Config: cfg}}
+ 	assert.ErrorContains(t, l.Validate(t.Context()), "not supported with a `user-v2` network")
+ }
++
++func TestConfigureTCCPermissions(t *testing.T) {
++	const osOpts = `
++osOpts:
++  Darwin:
++    tccPermissions:
++    - preset: sshd-full-disk-access
++    - preset: lima-guestagent-full-disk-access
++`
++	configure := func(t *testing.T, yaml string) *LimaVzDriver {
++		cfg, err := limayaml.Load(t.Context(), []byte(yaml), filepath.Join(t.TempDir(), "lima.yaml"))
++		assert.NilError(t, err)
++		configured, err := New().Configure(t.Context(), &limatype.Instance{Config: cfg, Dir: t.TempDir()})
++		assert.NilError(t, err)
++		return configured.Driver.(*LimaVzDriver)
++	}
++
++	t.Run("Darwin guest", func(t *testing.T) {
++		l := configure(t, "vmType: vz\nos: Darwin\n"+osOpts)
++		assert.DeepEqual(t, l.tccPermissions, []limatype.TCCPermission{
++			{Preset: "sshd-full-disk-access"},
++			{Preset: "lima-guestagent-full-disk-access"},
++		})
++	})
++	t.Run("Linux guest", func(t *testing.T) {
++		l := configure(t, "vmType: vz\nos: Linux\n"+osOpts)
++		assert.Assert(t, l.tccPermissions == nil)
++	})
++	t.Run("unknown preset", func(t *testing.T) {
++		cfg, err := limayaml.Load(t.Context(), []byte("vmType: vz\nos: Darwin\nosOpts:\n  Darwin:\n    tccPermissions:\n    - preset: no-such-preset\n"), filepath.Join(t.TempDir(), "lima.yaml"))
++		assert.NilError(t, err)
++		_, err = New().Configure(t.Context(), &limatype.Instance{Config: cfg, Dir: t.TempDir()})
++		assert.ErrorContains(t, err, `unknown TCC preset "no-such-preset"`)
++	})
++}
 diff --git pkg/guestpatch/macos/macos_darwin.go pkg/guestpatch/macos/macos_darwin.go
 index e6a3974d..4c596734 100644
 --- pkg/guestpatch/macos/macos_darwin.go
@@ -181,10 +235,10 @@ index e6a3974d..4c596734 100644
  }
 diff --git pkg/guestpatch/macos/tcc_darwin.go pkg/guestpatch/macos/tcc_darwin.go
 new file mode 100644
-index 00000000..c7f417a0
+index 00000000..fe647aaf
 --- /dev/null
 +++ pkg/guestpatch/macos/tcc_darwin.go
-@@ -0,0 +1,282 @@
+@@ -0,0 +1,243 @@
 +// SPDX-FileCopyrightText: Copyright The Lima Authors
 +// SPDX-License-Identifier: Apache-2.0
 +
@@ -194,9 +248,11 @@ index 00000000..c7f417a0
 +	"context"
 +	"encoding/hex"
 +	"fmt"
++	"maps"
 +	"os"
 +	"os/exec"
 +	"path/filepath"
++	"slices"
 +	"strings"
 +
 +	"github.com/lima-vm/lima/v2/pkg/limatype"
@@ -211,19 +267,16 @@ index 00000000..c7f417a0
 +	csreq       []byte // nil = no csreq
 +}
 +
-+// csreq blobs captured from a live macOS 15 VM via:
++// csreq blobs are compiled code requirements, generated with:
 +//
-+//	sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" "SELECT service,client,hex(csreq) FROM access;"
++//	csreq -r='identifier "com.apple.sshd-keygen-wrapper" and anchor apple' -b /dev/stdout | xxd -p
 +//
-+// These are identifier+AppleAnchor requirements — stable for Apple-signed system binaries.
-+var (
-+	csreqTerminal = mustDecodeHex(
-+		"FADE0C000000003000000001000000060000000200000012" +
-+			"636F6D2E6170706C652E5465726D696E616C000000000003")
-+	csreqSSHDKeygen = mustDecodeHex(
-+		"FADE0C000000003C0000000100000006000000020000001D" +
-+			"636F6D2E6170706C652E737368642D6B657967656E2D777261707065720000000000000003")
-+)
++// The requirement matches `codesign -dr - <binary>` in the guest. These are
++// identifier+AppleAnchor requirements — stable for Apple-signed system binaries.
++// TestPresetCSReqs decodes them; tccd keeps but ignores an entry whose csreq doesn't match.
++var csreqSSHDKeygen = mustDecodeHex(
++	"FADE0C000000003C0000000100000006000000020000001D" +
++		"636F6D2E6170706C652E737368642D6B657967656E2D7772617070657200000000000003")
 +
 +func mustDecodeHex(s string) []byte {
 +	b, err := hex.DecodeString(s)
@@ -246,28 +299,11 @@ index 00000000..c7f417a0
 +			csreq:       csreqSSHDKeygen,
 +		},
 +	},
-+	"terminal-accessibility": {
-+		{
-+			service:     "kTCCServiceAccessibility",
-+			client:      "com.apple.Terminal",
-+			clientType:  0,
-+			authValue:   2,
-+			authVersion: 1,
-+			csreq:       csreqTerminal,
-+		},
-+		{
-+			service:     "kTCCServicePostEvent",
-+			client:      "com.apple.Terminal",
-+			clientType:  0,
-+			authValue:   2,
-+			authVersion: 2,
-+			csreq:       csreqTerminal,
-+		},
-+	},
 +	// lima-guestagent-full-disk-access: allows the lima guest agent to read any file.
 +	// The agent binary is on the cidata volume at /Volumes/cidata/lima-guestagent.
-+	// csreq is nil (NULL) because the binary is rebuilt per-release; NULL skips
-+	// code-signing validation for this path-based entry.
++	// csreq is nil (NULL) because the binary is ad-hoc signed and changes with
++	// every build. tccd accepts the entry and records the binary's cdhash on
++	// first use.
 +	"lima-guestagent-full-disk-access": {
 +		{
 +			service:     "kTCCServiceSystemPolicyAllFiles",
@@ -289,36 +325,12 @@ index 00000000..c7f417a0
 +		return nil, nil
 +	}
 +
++	if err := ValidateTCCPermissions(perms); err != nil {
++		return nil, err
++	}
 +	var entries []tccEntry
 +	for _, p := range perms {
-+		if p.Preset != "" {
-+			preset, ok := tccPresets[p.Preset]
-+			if !ok {
-+				return nil, fmt.Errorf("unknown TCC preset %q; available: %s",
-+					p.Preset, availablePresets())
-+			}
-+			entries = append(entries, preset...)
-+			continue
-+		}
-+		e := tccEntry{service: p.Service, client: p.Client}
-+		switch p.ClientType {
-+		case "bundle":
-+			e.clientType = 0
-+		case "path":
-+			e.clientType = 1
-+		default:
-+			return nil, fmt.Errorf("tccPermission clientType %q: expected \"bundle\" or \"path\"", p.ClientType)
-+		}
-+		switch p.AuthValue {
-+		case "allow", "":
-+			e.authValue = 2
-+		case "deny":
-+			e.authValue = 0
-+		default:
-+			return nil, fmt.Errorf("tccPermission authValue %q: expected \"allow\" or \"deny\"", p.AuthValue)
-+		}
-+		e.authVersion = 1
-+		entries = append(entries, e)
++		entries = append(entries, tccPresets[p.Preset]...)
 +	}
 +
 +	// Build directory path and track what we create for later ownership fixup.
@@ -460,18 +472,74 @@ index 00000000..c7f417a0
 +	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 +}
 +
-+func availablePresets() string {
-+	names := make([]string, 0, len(tccPresets))
-+	for k := range tccPresets {
-+		names = append(names, k)
++// ValidateTCCPermissions reports a preset name that has no built-in entries.
++func ValidateTCCPermissions(perms []limatype.TCCPermission) error {
++	for _, p := range perms {
++		if _, ok := tccPresets[p.Preset]; !ok {
++			return fmt.Errorf("unknown TCC preset %q; available: %s",
++				p.Preset, strings.Join(slices.Sorted(maps.Keys(tccPresets)), ", "))
++		}
 +	}
-+	return strings.Join(names, ", ")
++	return nil
++}
+diff --git pkg/guestpatch/macos/tcc_darwin_test.go pkg/guestpatch/macos/tcc_darwin_test.go
+new file mode 100644
+index 00000000..28113442
+--- /dev/null
++++ pkg/guestpatch/macos/tcc_darwin_test.go
+@@ -0,0 +1,47 @@
++// SPDX-FileCopyrightText: Copyright The Lima Authors
++// SPDX-License-Identifier: Apache-2.0
++
++package macos
++
++import (
++	"encoding/binary"
++	"testing"
++
++	"gotest.tools/v3/assert"
++)
++
++// decodeIdentifierAnchorApple decodes a code requirement blob of the form
++// `identifier "<id>" and anchor apple` and returns the identifier.
++// It fails the test on any other layout, so a mistyped hex literal
++// (wrong length, wrong padding, wrong opcode) is caught here instead of
++// being silently ignored by tccd in the guest.
++func decodeIdentifierAnchorApple(t *testing.T, blob []byte) string {
++	t.Helper()
++	const (
++		csMagicRequirement = 0xfade0c00
++		exprForm           = 1
++		opIdent            = 2
++		opAppleAnchor      = 3
++		opAnd              = 6
++	)
++	u32 := func(off int) uint32 {
++		assert.Assert(t, off+4 <= len(blob), "blob truncated at offset %d", off)
++		return binary.BigEndian.Uint32(blob[off:])
++	}
++	assert.Equal(t, u32(0), uint32(csMagicRequirement), "magic")
++	assert.Equal(t, int(u32(4)), len(blob), "length field must match blob length")
++	assert.Equal(t, u32(8), uint32(exprForm), "kind")
++	assert.Equal(t, u32(12), uint32(opAnd), "first op")
++	assert.Equal(t, u32(16), uint32(opIdent), "second op")
++	n := int(u32(20))
++	id := string(blob[24 : 24+n])
++	off := 24 + (n+3)/4*4 // identifier data is padded to 4 bytes
++	assert.Equal(t, u32(off), uint32(opAppleAnchor), "third op")
++	assert.Equal(t, off+4, len(blob), "trailing bytes after anchor apple")
++	return id
++}
++
++func TestPresetCSReqs(t *testing.T) {
++	// Expected values: `codesign -dr - <binary>` in the guest.
++	assert.Equal(t, decodeIdentifierAnchorApple(t, csreqSSHDKeygen), "com.apple.sshd-keygen-wrapper")
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 0e56b125..7491f2e6 100644
+index 0e56b125..72cdbdda 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -371,6 +371,19 @@ type DarwinOpts struct {
+@@ -371,6 +371,16 @@ type DarwinOpts struct {
  	// SuppressFirstLoginSetupPlist overrides the built-in com.apple.SetupAssistant.plist content
  	// used by SuppressFirstLoginSetup. Ignored unless SuppressFirstLoginSetup is true.
  	SuppressFirstLoginSetupPlist *string `yaml:"suppressFirstLoginSetupPlist,omitempty" json:"suppressFirstLoginSetupPlist,omitempty" jsonschema:"nullable"`
@@ -480,87 +548,51 @@ index 0e56b125..7491f2e6 100644
 +	TCCPermissions []TCCPermission `yaml:"tccPermissions,omitempty" json:"tccPermissions,omitempty" jsonschema:"nullable"`
 +}
 +
-+// TCCPermission adds one entry to the guest's system TCC database during disk patching.
-+// Set Preset to a built-in name, or set Service/Client/ClientType/AuthValue for a custom entry.
++// TCCPermission names a built-in set of entries for the guest's system TCC database,
++// written during disk patching.
 +type TCCPermission struct {
-+	Preset     string `yaml:"preset,omitempty" json:"preset,omitempty"`
-+	Service    string `yaml:"service,omitempty" json:"service,omitempty"`
-+	Client     string `yaml:"client,omitempty" json:"client,omitempty"`
-+	ClientType string `yaml:"clientType,omitempty" json:"clientType,omitempty"` // "bundle" or "path"
-+	AuthValue  string `yaml:"authValue,omitempty" json:"authValue,omitempty"`   // "allow" (default) or "deny"
++	// Preset is one of "sshd-full-disk-access" or "lima-guestagent-full-disk-access".
++	Preset string `yaml:"preset,omitempty" json:"preset,omitempty"`
  }
  
  func NewOS(osname string) OS {
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 15e50e8a..6b049427 100644
+index 15e50e8a..31f60706 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -116,6 +116,69 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
+@@ -116,6 +116,36 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
  template above, then supply the actual build and version strings for your
  target OS release if needed.
  
 +## Pre-populating TCC permissions
 +
 +macOS uses the Transparency, Consent, and Control (TCC) framework to gate
-+access to sensitive services (Accessibility, Full Disk Access, etc.). By
-+default a fresh VM shows consent dialogs on first use, which blocks
-+unattended or automated setups.
++access to sensitive services such as Full Disk Access. Some of these can
++only be granted in System Settings, for example "Allow full disk access for
++remote users", which blocks unattended or automated setups.
 +
-+`osOpts.Darwin.tccPermissions` lets Lima write rows into the guest's
-+TCC database during initial disk setup — before the VM boots for the first
-+time — so permissions are already in place when the guest starts. The entries
-+are written once, when the disk is created; changing them later has no effect
-+on an existing instance.
-+
-+### Built-in presets
-+
-+Presets capture the exact csreq blobs and schema fields that macOS records
-+when a user manually grants a permission. Use a preset name when the client
-+is a native macOS or Lima binary:
++`osOpts.Darwin.tccPermissions` lets Lima write entries into the guest's
++system TCC database during initial disk setup, before the VM boots for the
++first time, so the permissions are already in place when the guest starts.
++The entries are written once, when the disk is created; changing them later
++has no effect on an existing instance.
 +
 +| Preset | Effect |
 +|--------|--------|
-+| `sshd-full-disk-access` | Grants Full Disk Access to `/usr/libexec/sshd-keygen-wrapper` |
-+| `lima-guestagent-full-disk-access` | Grants Full Disk Access to the Lima guest agent on the cidata volume |
-+| `terminal-accessibility` | Grants Accessibility + PostEvent to `com.apple.Terminal` |
++| `sshd-full-disk-access` | Full Disk Access for SSH sessions (`/usr/libexec/sshd-keygen-wrapper`), as "Allow full disk access for remote users" in System Settings |
++| `lima-guestagent-full-disk-access` | Full Disk Access for the Lima guest agent on the cidata volume |
 +
 +```yaml
 +osOpts:
 +  Darwin:
 +    tccPermissions:
-+      - preset: terminal-accessibility
 +      - preset: sshd-full-disk-access
 +```
 +
-+### Custom entries
-+
-+For cases not covered by a preset, use the raw fields directly. Note that
-+custom entries do not include a code-signing requirement (csreq), so they
-+skip binary identity validation — use presets for Apple-signed system
-+binaries where an exact csreq is known.
-+
-+Example — the equivalent of `sshd-full-disk-access` written as a custom entry:
-+
-+```yaml
-+osOpts:
-+  Darwin:
-+    tccPermissions:
-+      - service: kTCCServiceSystemPolicyAllFiles
-+        client: /usr/libexec/sshd-keygen-wrapper
-+        clientType: path
-+        authValue: allow
-+```
-+
-+Use the `sshd-full-disk-access` preset instead of the above when possible,
-+as the preset includes the correct csreq blob that macOS records for
-+`sshd-keygen-wrapper`.
-+
-+| Field | Values | Notes |
-+|-------|--------|-------|
-+| `service` | TCC service string | e.g. `kTCCServiceAccessibility`, `kTCCServiceSystemPolicyAllFiles` |
-+| `client` | Bundle ID or path | Bundle ID for Apple-signed apps; absolute path for other binaries |
-+| `clientType` | `bundle` or `path` | |
-+| `authValue` | `allow` (default) or `deny` | |
++Only these presets are supported. macOS keeps every entry written this way
++but doesn't honor all of them (for example, an Accessibility entry for
++Terminal has no effect on macOS 26 and 27 guests), so Lima only offers
++entries that are known to work.
 +
  ## Caveats
  - No support for turning off the video display.
