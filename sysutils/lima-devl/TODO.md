@@ -190,6 +190,35 @@ password.
 - Checked on the runners: the 26 guest's `sysadminctl` account and the 27 guest's
   Setup Assistant account both have SecureToken ENABLED, so SecureToken is not a reason
   for P1 (P1-FLOW.md said it was).
+- **macos-26 rebuilt** with an r18/r14 limactl (`2.3.0-dev.20261126c`, built from
+  `9a3022aa` + the port patches; CI run 45952421945 green on 15/26/27), 22:33–22:55:
+  26.7.3 guest, no `vz-guest-provisioning`/`vz-guest-password`, `.AppleSetupDone` and
+  `.skipbuddy` written by Lima, `sysadminctl` account `blake` with home
+  `/Users/blake.guest`, auto-login, runner `macOS_26` online. The `sysadminctl` path is
+  unchanged with the users-before-mounts order.
+- **Upstream boot race (not ours), seen in that rebuild:** after the guest rebooted itself
+  (lima_mac `autologin-reboot.sh`), `lima-macos-init.sh` found `/Volumes/cidata` but
+  `exec /Volumes/cidata/lima-guestagent` failed with "No such file or directory": the
+  mount point was there before the ISO contents. The LaunchDaemon is `RunAtLoad` only,
+  with no retry, so fake-cloud-init didn't run on that boot: no mounts, `wait-mount` timed
+  out and `build-26` failed. A host `limactl stop`/`start` (`make patch-26`) recovered it.
+  The script is upstream code in `guestpatch/macos` (only checks `-e /Volumes/cidata`);
+  waiting for the agent binary, or `KeepAlive` on failure, would fix it. Not reported.
+
+**2026-11-26 B2 r19 / P1 r15: preset check moved out of `Configure`.** `make rebuild-27` with
+the r18 limactl failed in `clean-27`: `limactl remove macos-27` → `failed to create driver
+instance: osOpts.Darwin.tccPermissions: unknown TCC preset "terminal-accessibility"`. The
+instance was created at r15, when that preset existed, and r17 checked presets in vz
+`Configure`, which deletion also runs (upstream's own comment in `Validate` says so). So an
+instance with a preset a later Lima drops couldn't be deleted. Now `darwinTCCPermissions(cfg)`
+parses and checks the presets; the driver's `Validate` (start, before the install) and
+`CreateDisk` call it; `Configure` doesn't, and the `tccPermissions` driver field is gone.
+`TestDarwinTCCPermissions` replaces `TestConfigureTCCPermissions` and checks that `Configure`
+succeeds with an unknown preset. B2 `6ec347e9` (old `backup/b2-tcc-20261126c`); stack Z1 →
+B2 `d88cdbb4` → A1 `1ba0a9cc` → P1 `eff6292f` (old `backup/p1-port-20261126e`; P1 conflicted
+only at the `macos.Patch` call). patch-08 unchanged; `b2_rev` 18→19, `p1_rev` 14→15. Build,
+tests (B2 alone and the stack), amd64 vet and golangci-lint pass. The failed `clean-27` had
+already deregistered `macOS_27` and stopped the VM.
 
 **2026-11-26 sync to master `9a3022aa` (v2.3.0-rc.0+):** 65 upstream commits since
 `fd6cf105`, mostly fixes and dependabot. Nothing touches the plans: A1 still not merged,

@@ -1,43 +1,57 @@
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index dadb6005..2885cb57 100644
+index dadb6005..8de987a3 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
-@@ -97,6 +97,7 @@ type LimaVzDriver struct {
- 	rosettaEnabled  bool
- 	rosettaBinFmt   bool
- 	diskImageFormat image.Type
-+	tccPermissions  []limatype.TCCPermission
- 
- 	machine                    *virtualMachineWrapper
- 	waitSSHLocalPortAccessible <-chan any
-@@ -161,6 +162,16 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) (*d
- 	} else {
- 		l.diskImageFormat = raw.Type
+@@ -265,6 +265,11 @@ func (l *LimaVzDriver) Validate(_ context.Context) error {
+ 	if err := validateConfig(l.Instance.Config); err != nil {
+ 		return err
  	}
-+	if l.Instance.Config.OS != nil && *l.Instance.Config.OS == limatype.DARWIN {
-+		var darwinOpts limatype.DarwinOpts
-+		if err := limayaml.Convert(l.Instance.Config.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.Darwin"); err != nil {
-+			return nil, err
-+		}
-+		if err := macos.ValidateTCCPermissions(darwinOpts.TCCPermissions); err != nil {
-+			return nil, fmt.Errorf("osOpts.Darwin.tccPermissions: %w", err)
-+		}
-+		l.tccPermissions = darwinOpts.TCCPermissions
++	// Not in Configure: an instance created with a preset a later Lima no longer has
++	// must still be deletable.
++	if _, err := darwinTCCPermissions(l.Instance.Config); err != nil {
++		return err
 +	}
+ 	if len(l.Instance.Config.BlockDevices) == 0 {
+ 		return nil
+ 	}
+@@ -278,6 +283,22 @@ func (l *LimaVzDriver) Validate(_ context.Context) error {
+ 	return err
+ }
  
- 	return &driver.ConfiguredDriver{
- 		Driver: l,
-@@ -413,7 +424,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
++// darwinTCCPermissions returns osOpts.Darwin.tccPermissions for a macOS guest, or nil
++// for other guests, and reports an unknown preset.
++func darwinTCCPermissions(cfg *limatype.LimaYAML) ([]limatype.TCCPermission, error) {
++	if cfg.OS == nil || *cfg.OS != limatype.DARWIN {
++		return nil, nil
++	}
++	var darwinOpts limatype.DarwinOpts
++	if err := limayaml.Convert(cfg.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.Darwin"); err != nil {
++		return nil, err
++	}
++	if err := macos.ValidateTCCPermissions(darwinOpts.TCCPermissions); err != nil {
++		return nil, fmt.Errorf("osOpts.Darwin.tccPermissions: %w", err)
++	}
++	return darwinOpts.TCCPermissions, nil
++}
++
+ func validateConfig(cfg *limatype.LimaYAML) error {
+ 	if cfg == nil {
+ 		return errors.New("configuration is nil")
+@@ -413,7 +434,11 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  		patchedMarker := disk + ".patched" // empty file
  		if !osutil.FileExists(patchedMarker) {
  			logrus.Infof("Patching macOS disk %#q", disk)
 -			if err := macos.Patch(ctx, disk); err != nil {
-+			if err := macos.Patch(ctx, disk, l.tccPermissions); err != nil {
++			tccPerms, err := darwinTCCPermissions(l.Instance.Config)
++			if err != nil {
++				return err
++			}
++			if err := macos.Patch(ctx, disk, tccPerms); err != nil {
  				return err
  			}
  			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
 diff --git pkg/driver/vz/vz_driver_darwin_test.go pkg/driver/vz/vz_driver_darwin_test.go
-index 1677fc62..74f17873 100644
+index 1677fc62..4660534f 100644
 --- pkg/driver/vz/vz_driver_darwin_test.go
 +++ pkg/driver/vz/vz_driver_darwin_test.go
 @@ -16,6 +16,7 @@ import (
@@ -48,12 +62,12 @@ index 1677fc62..74f17873 100644
  )
  
  func TestWaitForStopped(t *testing.T) {
-@@ -88,3 +89,38 @@ func TestValidateRejectsHostLoopbackFalseWithUserV2(t *testing.T) {
+@@ -88,3 +89,40 @@ func TestValidateRejectsHostLoopbackFalseWithUserV2(t *testing.T) {
  	l := &LimaVzDriver{Instance: &limatype.Instance{Config: cfg}}
  	assert.ErrorContains(t, l.Validate(t.Context()), "not supported with a `user-v2` network")
  }
 +
-+func TestConfigureTCCPermissions(t *testing.T) {
++func TestDarwinTCCPermissions(t *testing.T) {
 +	const osOpts = `
 +osOpts:
 +  Darwin:
@@ -61,30 +75,32 @@ index 1677fc62..74f17873 100644
 +    - preset: sshd-full-disk-access
 +    - preset: lima-guestagent-full-disk-access
 +`
-+	configure := func(t *testing.T, yaml string) *LimaVzDriver {
++	load := func(t *testing.T, yaml string) *limatype.LimaYAML {
 +		cfg, err := limayaml.Load(t.Context(), []byte(yaml), filepath.Join(t.TempDir(), "lima.yaml"))
 +		assert.NilError(t, err)
-+		configured, err := New().Configure(t.Context(), &limatype.Instance{Config: cfg, Dir: t.TempDir()})
-+		assert.NilError(t, err)
-+		return configured.Driver.(*LimaVzDriver)
++		return cfg
 +	}
 +
 +	t.Run("Darwin guest", func(t *testing.T) {
-+		l := configure(t, "vmType: vz\nos: Darwin\n"+osOpts)
-+		assert.DeepEqual(t, l.tccPermissions, []limatype.TCCPermission{
++		perms, err := darwinTCCPermissions(load(t, "vmType: vz\nos: Darwin\n"+osOpts))
++		assert.NilError(t, err)
++		assert.DeepEqual(t, perms, []limatype.TCCPermission{
 +			{Preset: "sshd-full-disk-access"},
 +			{Preset: "lima-guestagent-full-disk-access"},
 +		})
 +	})
 +	t.Run("Linux guest", func(t *testing.T) {
-+		l := configure(t, "vmType: vz\nos: Linux\n"+osOpts)
-+		assert.Assert(t, l.tccPermissions == nil)
++		perms, err := darwinTCCPermissions(load(t, "vmType: vz\nos: Linux\n"+osOpts))
++		assert.NilError(t, err)
++		assert.Assert(t, perms == nil)
 +	})
 +	t.Run("unknown preset", func(t *testing.T) {
-+		cfg, err := limayaml.Load(t.Context(), []byte("vmType: vz\nos: Darwin\nosOpts:\n  Darwin:\n    tccPermissions:\n    - preset: no-such-preset\n"), filepath.Join(t.TempDir(), "lima.yaml"))
-+		assert.NilError(t, err)
-+		_, err = New().Configure(t.Context(), &limatype.Instance{Config: cfg, Dir: t.TempDir()})
++		cfg := load(t, "vmType: vz\nos: Darwin\nosOpts:\n  Darwin:\n    tccPermissions:\n    - preset: no-such-preset\n")
++		_, err := darwinTCCPermissions(cfg)
 +		assert.ErrorContains(t, err, `unknown TCC preset "no-such-preset"`)
++		// Configure, which deletion uses, must still succeed.
++		_, err = New().Configure(t.Context(), &limatype.Instance{Config: cfg, Dir: t.TempDir()})
++		assert.NilError(t, err)
 +	})
 +}
 diff --git pkg/guestpatch/macos/macos_darwin.go pkg/guestpatch/macos/macos_darwin.go

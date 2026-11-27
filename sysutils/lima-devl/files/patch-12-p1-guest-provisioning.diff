@@ -156,7 +156,7 @@ index 98946b56..527ea111 100644
 +	return []vz.VirtualMachineStartOption{vz.WithGuestProvisioningOptions(opts)}, nil
 +}
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index 155a8fa9..21d2d5a7 100644
+index 4ed732f3..0cd57b17 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -15,6 +15,8 @@ import (
@@ -184,19 +184,19 @@ index 155a8fa9..21d2d5a7 100644
  )
  
  var knownYamlProperties = []string{
-@@ -424,7 +428,10 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
- 		patchedMarker := disk + ".patched" // empty file
- 		if !osutil.FileExists(patchedMarker) {
- 			logrus.Infof("Patching macOS disk %#q", disk)
--			if err := macos.Patch(ctx, disk, l.tccPermissions); err != nil {
+@@ -438,7 +442,10 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+ 			if err != nil {
+ 				return err
+ 			}
+-			if err := macos.Patch(ctx, disk, tccPerms); err != nil {
 +			opts := macos.PatchOptions{
 +				GuestProvisioning: osutil.FileExists(filepath.Join(l.Instance.Dir, filenames.VzGuestProvisioning)),
 +			}
-+			if err := macos.Patch(ctx, disk, l.tccPermissions, opts); err != nil {
++			if err := macos.Patch(ctx, disk, tccPerms, opts); err != nil {
  				return err
  			}
  			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
-@@ -441,6 +448,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+@@ -455,6 +462,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  // The function creates the following files:
  // - `image.ipsw`: hardlink to `image` (".ipsw" suffix is required by VZMacOSInstaller)
  // - `disk`: raw or ASIF disk (ASIF requires macOS 26+)
@@ -204,7 +204,7 @@ index 155a8fa9..21d2d5a7 100644
  //
  // After successful installation, `image.ipsw` and `image` are removed.
  func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
-@@ -493,6 +501,68 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
+@@ -507,6 +515,68 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
  		}
  	}
  
@@ -274,11 +274,11 @@ index 155a8fa9..21d2d5a7 100644
  }
  
 diff --git pkg/driver/vz/vz_driver_darwin_test.go pkg/driver/vz/vz_driver_darwin_test.go
-index 74f17873..d50549b3 100644
+index 4660534f..aadfd03a 100644
 --- pkg/driver/vz/vz_driver_darwin_test.go
 +++ pkg/driver/vz/vz_driver_darwin_test.go
-@@ -124,3 +124,31 @@ osOpts:
- 		assert.ErrorContains(t, err, `unknown TCC preset "no-such-preset"`)
+@@ -126,3 +126,31 @@ osOpts:
+ 		assert.NilError(t, err)
  	})
  }
 +
