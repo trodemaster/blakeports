@@ -79,7 +79,7 @@ and ppc, minimal fix, verify on all builders, write up, draft PR for review):
 **Behind upstream master** (2026-11-20 check; all carry blakeports
 changes, so syncing is a real update, not a copy):
 
-- [ ] **qemu** 11.1.1 → 11.1.3 (local build changes, revision 10)
+- [x] **qemu** 11.1.1 → 11.1.3, now upstream verbatim (the local TPM ppi patch is dropped: Lima 2.3.0 passes ppi=off itself)
 - [ ] **vault** 1.21.0 → 2.2.2
 - [ ] **libgcrypt** 1.12.3 → 1.12.4, **python314** 3.14.7 → 3.14.10:
   tied to the Leopard items above (re-prove on the upstream version)

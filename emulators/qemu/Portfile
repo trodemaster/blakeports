@@ -8,33 +8,27 @@ PortGroup               legacysupport   1.1
 legacysupport.newest_darwin_requires_legacy 16
 
 name                    qemu
-version                 11.1.1
-# Set well above 0 so this blakeports build outranks any point-release
-# revision bump upstream ships for 11.1.1 before we pick up a newer version.
-revision                10
+version                 11.1.3
+revision                1
 categories              emulators
 license                 GPL-2+
-maintainers             {@trodemaster icloud.com:manuals-unread2u} openmaintainer
+maintainers             {raimue @raimue} \
+                        {gmail.com:herby.gillot @herbygillot} \
+                        openmaintainer
 
 description             Emulator for various architectures
-
 long_description        QEMU is a generic and open source machine emulator. \
                         It can run OSes and programs made for one machine on a \
                         different machine. By using dynamic translation, it \
-                        achieves very good performance. \
-                        This blakeports build tracks upstream macports-ports \
-                        emulators/qemu exactly (same version, same build-compat \
-                        patches), with one additional local patch: \
-                        tpm-tis-device's "ppi" property now defaults to off. \
-                        See patch-tpm-tis-ppi-default-off.diff below for why.
+                        achieves very good performance.
 
 homepage                https://www.qemu.org
 master_sites            https://download.qemu.org/
 use_xz                  yes
 
-checksums               rmd160  c188ed69963b06f3b1129124348846d818ababe3 \
-                        sha256  079ffbff8a7111bbc89022107cbabf3bbfd614d5fc9d7cc675991196aca12482 \
-                        size    141888716
+checksums               rmd160  19d2bb2a91c536d6ce16e64799fabb7791f91d7d \
+                        sha256  5a8289c7940dc77d3873c81a6c29ba3afe1446fc9d36e77fa1658cdbecb84b22 \
+                        size    141819712
 
 set py_branch           3.14
 set py_version          [string replace ${py_branch} 1 1]
@@ -128,23 +122,14 @@ patchfiles-append       patch-qemu-net-vmnet-bridged.diff
 # could never succeed on such systems anyway.
 patchfiles-append       patch-qemu-hvf-macos15-sdk.diff
 
-# blakeports-local: tpm-tis-device (the sysbus TPM model used on the ARM
-# "virt" machine) registers a Physical Presence Interface MMIO region that
-# is not 16K-page-aligned. Apple's Hypervisor.framework requires 16K-aligned
-# regions for hv_vm_unmap and aborts with HV_BAD_ARGUMENT when it isn't, so
-# any aarch64 guest booted with -accel hvf and a tpm-tis-device (e.g. Lima's
-# "tpm: true") crashes on Apple Silicon. Upstream fixed this by gating the
-# PPI region behind a "ppi" device property, but only defaults it to off
-# via hw_compat_11_0[] for machine types <= virt-11.0 -- callers that
-# request the unversioned "virt" alias (as Lima does) still get ppi=on and
-# still crash. This patch flips the property's own default to off
-# unconditionally, so the crash is avoided without needing an explicit
-# -device ...,ppi=off argument or a pinned machine type. This does disable
-# the TPM's firmware-level Physical Presence UI (ownership/clear); measured
-# boot and normal TPM operation are unaffected. Pass ppi=on explicitly on
-# the -device line to restore it where PPI is actually needed.
-# See https://gitlab.com/qemu-project/qemu/-/issues/2895.
-patchfiles-append       patch-tpm-tis-ppi-default-off.diff
+# hv_vm_config_create() and the IPA size accessors require the macOS 13.0
+# SDK and runtime. On earlier systems, use the default configuration and its
+# fixed 36-bit IPA space, including when built against a newer SDK.
+patchfiles-append       patch-qemu-hvf-macos13-sdk.diff
+
+# The virt machine's default HVF in-kernel interrupt controller requires
+# macOS 15.0 and its SDK. Use the emulated controller when unavailable.
+patchfiles-append       patch-qemu-hvf-kernel-irqchip-default.diff
 
 # ERROR: Problem encountered: You either need GCC v7.4 or Clang v10.0 (or XCode Clang v15.0) to compile QEMU
 compiler.blacklist      {clang < 1500} {macports-clang-[3-9].*} {macports-gcc-[56]} {*gcc-[34].*}
@@ -238,6 +223,14 @@ if {${os.platform} eq "darwin" && ${os.major} < 16} {
 
 # libtool: unknown option character `-' in: --mode=compile
 configure.env-append   LIBTOOL=${prefix}/bin/glibtool
+
+# …/hw/display/apple-gfx.m:… error: 'PGTask_t' is unavailable: obsoleted in macOS 27.0 - No longer supported
+#
+# It’s almost certain that a future version of qemu will handle this more
+# gracefully on its own. Remove this when qemu has adapted.
+if {${os.platform} eq "darwin" && ${os.major} >= 27} {
+    configure.args-append --disable-pvg
+}
 
 set target_list {}
 pre-configure {
