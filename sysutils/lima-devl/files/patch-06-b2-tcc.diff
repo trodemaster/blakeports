@@ -1,29 +1,35 @@
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index dadb6005..7d68e898 100644
+index dadb6005..8644c6ce 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -97,6 +97,7 @@ type LimaVzDriver struct {
  	rosettaEnabled  bool
  	rosettaBinFmt   bool
  	diskImageFormat image.Type
-+	guestPatch      limatype.VZGuestPatch
++	tccPermissions  []limatype.TCCPermission
  
  	machine                    *virtualMachineWrapper
  	waitSSHLocalPortAccessible <-chan any
-@@ -161,6 +162,7 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) (*d
+@@ -161,6 +162,13 @@ func (l *LimaVzDriver) Configure(_ context.Context, inst *limatype.Instance) (*d
  	} else {
  		l.diskImageFormat = raw.Type
  	}
-+	l.guestPatch = vzOpts.GuestPatch
++	if l.Instance.Config.OS != nil && *l.Instance.Config.OS == limatype.DARWIN {
++		var darwinOpts limatype.DarwinOpts
++		if err := limayaml.Convert(l.Instance.Config.OsOpts[limatype.DARWIN], &darwinOpts, "osOpts.Darwin"); err != nil {
++			return nil, err
++		}
++		l.tccPermissions = darwinOpts.TCCPermissions
++	}
  
  	return &driver.ConfiguredDriver{
  		Driver: l,
-@@ -413,7 +415,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
+@@ -413,7 +421,7 @@ func (l *LimaVzDriver) CreateDisk(ctx context.Context) error {
  		patchedMarker := disk + ".patched" // empty file
  		if !osutil.FileExists(patchedMarker) {
  			logrus.Infof("Patching macOS disk %#q", disk)
 -			if err := macos.Patch(ctx, disk); err != nil {
-+			if err := macos.Patch(ctx, disk, l.guestPatch.TCCPermissions); err != nil {
++			if err := macos.Patch(ctx, disk, l.tccPermissions); err != nil {
  				return err
  			}
  			if err := os.WriteFile(patchedMarker, []byte{}, 0o644); err != nil {
@@ -462,21 +468,15 @@ index 00000000..c7f417a0
 +	return strings.Join(names, ", ")
 +}
 diff --git pkg/limatype/lima_yaml.go pkg/limatype/lima_yaml.go
-index 0e56b125..531040f4 100644
+index 0e56b125..7491f2e6 100644
 --- pkg/limatype/lima_yaml.go
 +++ pkg/limatype/lima_yaml.go
-@@ -128,8 +128,23 @@ type QEMUOpts struct {
- }
- 
- type VZOpts struct {
--	Rosetta         Rosetta     `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
--	DiskImageFormat *image.Type `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	Rosetta         Rosetta      `yaml:"rosetta,omitempty" json:"rosetta,omitempty"`
-+	DiskImageFormat *image.Type  `yaml:"diskImageFormat,omitempty" json:"diskImageFormat,omitempty" jsonschema:"nullable"`
-+	GuestPatch      VZGuestPatch `yaml:"guestPatch,omitempty" json:"guestPatch,omitempty"`
-+}
-+
-+type VZGuestPatch struct {
+@@ -371,6 +371,19 @@ type DarwinOpts struct {
+ 	// SuppressFirstLoginSetupPlist overrides the built-in com.apple.SetupAssistant.plist content
+ 	// used by SuppressFirstLoginSetup. Ignored unless SuppressFirstLoginSetup is true.
+ 	SuppressFirstLoginSetupPlist *string `yaml:"suppressFirstLoginSetupPlist,omitempty" json:"suppressFirstLoginSetupPlist,omitempty" jsonschema:"nullable"`
++	// TCCPermissions adds entries to the guest's system TCC database while the disk is
++	// patched, before the first boot. Applied once, when the disk is created.
 +	TCCPermissions []TCCPermission `yaml:"tccPermissions,omitempty" json:"tccPermissions,omitempty" jsonschema:"nullable"`
 +}
 +
@@ -490,9 +490,9 @@ index 0e56b125..531040f4 100644
 +	AuthValue  string `yaml:"authValue,omitempty" json:"authValue,omitempty"`   // "allow" (default) or "deny"
  }
  
- type Rosetta struct {
+ func NewOS(osname string) OS {
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 15e50e8a..a695a59c 100644
+index 15e50e8a..6b049427 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
 @@ -116,6 +116,69 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
@@ -506,9 +506,11 @@ index 15e50e8a..a695a59c 100644
 +default a fresh VM shows consent dialogs on first use, which blocks
 +unattended or automated setups.
 +
-+`vmOpts.vz.guestPatch.tccPermissions` lets Lima write rows into the guest's
++`osOpts.Darwin.tccPermissions` lets Lima write rows into the guest's
 +TCC database during initial disk setup — before the VM boots for the first
-+time — so permissions are already in place when the guest starts.
++time — so permissions are already in place when the guest starts. The entries
++are written once, when the disk is created; changing them later has no effect
++on an existing instance.
 +
 +### Built-in presets
 +
@@ -523,12 +525,11 @@ index 15e50e8a..a695a59c 100644
 +| `terminal-accessibility` | Grants Accessibility + PostEvent to `com.apple.Terminal` |
 +
 +```yaml
-+vmOpts:
-+  vz:
-+    guestPatch:
-+      tccPermissions:
-+        - preset: terminal-accessibility
-+        - preset: sshd-full-disk-access
++osOpts:
++  Darwin:
++    tccPermissions:
++      - preset: terminal-accessibility
++      - preset: sshd-full-disk-access
 +```
 +
 +### Custom entries
@@ -541,14 +542,13 @@ index 15e50e8a..a695a59c 100644
 +Example — the equivalent of `sshd-full-disk-access` written as a custom entry:
 +
 +```yaml
-+vmOpts:
-+  vz:
-+    guestPatch:
-+      tccPermissions:
-+        - service: kTCCServiceSystemPolicyAllFiles
-+          client: /usr/libexec/sshd-keygen-wrapper
-+          clientType: path
-+          authValue: allow
++osOpts:
++  Darwin:
++    tccPermissions:
++      - service: kTCCServiceSystemPolicyAllFiles
++        client: /usr/libexec/sshd-keygen-wrapper
++        clientType: path
++        authValue: allow
 +```
 +
 +Use the `sshd-full-disk-access` preset instead of the above when possible,

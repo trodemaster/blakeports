@@ -6,10 +6,10 @@ P1 r11 (2026-11-17). P1 is automatic and has no config. The branch is lima
 
 | Commit | Patch | What |
 |---|---|---|
-| `cad1848f` | Z1, patch-11 | move to Code-Hex/vz v4 main (untagged) |
-| `637f23d9` `4dfa543a` `17b5d1fe` | B2, patch-06 | TCC presets (`vmOpts.vz.guestPatch.tccPermissions`) |
-| `a312a345` | A1, patch-08 | `osOpts.Darwin.autoLogin` |
-| `07b80e64` | P1, patch-12 | guest provisioning |
+| `ac0824b6` | Z1, patch-11 | move to Code-Hex/vz v4 main (untagged) |
+| `8ee94248` `c046f703` `05ede3fa` | B2, patch-06 | TCC presets (`osOpts.Darwin.tccPermissions`) |
+| `74d19d74` | A1, patch-08 | `osOpts.Darwin.autoLogin` |
+| `721c39e7` | P1, patch-12 | guest provisioning |
 
 The test history is in [TODO.md](TODO.md) (the P1 notes from 2026-11-07, -13 and -17).
 The Apple-side mechanism is reverse engineered in

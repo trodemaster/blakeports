@@ -8,7 +8,7 @@ Patch revs: see `w1_rev` / `b2_rev` / `p1_rev` in the Portfile (B4 is parked, no
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
 | V1 (`patch-04`) | ~~Guest macOS version detection~~ — **merged upstream as PR #5528 (2026-09-23)**, patch removed from port 2026-10-04 | done |
-| B2 (`patch-06`) | TCC pre-seeding (`guestPatch.tccPermissions`) | ready for submission (B1 dependency now merged) |
+| B2 (`patch-06`) | TCC pre-seeding (`osOpts.Darwin.tccPermissions`, moved from `vmOpts.vz.guestPatch` in r14); branch `upstream-pr/b2-tcc` | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | ~~macOS 27 fakecloudinit workarounds~~ — **removed from port 2026-10-05** (beta-era; branch `macports/m1-fakecloudinit-macos27` kept in case any SA plist keys are still needed on 27 GA) | dropped |
 | A1 (`patch-08`) | `osOpts.Darwin.autoLogin` (opt-in bool): fakecloudinit writes `/etc/kcpassword` + loginwindow `autoLoginUser` for the user it creates (classic and P1 paths), from the second boot; signalled by an empty `auto-login` cidata file. Not in upstream (no auto-login code, no issue); independent of vz v4, so it can go upstream before P1. Branch `feat/darwin-auto-login` (one commit on master) | **r2 2026-11-17**: E2E on a stock config (no lima_mac) auto-logs in from the 2nd boot; a password change breaks it (confirmed), docs say so |
@@ -109,6 +109,22 @@ provisioning API but no tagged v4 release, and lima master is still on v3.8.0, s
 `hack/tools/go.mod` instead of a hand-bumped pin: v2.13.2 failed on the macOS_27 runner
 ("export data version 5 is greater than maximum supported version 4", newer go-1.27).
 Tested on CI macOS_27 first.
+
+**2026-11-26 B2 r14: config moved to `osOpts.Darwin.tccPermissions`** (was
+`vmOpts.vz.guestPatch.tccPermissions`), ahead of the upstream PR: AkihiroSuda's rule from
+#5186 is that guest-OS settings go under `osOpts.<os>`, not `vmOpts.<driver>`.
+`TCCPermissions` is a field of `DarwinOpts` next to `AutoLogin`; `VZGuestPatch` is gone. The
+vz driver reads `osOpts.Darwin` in `Configure` (macOS guests only, conversion errors fail
+`Configure`) into `l.tccPermissions`. The docs examples moved too. The upstream PR branch is
+now `upstream-pr/b2-tcc` (origin/master + B2's 3 commits; replaces `macports/b2-on-b1`).
+`macports/p1-port` was rebuilt as Z1 → B2 → A1 → P1 (old one: `backup/p1-port-20261126`);
+the only differences are the move and P1's `macos.Patch(ctx, disk, l.tccPermissions, opts)`.
+A1's patch changed only in context lines (`a1_rev` stays 2); `b2_rev` 13→14, `p1_rev` 11→12.
+Build, vet and the vz, limayaml, cidata and fakecloudinit tests pass on the fully patched
+tree, except W1's ISO fixture test (binary fixtures can't travel in a `.diff`, as before).
+lima_mac's macos-14/15/26/27 yamls moved their `tccPermissions` into `osOpts.Darwin` at the
+same time; existing VMs are unaffected (TCC rows are only written when a disk is patched).
+Not yet: CI build, E2E on a fresh VM.
 
 **2026-11-26 sync to master `9a3022aa` (v2.3.0-rc.0+):** 65 upstream commits since
 `fd6cf105`, mostly fixes and dependabot. Nothing touches the plans: A1 still not merged,
