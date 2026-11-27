@@ -557,14 +557,16 @@ index 0e56b125..72cdbdda 100644
  
  func NewOS(osname string) OS {
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index 15e50e8a..31f60706 100644
+index 15e50e8a..2de58ad4 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -116,6 +116,36 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
+@@ -116,6 +116,38 @@ When `suppressFirstLoginSetupPlist` is supplied, it is used verbatim — no
  template above, then supply the actual build and version strings for your
  target OS release if needed.
  
-+## Pre-populating TCC permissions
++### Pre-populating TCC permissions
++| ⚡ Requirement | Lima >= 2.4 |
++|-------------------|-----------------------------|
 +
 +macOS uses the Transparency, Consent, and Control (TCC) framework to gate
 +access to sensitive services such as Full Disk Access. Some of these can

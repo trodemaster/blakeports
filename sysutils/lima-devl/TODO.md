@@ -8,11 +8,11 @@ Patch revs: see `w1_rev` / `b2_rev` / `p1_rev` in the Portfile (B4 is parked, no
 | Patch | Feature | Upstream status |
 |-------|---------|-----------------|
 | V1 (`patch-04`) | ~~Guest macOS version detection~~ — **merged upstream as PR #5528 (2026-09-23)**, patch removed from port 2026-10-04 | done |
-| B2 (`patch-06`) | TCC pre-seeding (`osOpts.Darwin.tccPermissions`, moved from `vmOpts.vz.guestPatch` in r14; sshd csreq fixed in r15, Terminal preset dropped and squashed in r16, presets only in r17); branch `upstream-pr/b2-tcc` | ready for submission (B1 dependency now merged) |
+| B2 (`patch-06`) | TCC pre-seeding (`osOpts.Darwin.tccPermissions`, moved from `vmOpts.vz.guestPatch` in r14; sshd csreq fixed in r15, Terminal preset dropped and squashed in r16, presets only in r17, docs subsection in r18); branch `upstream-pr/b2-tcc` | ready for submission (B1 dependency now merged) |
 | B4 (`patch-10`) | `osOpts.darwin.clipboard` (VZ SPICE agent port, host side only) | **parked — likely unfixable from a CLI binary** (2026-07-11) |
 | M1 (`patch-09`) | ~~macOS 27 fakecloudinit workarounds~~ — **removed from port 2026-10-05** (beta-era; branch `macports/m1-fakecloudinit-macos27` kept in case any SA plist keys are still needed on 27 GA) | dropped |
 | A1 (`patch-08`) | `osOpts.Darwin.autoLogin` (opt-in bool): fakecloudinit writes `/etc/kcpassword` + loginwindow `autoLoginUser` for the user it creates (classic and P1 paths), from the second boot; signalled by an empty `auto-login` cidata file. Not in upstream (no auto-login code, no issue); independent of vz v4, so it can go upstream before P1. Branch `feat/darwin-auto-login` (one commit on master) | **r2 2026-11-17**: E2E on a stock config (no lima_mac) auto-logs in from the 2nd boot; a password change breaks it (confirmed), docs say so |
-| P1 (`patch-12`) | macOS 27 native guest provisioning, **automatic since r10** (no config): when host and guest are both 27+, Setup Assistant creates the user from `VZMacGuestProvisioningOptions` with a host-generated random password; the guest agent moves the home to `user.home` and sets the user up as for `sysadminctl`. Upstream issue #5516 (refactoring). PR branch `upstream-pr/p1-guest-provisioning` = port branch `macports/p1-port` (Z1 -> B2 -> A1 -> P1; P1 needs B2 for the guest agent's Full Disk Access; patch-12 = its P1 commit); r9 and earlier on `macports/p1-on-z1` | **r11 2026-11-17**: E2E on a stock config (host home mounted, no TCC presets) passes; still needs a tagged vz v4 (Z1); flow in [P1-FLOW.md](P1-FLOW.md) (r11) |
+| P1 (`patch-12`) | macOS 27 native guest provisioning, **automatic since r10** (no config): when host and guest are both 27+, Setup Assistant creates the user from `VZMacGuestProvisioningOptions` with a host-generated random password; the guest agent moves the home to `user.home` and sets the user up as for `sysadminctl`. Upstream issue #5516 (refactoring). PR branch `upstream-pr/p1-guest-provisioning` = port branch `macports/p1-port` (Z1 -> B2 -> A1 -> P1; P1 needs B2 for the guest agent's Full Disk Access; patch-12 = its P1 commit); r9 and earlier on `macports/p1-on-z1` | **r11 2026-11-17**: E2E on a stock config (host home mounted, no TCC presets) passes. **r14 2026-11-26**: password kept in `vz-guest-password` so an interrupted first boot can be finished (not guest-tested yet). Still needs a tagged vz v4 (Z1); flow in [P1-FLOW.md](P1-FLOW.md) (r14) |
 | Z1 (`patch-11`) | Move to `github.com/Code-Hex/vz/v4` main (`64cc34b`, pseudo-version; r2 2026-11-17 on `fd6cf105`), which has the macOS 27 guest provisioning API (`NewMacGuestProvisioningOptions` / `WithGuestProvisioningOptions`); adapts to v4's channel-taking `StateChangedNotify`. Branch `macports/vz4-upstream` | local only — drop once lima moves to a tagged vz v4 |
 | W1 (`patch-03`) | Windows WIM/ESD edition detection (`installationType`); its `Copy-Provision` switch fix was dropped 2026-11-07 (upstream `7cc8a755`) | carried in port; not yet submitted upstream |
 
@@ -163,6 +163,33 @@ silently ignored. `TCCPermission` has only `preset`; `macos.ValidateTCCPermissio
 table, no custom section. B2 is now one commit `5f09d6c1` (414 lines; old `backup/b2-tcc-20261126`),
 `macports/p1-port` rebuilt (`48b47c14`; old `backup/p1-port-20261126c`); patch-08/12 context only;
 `b2_rev` 16→17. lima_mac yamls validate with an r17 limactl.
+
+**2026-11-26 B2 r18 / P1 r14: P1 refinement.** Blake chose: keep
+`lima-guestagent-full-disk-access` a public B2 preset; close P1's retry gap by keeping the
+password.
+- B2 (docs only): the TCC section is now `### Pre-populating TCC permissions` under Advanced
+  topics, with a `Lima >= 2.4` requirement table, so A1's `### Automatic login` no longer
+  lands under it. `upstream-pr/b2-tcc` = `53a5a1c2` (old `backup/b2-tcc-20261126b`).
+- P1: the initial password moved to its own file, `vz-guest-password`, kept for the life of
+  the instance and put on cidata every boot. `vz-guest-provisioning` is now an empty marker,
+  still removed after the first start (the only one that passes the provisioning options).
+  fakecloudinit skips adoption once `~/.ssh/authorized_keys` exists (not "home exists":
+  Setup Assistant creates the home itself, so with `user.home` = `/Users/<user>` that would
+  skip too early), so a first boot cut off after Setup Assistant made the account is
+  finished on the next boot. If it is cut off before Setup Assistant ran, the docs say to
+  recreate the instance. Not tested on a guest yet.
+- P1 docs: the TCC link pointed at `#built-in-presets`, which r17 removed; now
+  `#pre-populating-tcc-permissions`. Commit message: the users-before-mounts reorder
+  applies to all macOS guests, and says so.
+- A1 and P1 had no `Signed-off-by` (Lima requires DCO); added.
+- `macports/p1-port` = `upstream-pr/p1-guest-provisioning` = `9332409e`: Z1 `ac0824b6` →
+  B2 `b6294479` → A1 `00558c36` → P1 (old `backup/p1-port-20261126d`). patch-08 context
+  only (`a1_rev` stays 2); `b2_rev` 17→18, `p1_rev` 13→14. All patches apply to `9a3022aa`
+  without fuzz; build, vet (arm64, amd64 cgo), the vz, cidata, fakecloudinit and guestpatch
+  tests, and golangci-lint v2.15.0 (0 issues) pass.
+- Checked on the runners: the 26 guest's `sysadminctl` account and the 27 guest's
+  Setup Assistant account both have SecureToken ENABLED, so SecureToken is not a reason
+  for P1 (P1-FLOW.md said it was).
 
 **2026-11-26 sync to master `9a3022aa` (v2.3.0-rc.0+):** 65 upstream commits since
 `fd6cf105`, mostly fixes and dependabot. Nothing touches the plans: A1 still not merged,

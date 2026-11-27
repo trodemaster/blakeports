@@ -1,8 +1,8 @@
 diff --git pkg/cidata/cidata.go pkg/cidata/cidata.go
-index 08923ba4..6642383b 100644
+index 08923ba4..452cd18f 100644
 --- pkg/cidata/cidata.go
 +++ pkg/cidata/cidata.go
-@@ -132,12 +132,20 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+@@ -132,12 +132,21 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
  	}
  	archive := "nerdctl-full.tgz"
  	var darwinOpts limatype.DarwinOpts
@@ -13,10 +13,11 @@ index 08923ba4..6642383b 100644
  			return nil, err
  		}
  		guestOSVersion, guestOSBuildVersion = store.ReadGuestOSVersion(instDir)
-+		// The vz driver leaves this marker, holding the initial password, until the
-+		// first boot, on which Setup Assistant creates the user from
-+		// VZMacGuestProvisioningOptions (macOS 27 or later).
-+		if b, err := os.ReadFile(filepath.Join(instDir, filenames.VzGuestProvisioning)); err == nil {
++		// The vz driver writes this file when Setup Assistant creates the user from
++		// VZMacGuestProvisioningOptions on the first boot (macOS 27 or later). It is
++		// kept, so that a later boot can still adopt the account if the first one
++		// was interrupted.
++		if b, err := os.ReadFile(filepath.Join(instDir, filenames.VzGuestPassword)); err == nil {
 +			guestProvisioningPassword = string(b)
 +		} else if !errors.Is(err, os.ErrNotExist) {
 +			return nil, err
@@ -24,7 +25,7 @@ index 08923ba4..6642383b 100644
  	}
  	var suppressFirstLoginSetupPlist string
  	if darwinOpts.SuppressFirstLoginSetupPlist != nil {
-@@ -179,6 +187,7 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
+@@ -179,6 +188,7 @@ func templateArgs(ctx context.Context, bootScripts bool, instDir, name string, i
  		AutoLogin:                    darwinOpts.AutoLogin != nil && *darwinOpts.AutoLogin,
  		GuestOSVersion:               guestOSVersion,
  		GuestOSBuildVersion:          guestOSBuildVersion,
@@ -32,14 +33,14 @@ index 08923ba4..6642383b 100644
  	}
  
  	firstUsernetIndex := limayaml.FirstUsernetIndex(instConfig)
-@@ -470,6 +479,15 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
+@@ -470,6 +480,15 @@ func GenerateISO9660(ctx context.Context, drv driver.Driver, instDir, name strin
  			Reader: strings.NewReader(""),
  		})
  	}
 +	if args.GuestProvisioningPassword != "" {
 +		// Presence of this file (not any cloud-config key) tells the guest agent that
-+		// Setup Assistant creates the user from VZMacGuestProvisioningOptions on this
-+		// boot, so it must adopt that account instead of creating one.
++		// Setup Assistant creates the user from VZMacGuestProvisioningOptions, so it
++		// must adopt that account instead of creating one.
 +		layout = append(layout, iso9660util.Entry{
 +			Path:   "guest-provisioning-password",
 +			Reader: strings.NewReader(args.GuestProvisioningPassword),
@@ -49,14 +50,14 @@ index 08923ba4..6642383b 100644
  	driverScripts, err := drv.BootScripts(ctx)
  	if err != nil {
 diff --git pkg/cidata/template.go pkg/cidata/template.go
-index 623d2acc..19541e78 100644
+index 623d2acc..21468fb6 100644
 --- pkg/cidata/template.go
 +++ pkg/cidata/template.go
 @@ -147,6 +147,7 @@ type TemplateArgs struct {
  	AutoLogin                       bool   // macOS guests only
  	GuestOSVersion                  string // macOS guests only: restore-image OS version, e.g. "27.0.0"; empty otherwise
  	GuestOSBuildVersion             string // macOS guests only: restore-image build, e.g. "26A428"; empty otherwise
-+	GuestProvisioningPassword       string // macOS guests only: initial password while Setup Assistant provisions the user on first boot
++	GuestProvisioningPassword       string // macOS guests only: initial password of the user Setup Assistant creates from guest provisioning
  }
  
  func (t *TemplateArgs) generateWindowsInitialPassword() error {
@@ -110,23 +111,26 @@ index b11a4ae5..233667b3 100644
 +	return nil, nil
 +}
 diff --git pkg/driver/vz/vm_darwin_arm64.go pkg/driver/vz/vm_darwin_arm64.go
-index 98946b56..588db39e 100644
+index 98946b56..527ea111 100644
 --- pkg/driver/vz/vm_darwin_arm64.go
 +++ pkg/driver/vz/vm_darwin_arm64.go
-@@ -186,3 +186,37 @@ func installMacOS(ctx context.Context, vm *vz.VirtualMachine, ipsw string) error
+@@ -186,3 +186,40 @@ func installMacOS(ctx context.Context, vm *vz.VirtualMachine, ipsw string) error
  	}
  	return nil
  }
 +
 +// guestProvisioningStartOptions returns the start options that make Setup
 +// Assistant create the Lima user on this boot, if prepareGuestProvisioning marked
-+// the instance for guest provisioning. The marker holds the initial password.
++// the instance for guest provisioning and it has not been started yet.
 +func guestProvisioningStartOptions(inst *limatype.Instance) ([]vz.VirtualMachineStartOption, error) {
-+	pw, err := os.ReadFile(filepath.Join(inst.Dir, filenames.VzGuestProvisioning))
-+	if err != nil {
++	if _, err := os.Stat(filepath.Join(inst.Dir, filenames.VzGuestProvisioning)); err != nil {
 +		if errors.Is(err, fs.ErrNotExist) {
 +			return nil, nil
 +		}
++		return nil, err
++	}
++	pw, err := os.ReadFile(filepath.Join(inst.Dir, filenames.VzGuestPassword))
++	if err != nil {
 +		return nil, err
 +	}
 +	username := *inst.Config.User.Name
@@ -152,7 +156,7 @@ index 98946b56..588db39e 100644
 +	return []vz.VirtualMachineStartOption{vz.WithGuestProvisioningOptions(opts)}, nil
 +}
 diff --git pkg/driver/vz/vz_driver_darwin.go pkg/driver/vz/vz_driver_darwin.go
-index 155a8fa9..b1671d2e 100644
+index 155a8fa9..21d2d5a7 100644
 --- pkg/driver/vz/vz_driver_darwin.go
 +++ pkg/driver/vz/vz_driver_darwin.go
 @@ -15,6 +15,8 @@ import (
@@ -196,11 +200,11 @@ index 155a8fa9..b1671d2e 100644
  // The function creates the following files:
  // - `image.ipsw`: hardlink to `image` (".ipsw" suffix is required by VZMacOSInstaller)
  // - `disk`: raw or ASIF disk (ASIF requires macOS 26+)
-+// - `vz-guest-provisioning`: only for a macOS 27+ guest on a macOS 27+ host, see prepareGuestProvisioning
++// - `vz-guest-provisioning` and `vz-guest-password`: only for a macOS 27+ guest on a macOS 27+ host, see prepareGuestProvisioning
  //
  // After successful installation, `image.ipsw` and `image` are removed.
  func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
-@@ -493,6 +501,63 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
+@@ -493,6 +501,68 @@ func (l *LimaVzDriver) createDiskMacOSGuest(ctx context.Context) error {
  		}
  	}
  
@@ -211,8 +215,10 @@ index 155a8fa9..b1671d2e 100644
 +// provisioning on its first boot when both host and guest are macOS 27 or later.
 +// Setup Assistant then creates the user account from VZMacGuestProvisioningOptions
 +// instead of the guest agent creating it with sysadminctl.
-+// The marker file holds the account's initial password; it is removed after the
-+// first start.
++// The empty vz-guest-provisioning marker is removed after the first start, which
++// is the only one that passes the provisioning options. vz-guest-password holds
++// the account's initial password and is kept, so that a later boot can still
++// adopt the account if the first one was interrupted.
 +func (l *LimaVzDriver) prepareGuestProvisioning() error {
 +	hostVersion, err := osutil.ProductVersion()
 +	if err != nil {
@@ -236,7 +242,10 @@ index 155a8fa9..b1671d2e 100644
 +	if err != nil {
 +		return fmt.Errorf("failed to generate password: %w", err)
 +	}
-+	return os.WriteFile(filepath.Join(l.Instance.Dir, filenames.VzGuestProvisioning), []byte(pw), 0o600)
++	if err := os.WriteFile(filepath.Join(l.Instance.Dir, filenames.VzGuestPassword), []byte(pw), 0o600); err != nil {
++		return err
++	}
++	return os.WriteFile(filepath.Join(l.Instance.Dir, filenames.VzGuestProvisioning), nil, 0o644)
 +}
 +
 +var errGuestProvisioningNeedsNewerHost = errors.New("the host must be macOS 27 or later to provision a macOS 27 or later guest")
@@ -301,7 +310,7 @@ index 74f17873..d50549b3 100644
 +	assert.Assert(t, errors.Is(guestProvisioningSkipReason(26, "27.0.0"), errGuestProvisioningNeedsNewerHost))
 +}
 diff --git pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
-index 61fef209..d2c407dd 100644
+index 61fef209..1aaf6149 100644
 --- pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 +++ pkg/guestagent/fakecloudinit/fakecloudinit_darwin.go
 @@ -17,6 +17,7 @@ import (
@@ -343,7 +352,7 @@ index 61fef209..d2c407dd 100644
  	for _, entry := range userData.WriteFiles {
  		if err := writeFiles(ctx, entry); err != nil {
  			errs = append(errs, fmt.Errorf("failed to write file for path %#q: %w", entry.Path, err))
-@@ -337,6 +342,13 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -337,6 +342,21 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  	if homedir == "" {
  		return fmt.Errorf("homedir is required for user %#q", u.Name)
  	}
@@ -352,12 +361,20 @@ index 61fef209..d2c407dd 100644
 +	// Presence of guest-provisioning-password on the cidata volume is what signals
 +	// this; see GenerateISO9660.
 +	if pw, err := os.ReadFile(filepath.Join(mnt, "guest-provisioning-password")); err == nil {
++		// The file stays on cidata on later boots. The account is set up once
++		// Lima's authorized_keys is in place (the home may already exist before
++		// that: Setup Assistant creates it). Until then, for example when the first
++		// boot was interrupted after Setup Assistant created the account, adopt it.
++		if osutil.FileExists(filepath.Join(homedir, ".ssh", "authorized_keys")) {
++			logrus.Debugf("user %#q is already set up, skipping", u.Name)
++			return nil
++		}
 +		return adoptProvisionedUser(ctx, u, mnt, string(pw))
 +	}
  	if osutil.FileExists(homedir) {
  		logrus.Debugf("homedir %#q already exists, skipping user creation for user %#q", homedir, u.Name)
  		return nil
-@@ -411,23 +423,216 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -411,23 +431,216 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  		return fmt.Errorf("failed to execute command %v: %w (output=%#q)", cmd.Args, err, output)
  	}
  
@@ -579,7 +596,7 @@ index 61fef209..d2c407dd 100644
  			return fmt.Errorf("failed to chown %#q for user %#q: %w", f, u.Name, err)
  		}
  	}
-@@ -436,17 +641,22 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
+@@ -436,17 +649,22 @@ func createUser(ctx context.Context, u *cloudinittypes.User, mnt string) error {
  			return fmt.Errorf("failed to write sudoers file for user %#q: %w", u.Name, err)
  		}
  	}
@@ -767,34 +784,36 @@ index 4c596734..98cdafb7 100644
  			return nil, fmt.Errorf("failed to touch %#q: %w", file, err)
  		}
 diff --git pkg/limatype/filenames/filenames.go pkg/limatype/filenames/filenames.go
-index 3c644745..325ba981 100644
+index 3c644745..138646ae 100644
 --- pkg/limatype/filenames/filenames.go
 +++ pkg/limatype/filenames/filenames.go
-@@ -74,6 +74,7 @@ const (
+@@ -74,6 +74,8 @@ const (
  	VzGuestOSVersion        = "vz-guest-os-version"       // macOS guests only; restore-image OS version, e.g. "27.0.0"
  	VzGuestOSBuildVersion   = "vz-guest-os-build-version" // macOS guests only; restore-image build, e.g. "26A428"
  	VzAux                   = "vz-aux"                    // macOS guests only
-+	VzGuestProvisioning     = "vz-guest-provisioning"     // macOS 27+ guests only; initial password, present until the first boot applies guest provisioning
++	VzGuestProvisioning     = "vz-guest-provisioning"     // macOS 27+ guests only; empty, present until the first start passes the guest provisioning options
++	VzGuestPassword         = "vz-guest-password"         // macOS 27+ guests only; initial password of the user Setup Assistant creates
  	VzEfi                   = "vz-efi"                    // efi variable store
  	QemuEfiCodeFD           = "qemu-efi-code.fd"          // efi code; not always created
  	AnsibleInventoryYAML    = "ansible-inventory.yaml"
 diff --git website/content/en/docs/dev/internals.md website/content/en/docs/dev/internals.md
-index e697bed9..990243bf 100644
+index e697bed9..c641d6ee 100644
 --- website/content/en/docs/dev/internals.md
 +++ website/content/en/docs/dev/internals.md
-@@ -76,6 +76,7 @@ VZ:
+@@ -76,6 +76,8 @@ VZ:
  - `vz-guest-os-version`: macOS version of the restore image a Mac VM was created from, e.g. `27.0.0` (written once, at create time)
  - `vz-guest-os-build-version`: build number of that restore image, e.g. `26A428`
  - `vz-aux`: Auxiliary storage for a Mac VM
-+- `vz-guest-provisioning`: initial password of a macOS 27+ guest's user, present from create time until the first start applies guest provisioning
++- `vz-guest-provisioning`: empty marker of a macOS 27+ guest, present from create time until the first start passes the guest provisioning options
++- `vz-guest-password`: initial password of the user Setup Assistant creates in a macOS 27+ guest
  - `vz-efi`: EFIVariable store file for a VM
  
  Serial:
 diff --git website/content/en/docs/usage/guests/macos.md website/content/en/docs/usage/guests/macos.md
-index ed487d8e..30e293e5 100644
+index 6f9c8864..e7f28b63 100644
 --- website/content/en/docs/usage/guests/macos.md
 +++ website/content/en/docs/usage/guests/macos.md
-@@ -169,6 +169,30 @@ login is not available while FileVault is on.
+@@ -171,6 +171,32 @@ login is not available while FileVault is on.
  
  **Default:** `false`
  
@@ -815,12 +834,14 @@ index ed487d8e..30e293e5 100644
 +default, which cannot clash with the host home directory mounted in the guest)
 +before anyone logs in. macOS only lets a process with Full Disk Access move a
 +home directory, so Lima adds the
-+[`lima-guestagent-full-disk-access`](#built-in-presets) TCC permission for these
++[`lima-guestagent-full-disk-access`](#pre-populating-tcc-permissions) TCC permission for these
 +guests. [`osOpts.Darwin.autoLogin`](#automatic-login) is turned on after the move,
 +as for older guests.
 +
 +macOS only applies guest provisioning on the first boot after installation, so it
-+has no effect on existing instances.
++has no effect on existing instances. If that boot is interrupted after Setup
++Assistant has created the account, the next boot moves the home and finishes the
++setup. If it is interrupted before, delete the instance and create it again.
 +
  ## Caveats
  - No support for turning off the video display.

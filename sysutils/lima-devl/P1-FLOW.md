@@ -1,15 +1,15 @@
 # P1 flow: macOS 27 guest provisioning with a moved home
 
 How Lima creates the user of a macOS 27+ guest with Apple's guest provisioning, as of
-P1 r11 (2026-11-17). P1 is automatic and has no config. The branch is lima
+P1 r14 (2026-11-26). P1 is automatic and has no config. The branch is lima
 `macports/p1-port`, which is also the upstream PR branch `upstream-pr/p1-guest-provisioning`:
 
 | Commit | Patch | What |
 |---|---|---|
 | `ac0824b6` | Z1, patch-11 | move to Code-Hex/vz v4 main (untagged) |
-| `8ee94248` `c046f703` `05ede3fa` | B2, patch-06 | TCC presets (`osOpts.Darwin.tccPermissions`) |
-| `74d19d74` | A1, patch-08 | `osOpts.Darwin.autoLogin` |
-| `721c39e7` | P1, patch-12 | guest provisioning |
+| `b6294479` | B2, patch-06 | TCC presets (`osOpts.Darwin.tccPermissions`) |
+| `00558c36` | A1, patch-08 | `osOpts.Darwin.autoLogin` |
+| `9332409e` | P1, patch-12 | guest provisioning |
 
 The test history is in [TODO.md](TODO.md) (the P1 notes from 2026-11-07, -13 and -17).
 The Apple-side mechanism is reverse engineered in
@@ -19,8 +19,9 @@ The Apple-side mechanism is reverse engineered in
 
 On macOS 27, `VZMacGuestProvisioningOptions` (username, full name, password, auto-login,
 Remote Login) is handed to the guest on its first boot. The faceless Setup Assistant
-creates the account from it, which gives a proper account: SecureToken, FileVault user,
-`.AppleSetupDone`. Issue #5516 asks Lima to use this for 27+ guests instead of skipping
+creates the account from it and writes `.AppleSetupDone`. The account is no better than
+a `sysadminctl` one: on 2026-11-26 the 26 runner's `sysadminctl` account and the 27
+runner's Setup Assistant account both had SecureToken ENABLED. Issue #5516 asks Lima to use this for 27+ guests instead of skipping
 Setup Assistant and running `sysadminctl`. But Apple always puts the home at
 `/Users/<username>`, and the API has no home option. Lima's macOS default home is
 `/Users/<user>.guest`, because `/Users/<user>` is where the host's home is mounted
@@ -59,8 +60,10 @@ guest hangs. The serial log is rewritten on every boot, so read it before restar
    Only the last case logs a warning; the others log at debug, so older guests are
    quiet. With a reason, the instance takes the classic `sysadminctl` path. Otherwise it
    generates a random 16-character password (same generator as the classic path and
-   Windows) and writes it to the `0600` marker file `vz-guest-provisioning` in the
-   instance directory. **Every later step keys off this file.**
+   Windows) to `vz-guest-password` (`0600`) and writes the empty marker
+   `vz-guest-provisioning`, both in the instance directory. The marker means "the next
+   start passes the provisioning options"; the password file means "Setup Assistant
+   creates this instance's user" and is kept for the life of the instance.
 3. **Patch the disk** (`CreateDisk` → `macos.Patch`). With
    `PatchOptions{GuestProvisioning: true}` it installs the `lima-macos-init`
    LaunchDaemon as usual, but:
@@ -69,9 +72,10 @@ guest hangs. The serial log is rewritten on every boot, so read it before restar
    - it adds B2's `lima-guestagent-full-disk-access` TCC entry. Without Full Disk Access,
      macOS refuses both the rename of the home and `dscl -create … NFSHomeDirectory`
      (`ODErrorRecordPermissionError`, even with `-u`/`-P`).
-4. **Build cidata** (hostagent, before the VM starts). While the marker exists,
-   `GenerateISO9660` adds `guest-provisioning-password`, containing the password. Its
-   presence tells fakecloudinit that Setup Assistant creates the user on this boot. It
+4. **Build cidata** (hostagent, before every start). While `vz-guest-password` exists
+   (always, for these instances), `GenerateISO9660` adds `guest-provisioning-password`,
+   containing the password. Its presence tells fakecloudinit that Setup Assistant
+   creates the user, so it adopts the account instead of running `sysadminctl`. It
    is a separate file so `user-data` stays strictly cloud-config. If
    `osOpts.Darwin.autoLogin` is set, A1's empty `auto-login` file is there too.
 5. **Start the VM** (`startVM`). `guestProvisioningStartOptions` builds
@@ -83,7 +87,7 @@ guest hangs. The serial log is rewritten on every boot, so read it before restar
 
    The options are passed as `machine.Start(vz.WithGuestProvisioningOptions(opts))`.
    Once `Start` returns, the marker is deleted, because macOS only evaluates the options
-   on the first boot after installation.
+   on the first boot after installation. The password file stays.
 
 ## Guest side: first boot
 
@@ -91,8 +95,8 @@ Two things start in parallel on the first boot: Setup Assistant at the login win
 Lima's LaunchDaemon.
 
 **Setup Assistant (Apple, faceless).** It reads the provisioning options. It creates the
-admin account `<user.name>` (uid 501, full name from the options), its home
-`/Users/<user.name>` and SecureToken (which makes it a FileVault-enabled user). It
+admin account `<user.name>` (uid 501, full name from the options) and its home
+`/Users/<user.name>`, with a SecureToken (as `sysadminctl` gives the first account too). It
 writes `/var/db/.AppleSetupDone`, then stops at the login window. It leaves a background
 launchd session `user/501` running (`cfprefsd`, `secd`, `lsd`, `trustd`, `distnoted`,
 `pkd`, ...), whose processes hold the home open.
@@ -103,8 +107,11 @@ before mounts because the default host-home mount is a symlink at `/Users/<user>
 came first, it would take that path a few seconds before Setup Assistant made the home
 there. That happened in the r11 test, and the move then renamed the symlink.
 
-For the Lima user, `createUser` sees `guest-provisioning-password` on cidata and calls
-`adoptProvisionedUser`:
+For the Lima user, `createUser` sees `guest-provisioning-password` on cidata. If
+`user.home/.ssh/authorized_keys` exists, the account was set up on an earlier boot and it
+is skipped. (Not "the home exists": Setup Assistant creates the home itself, so with
+`user.home` = `/Users/<user>` that would skip before Lima's files are in.) Otherwise it
+calls `adoptProvisionedUser`:
 
 1. **Wait for the account**: `lookupDSUser` (`dscl . -read /Users/<name> UniqueID
    NFSHomeDirectory`, parsed by the tested `parseDSCLRead`, `UniqueID` required) every
@@ -145,9 +152,12 @@ about 3 minutes after `limactl start`, including the install.
 
 ## Guest side: later boots
 
-- There is no marker, so there are no provisioning options and no
-  `guest-provisioning-password` on cidata.
-- `createUser` finds `user.home` and skips the user, as for any existing instance.
+- There is no marker, so there are no provisioning options.
+  `guest-provisioning-password` is still on cidata.
+- `createUser` finds `user.home/.ssh/authorized_keys` and skips the user.
+- If the first boot was cut off after Setup Assistant created the account but before
+  `authorized_keys` was written, the account isn't skipped: the next boot finds it right
+  away and finishes the move and setup.
 - loginwindow reads `autoLoginUser` and `kcpassword` and logs the user in.
 - Provision scripts that need a GUI user session (for example `defaults write` in the
   user's domain) only work from this boot. On the first boot they fail with
@@ -164,7 +174,7 @@ sequenceDiagram
     participant LW as loginwindow (guest)
 
     L->>L: install IPSW, write vz-guest-os-version
-    L->>L: host and guest >= 27? write random password to vz-guest-provisioning
+    L->>L: host and guest >= 27? write vz-guest-password, empty vz-guest-provisioning
     L->>L: macos.Patch(GuestProvisioning): no skip markers, add guest agent FDA
     L->>L: cidata: guest-provisioning-password (+ auto-login if osOpts.Darwin.autoLogin)
     L->>VZ: Start(WithGuestProvisioningOptions(fullName, name, pw, auto/remote login off))
@@ -234,12 +244,15 @@ osascript -e 'tell application "System Events" to set visible of (first process 
   as root, but expect a reviewer to ask about it. The docs say so.
 - **Users are now created before mounts on every macOS guest.** Nothing depends on the
   old order, and a mount point inside the guest home needs the home to exist first.
-- **The marker is removed once `Start` returns, not once provisioning succeeds.** If the
-  first boot dies before Setup Assistant runs, provisioning doesn't retry. The next boot
-  has no password file, and `createUser` falls back to `sysadminctl`, but there's no
-  `.AppleSetupDone`, so Setup Assistant would run interactively. Not tested.
+- **An interrupted first boot (r14).** macOS guests run no guest agent daemon, so the host
+  can't tell when the first boot finished, and the marker is removed once `Start` returns.
+  The password stays on cidata, so if the first boot dies after Setup Assistant created
+  the account, the next boot adopts it and moves the home. If it dies before Setup
+  Assistant ran, the next start has no provisioning options and there is no
+  `.AppleSetupDone`, so Setup Assistant would run interactively; the docs say to recreate
+  the instance. Neither case is tested on a guest yet.
 - **The password is stored in plain text** in the instance directory (`0600`) and on
-  cidata, as for the classic path's `~/password`.
+  cidata on every boot, as for the classic path's `~/password`.
 - **Changing the password breaks auto-login** (confirmed 2026-11-17): kcpassword keeps
   the old one. The A1 docs say so.
 - **The `kcpassword` encoding is reverse engineered.** The 11-byte key and 12-byte padding
